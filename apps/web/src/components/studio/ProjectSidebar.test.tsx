@@ -84,6 +84,53 @@ describe("ProjectSidebar", () => {
     expect(screen.queryByText(/private customer_id evidence/i)).toBeNull();
   });
 
+  it("fails closed when a same-mode artifact belongs to another session", () => {
+    render(
+      <ProjectSidebar
+        context={{
+          ...context,
+          mode: "live",
+          artifact: {
+            artifactId: "artifact_stale",
+            fileName: "stale-private-notebook.ipynb",
+            support: { status: "SUPPORTED" },
+            cells: [
+              {
+                index: 4,
+                sourceExcerpt: "stale private metric evidence",
+                metricCandidates: ["accuracy"],
+                outputHashes: [],
+                symbols: [],
+              },
+            ],
+          } as unknown as NonNullable<StudioContext["artifact"]>,
+          session: {
+            sessionId: "session_live_2",
+            artifactId: "artifact_current",
+            mode: { kind: "live_notebook" },
+            state: "INGESTED",
+            version: 1,
+            createdAt: "2026-07-21T10:00:00.000Z",
+            updatedAt: "2026-07-21T10:00:00.000Z",
+          },
+        }}
+        recentProjects={[]}
+        onNewAnalysis={vi.fn()}
+        onShowEvidence={vi.fn()}
+        onOpenRecent={vi.fn()}
+        onOpenCommands={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Artifact mismatch")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /artifact mismatch/i }),
+    ).toBeDisabled();
+    expect(screen.queryByText("stale-private-notebook.ipynb")).toBeNull();
+    expect(screen.queryByText(/stale private metric evidence/i)).toBeNull();
+  });
+
   it("keeps the keyboard shortcut visible without adding it to the command name", async () => {
     const user = userEvent.setup();
     const onOpenCommands = vi.fn();

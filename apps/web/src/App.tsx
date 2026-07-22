@@ -3015,6 +3015,31 @@ function LeakageRealityScreen({
   const [patch, setPatch] = useState<PatchResult | null>(
     session?.patchResult?.status === "VERIFIED" ? session.patchResult : null,
   );
+  useEffect(() => {
+    if (session === null) return;
+    const verifiedPatch =
+      session.patchResult?.status === "VERIFIED" && repairPermitted
+        ? session.patchResult
+        : null;
+    setPatch(verifiedPatch);
+    if (verifiedPatch === null && transferState === "patched") {
+      setTransferState(
+        session.transferResult?.outcome === "PASSED"
+          ? "passed"
+          : session.transferResult?.outcome === "FAILED"
+            ? "failed"
+            : session.revision === undefined
+              ? "locked"
+              : "ready",
+      );
+    }
+  }, [
+    repairPermitted,
+    session?.patchResult,
+    session?.revision,
+    session?.transferResult?.outcome,
+    transferState,
+  ]);
   const [proofBundle, setProofBundle] = useState<ProofBundle | null>(
     session?.proofBundle ?? null,
   );
@@ -5393,8 +5418,8 @@ export function App() {
       setCancellingRunner(false);
       setRestartBusy(false);
       setRouteHydrated(false);
-      setLocationRevision((current) => current + 1);
-      if (parseStudioLocation(window.location.pathname).kind === "landing") {
+      const destination = parseStudioLocation(window.location.pathname);
+      if (destination.kind === "landing" || destination.kind === "new") {
         const storedSessionId = window.localStorage.getItem(
           storageKeys.sessionId,
         );
@@ -5402,9 +5427,13 @@ export function App() {
           storedSessionId !== null &&
           knownActiveRunnerJobs(storedSessionId).length > 0
         ) {
+          if (destination.kind === "new") {
+            window.history.replaceState({}, "", "/");
+          }
           detachActiveRunnerToLanding(false);
         }
       }
+      setLocationRevision((current) => current + 1);
     };
     window.addEventListener("popstate", handlePopState);
     return () => {
@@ -5621,6 +5650,17 @@ export function App() {
     setReplayIntro(false);
 
     if (route.kind === "new") {
+      const storedSessionId =
+        session?.sessionId ??
+        window.localStorage.getItem(storageKeys.sessionId);
+      if (
+        storedSessionId !== null &&
+        knownActiveRunnerJobs(storedSessionId).length > 0
+      ) {
+        window.history.replaceState({}, "", "/");
+        detachActiveRunnerToLanding();
+        return;
+      }
       const storedClaim =
         window.localStorage.getItem(storageKeys.claim)?.trim() ?? "";
       clearVisibleInvestigation();
@@ -5694,6 +5734,7 @@ export function App() {
         try {
           restoredArtifact = await counterLabApi.getSessionArtifact(
             restored.sessionId,
+            restored.artifactId,
           );
         } catch (caught) {
           if (
@@ -5848,7 +5889,13 @@ export function App() {
   }, [judgeMode, reviewStep, stage]);
 
   useEffect(() => {
-    if (!routeHydrated || judgeMode || routeRecovery !== null) return;
+    if (
+      childRequestGeneration !== userRequestGeneration.current ||
+      !routeHydrated ||
+      judgeMode ||
+      routeRecovery !== null
+    )
+      return;
     const path = studioPath({
       stage,
       mode,
@@ -5861,6 +5908,7 @@ export function App() {
     }
   }, [
     activeReplayId,
+    childRequestGeneration,
     judgeMode,
     mode,
     routeHydrated,
@@ -6302,6 +6350,14 @@ export function App() {
     void withRequest(async (request) => {
       const updated = await counterLabApi.confirmBeliefTest(session.sessionId);
       request.assertCurrent();
+      if (updated.state !== "BELIEF_TEST_CONFIRMED") {
+        throw new ApiClientError({
+          code: "BELIEF_CONFIRMATION_NOT_RECORDED",
+          message:
+            "CounterLab did not receive a learner-confirmed belief authority",
+          status: 409,
+        });
+      }
       setSession(updated);
       setConfirmed(true);
     }, "Confirming the reviewed explanation…");
@@ -6495,7 +6551,9 @@ export function App() {
             : "Live notebook session",
       mode: recent.mode,
       status: recent.status,
+      disabled: busy,
       onOpen: () => {
+        if (busy) return;
         window.history.pushState({}, "", recentWorkPath(recent));
         setRouteRecovery(null);
         setRouteHydrated(false);

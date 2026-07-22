@@ -726,21 +726,9 @@ describe("CounterLabApiClient", () => {
       state: "REASONING_DIFF_ISSUED" as const,
       proofCapsule: undefined,
     };
-    expect(SessionViewSchema.parse(preCapsuleReasoningDiff)).toMatchObject({
-      reasoningDiffV2: { id: nativeSession.reasoningDiffV2.id },
-    });
-    expect(() =>
-      SessionViewSchema.parse({
-        ...preCapsuleReasoningDiff,
-        reasoningDiffV2: {
-          ...nativeSession.reasoningDiffV2,
-          authority: {
-            ...nativeSession.reasoningDiffV2.authority,
-            authoritativeResultHash: digest("0"),
-          },
-        },
-      }),
-    ).toThrow(/Reasoning Diff authority does not match the session/i);
+    expect(() => SessionViewSchema.parse(preCapsuleReasoningDiff)).toThrow(
+      /Reasoning Diff.*Proof Capsule/i,
+    );
 
     expect(() =>
       SessionViewSchema.parse({
@@ -889,14 +877,13 @@ describe("CounterLabApiClient", () => {
       state: "REASONING_DIFF_ISSUED" as const,
       proofCapsule: undefined,
     };
-    preCapsuleReasoning.beliefSpec.claim += " Tampered after issuance.";
     await expect(
       new CounterLabApiClient({
         fetch: vi.fn<typeof fetch>(async () =>
           jsonResponse({ ok: true, data: preCapsuleReasoning }),
         ),
       }).getSession(preCapsuleReasoning.sessionId),
-    ).rejects.toMatchObject({ code: "NATIVE_PROOF_LINEAGE_INVALID" });
+    ).rejects.toMatchObject({ code: "INVALID_API_RESPONSE" });
 
     const boundaryOnly = {
       ...structuredClone(nativeSession),
@@ -1904,6 +1891,92 @@ describe("CounterLabApiClient", () => {
     });
   });
 
+  it("rejects session and replay payloads detached from the requested identity", async () => {
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({
+            ok: true,
+            data: { ...session, sessionId: "session_other" },
+          }),
+        ),
+      }).getSession(session.sessionId),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+
+    const replay = publicReplayFixture("entity_leakage");
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({ ok: true, data: replay }),
+        ),
+      }).getReplay("replay_other"),
+    ).rejects.toMatchObject({ code: "REPLAY_LINEAGE_INVALID" });
+  });
+
+  it("rejects created sessions detached from the requested mode or artifact", async () => {
+    const clientFor = (data: unknown) =>
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({ ok: true, data }, 201),
+        ),
+      });
+
+    await expect(
+      clientFor({
+        ...session,
+        mode: { kind: "live_notebook" },
+      }).createSampleSession({ sampleId: "leakage-01" }),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+
+    await expect(
+      clientFor({
+        ...session,
+        artifactId: "artifact_other",
+        mode: { kind: "live_notebook" },
+      }).createLiveSession({ artifactId: artifact.artifactId }),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+
+    await expect(
+      clientFor({
+        ...session,
+        mode: { kind: "verified_replay", replayId: "replay_other" },
+      }).createReplaySession({ replayId: "leakage-01" }),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+  });
+
+  it("rejects session artifacts and runner jobs detached from request authority", async () => {
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({
+            ok: true,
+            data: { ...artifact, artifactId: "artifact_other" },
+          }),
+        ),
+      }).getSessionArtifact(session.sessionId, artifact.artifactId),
+    ).rejects.toMatchObject({ code: "ARTIFACT_RESPONSE_LINEAGE_INVALID" });
+
+    const liveSession = {
+      ...session,
+      mode: { kind: "live_notebook" as const },
+      state: "LAB_VERIFIED" as const,
+      version: 8,
+    };
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({
+            ok: true,
+            data: {
+              ...liveSession,
+              runnerJob: { ...runnerJob, sessionId: "session_other" },
+            },
+          }),
+        ),
+      }).runLab(session.sessionId),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+  });
+
   it("accepts queued live lab and patch jobs without substituting sample outputs", async () => {
     const liveSession = {
       ...session,
@@ -1967,6 +2040,10 @@ describe("CounterLabApiClient", () => {
         resultHash: nativeSession.patchResult.resultHash,
       },
     });
+
+    await expect(
+      clientFor(validResponse).compilePatch("session_other"),
+    ).rejects.toMatchObject({ code: "PATCH_AUTHORITY_LINEAGE_INVALID" });
 
     await expect(
       clientFor({
@@ -2074,11 +2151,14 @@ describe("CounterLabApiClient", () => {
         ok: true,
         data: {
           ...session,
+          sessionId: "session/with space",
           mode: { kind: "live_notebook" },
           state: "LAB_REJECTED",
           version: 9,
           runnerJob: {
             ...runnerJob,
+            jobId: "job/with space",
+            sessionId: "session/with space",
             status: "CANCELLED",
             jobVersion: 2,
             runnerIdentity: "counterlab-control-plane-cancel",
@@ -2511,7 +2591,7 @@ describe("CounterLabApiClient", () => {
     const privateSession = {
       ...session,
       sessionId,
-      mode: { kind: "live_notebook" as const },
+      mode: { kind: "sample_lesson" as const, sampleId: "leakage-01" as const },
     };
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const path = String(input);
@@ -2660,6 +2740,7 @@ describe("CounterLabApiClient", () => {
           ok: true,
           data: {
             ...privateSession,
+            mode: { kind: "sample_lesson", sampleId: "leakage-01" },
             ownerCapability: sessionCapability,
           },
         });

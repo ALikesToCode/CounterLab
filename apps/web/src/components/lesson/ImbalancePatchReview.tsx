@@ -31,6 +31,22 @@ const imbalanceRepairPreserves = [
   "original notebook",
 ] as const;
 
+function completionProofReady(session: SessionView): boolean {
+  if (session.beliefSpec !== undefined) {
+    return (
+      session.state === "PROOF_CAPSULE_ISSUED" &&
+      session.reasoningDiffV2 !== undefined &&
+      session.proofCapsule !== undefined
+    );
+  }
+  return (
+    (session.state === "REASONING_DIFF_ISSUED" ||
+      session.state === "PROOF_CAPSULE_ISSUED") &&
+    session.reasoningDiff !== undefined &&
+    session.proofBundle !== undefined
+  );
+}
+
 function eventTitle(kind: string): string {
   const titles: Record<string, string> = {
     "job.started": "Patch job started",
@@ -71,6 +87,12 @@ export function ImbalancePatchReview({
   const nativeAuthority = session.beliefSpec !== undefined;
   const repairAllowed =
     !nativeAuthority || session.evidenceVerdict?.kind === "SUPPORTS";
+
+  useEffect(() => {
+    setPatch(
+      session.patchResult?.status === "VERIFIED" ? session.patchResult : null,
+    );
+  }, [session.patchResult]);
 
   useEffect(() => {
     if (patch === null) {
@@ -253,18 +275,12 @@ export function ImbalancePatchReview({
       const refreshed = await counterLabApi.getSession(session.sessionId);
       updateSession(refreshed);
       setPatch(
-        refreshed.patchResult === undefined
-          ? patch
-          : refreshed.patchResult.status === "VERIFIED"
-            ? refreshed.patchResult
-            : null,
+        refreshed.patchResult?.status === "VERIFIED"
+          ? refreshed.patchResult
+          : null,
       );
       setProof(refreshed.proofBundle ?? null);
-      if (
-        refreshed.state !== "PROOF_CAPSULE_ISSUED" ||
-        refreshed.reasoningDiffV2 === undefined ||
-        refreshed.proofCapsule === undefined
-      ) {
+      if (!completionProofReady(refreshed)) {
         setError(
           "Proof finalization is still pending. CounterLab has not released a completed proof record.",
         );
@@ -293,19 +309,14 @@ export function ImbalancePatchReview({
         </section>
       );
     }
-    if (
-      nativeAuthority &&
-      (session.state !== "PROOF_CAPSULE_ISSUED" ||
-        session.reasoningDiffV2 === undefined ||
-        session.proofCapsule === undefined)
-    ) {
+    if (!completionProofReady(session)) {
       return (
         <section className="panel imbalance-patch-review" role="status">
           <p className="eyebrow aqua">Repair verified · Proof pending</p>
           <h2>Finalizing the authoritative evidence record.</h2>
           <p>
             The repaired copy passed its checks. CounterLab will not show a
-            completed Reasoning Diff or Proof Capsule until all native authority
+            completed Reasoning Diff or proof record until all authority
             bindings are present.
           </p>
           {error !== null && (

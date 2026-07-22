@@ -43,6 +43,7 @@ export function StartOverDialog({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      event.stopPropagation();
       if (event.key === "Escape" && !busy) {
         event.preventDefault();
         onKeepWorking();
@@ -62,6 +63,11 @@ export function StartOverDialog({
       const first = focusable[0];
       const last = focusable.at(-1);
       if (first === undefined || last === undefined) return;
+      if (!dialogRef.current?.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+        return;
+      }
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();

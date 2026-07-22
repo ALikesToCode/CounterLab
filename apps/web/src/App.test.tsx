@@ -3302,6 +3302,48 @@ describe("CounterLab judged flow", () => {
     ).not.toBeNull();
   });
 
+  it("does not enter a new analysis when browser history leaves an active job", async () => {
+    installApi({
+      liveGpt: "configured",
+      runner: "configured",
+      stallRunner: true,
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+    window.localStorage.setItem("counterlab.sessionId", "session_ui");
+    window.localStorage.setItem(
+      "counterlab.activeRunnerJob.session_ui",
+      JSON.stringify({
+        schemaVersion: "1",
+        sessionId: "session_ui",
+        jobId: liveRunnerJob.jobId,
+        kind: liveRunnerJob.kind,
+      }),
+    );
+
+    render(<App />);
+    await screen.findByRole("button", { name: /cancel this test/i });
+    await act(async () => {
+      window.history.pushState({}, "", "/new");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /what result are you trying to understand/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /live test is still registered/i,
+    );
+    expect(window.location.pathname).toBe("/");
+    expect(
+      screen.queryByRole("heading", { name: /test my notebook/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      window.localStorage.getItem("counterlab.activeRunnerJob.session_ui"),
+    ).not.toBeNull();
+  });
+
   it("hydrates restored session evidence from the canonical private endpoint", async () => {
     const user = userEvent.setup();
     const storedEvents = [
@@ -4551,6 +4593,60 @@ describe("CounterLab judged flow", () => {
         ([path]) => String(path) === "/api/sessions/session_ui",
       ),
     ).toBe(true);
+  });
+
+  it("disables recent-work navigation while a mode request is pending", async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem(
+      "counterlab.recentWork.v1",
+      JSON.stringify({
+        schemaVersion: "1",
+        records: [
+          {
+            id: "session_ui",
+            mode: "live",
+            status: "INGESTED",
+            updatedAt: "2026-07-19T01:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    const normalFetch = installApi();
+    const pending = deferredResponse();
+    const sampleResponse = await normalFetch("/api/sample/sessions", {
+      method: "POST",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>((input, init) =>
+        String(input) === "/api/sample/sessions"
+          ? pending.promise
+          : normalFetch(input, init),
+      ),
+    );
+    render(<App />);
+
+    await user.click(screen.getByText("Recent work from this browser"));
+    const recent = screen.getByRole("button", {
+      name: /live notebook session.*question ready/i,
+    });
+    expect(recent).toBeEnabled();
+    await user.click(
+      screen.getByRole("button", { name: /start verified sample/i }),
+    );
+    await vi.waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /start verified sample/i }),
+      ).toBeDisabled(),
+    );
+    const disabledWhilePending = recent.hasAttribute("disabled");
+
+    await act(async () => {
+      pending.resolve(sampleResponse);
+      await pending.promise;
+    });
+
+    expect(disabledWhilePending).toBe(true);
   });
 
   it("reconstructs the landing page when browser history emits popstate", async () => {

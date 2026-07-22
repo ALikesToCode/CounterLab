@@ -41,10 +41,41 @@ describe("StartOverDialog", () => {
     fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
     expect(confirm).toHaveFocus();
 
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    outside.focus();
+    fireEvent.keyDown(outside, { key: "Tab" });
+    expect(keepWorking).toHaveFocus();
+    outside.remove();
+
     fireEvent.click(
       screen.getByRole("button", { name: /stop jobs and start over/i }),
     );
     expect(onConfirm).toHaveBeenCalledOnce();
+  });
+
+  it("keeps global command shortcuts behind the modal", () => {
+    const commandShortcut = vi.fn();
+    window.addEventListener("keydown", commandShortcut);
+    render(
+      <StartOverDialog
+        jobs={jobs}
+        busy={false}
+        onKeepWorking={vi.fn()}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByRole("button", { name: /keep working/i }), {
+      key: "k",
+      ctrlKey: true,
+    });
+
+    expect(commandShortcut).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("heading", { name: /stop live work and start over/i }),
+    ).toBeInTheDocument();
+    window.removeEventListener("keydown", commandShortcut);
   });
 
   it("closes with Escape and disables both actions while stopping", () => {

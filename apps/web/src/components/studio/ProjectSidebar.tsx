@@ -28,30 +28,41 @@ export function ProjectSidebar({
   const modeMatchesSession =
     context.session === null ||
     context.session.mode.kind === expectedSessionMode;
-  const visibleArtifact = modeMatchesSession ? context.artifact : null;
+  const artifactMatchesSession =
+    context.session === null ||
+    context.artifact === null ||
+    context.artifact.artifactId === context.session.artifactId;
+  const contextMatchesSession = modeMatchesSession && artifactMatchesSession;
+  const visibleArtifact = contextMatchesSession ? context.artifact : null;
   const artifactCopy = !modeMatchesSession
     ? {
         heading: "Evidence context",
         fallbackName: "Mode mismatch",
         empty: "Artifact details withheld",
       }
-    : context.mode === "instant"
+    : !artifactMatchesSession
       ? {
-          heading: "Bundled sample artifact",
-          fallbackName: "Sample artifact unavailable",
-          empty: "No fixed sample loaded",
+          heading: "Evidence context",
+          fallbackName: "Artifact mismatch",
+          empty: "Artifact details withheld",
         }
-      : context.mode === "replay"
+      : context.mode === "instant"
         ? {
-            heading: "Replay artifact",
-            fallbackName: "Stored replay evidence",
-            empty: "Replay artifact unavailable",
+            heading: "Bundled sample artifact",
+            fallbackName: "Sample artifact unavailable",
+            empty: "No fixed sample loaded",
           }
-        : {
-            heading: "Uploaded notebook",
-            fallbackName: "Attach a notebook",
-            empty: "No notebook uploaded",
-          };
+        : context.mode === "replay"
+          ? {
+              heading: "Replay artifact",
+              fallbackName: "Stored replay evidence",
+              empty: "Replay artifact unavailable",
+            }
+          : {
+              heading: "Uploaded notebook",
+              fallbackName: "Attach a notebook",
+              empty: "No notebook uploaded",
+            };
   const evidenceCells =
     visibleArtifact?.cells
       .filter(
@@ -98,7 +109,7 @@ export function ProjectSidebar({
         <p>{artifactCopy.heading}</p>
         <button
           type="button"
-          disabled={!modeMatchesSession}
+          disabled={!contextMatchesSession}
           onClick={onShowEvidence}
         >
           <span className="notebook-glyph" aria-hidden="true">
@@ -138,6 +149,7 @@ export function ProjectSidebar({
             <button
               type="button"
               key={project.sessionId}
+              disabled={newAnalysisDisabled}
               onClick={() => onOpenRecent(project)}
             >
               <span className={`recent-mode ${project.mode}`} />

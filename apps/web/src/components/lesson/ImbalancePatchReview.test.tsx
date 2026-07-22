@@ -215,6 +215,58 @@ describe("ImbalancePatchReview", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("withholds legacy completion until its Reasoning Diff and Proof Bundle are issued", async () => {
+    const user = userEvent.setup();
+    const completedSession = {
+      ...createDefaultProofBoundSessionFixture(),
+      mode: { kind: "live_notebook" },
+    } as SessionView;
+    const partialSession = {
+      ...completedSession,
+      state: "PATCH_VERIFIED",
+      reasoningDiff: undefined,
+      proofBundle: undefined,
+    } as SessionView;
+    const updateSession = vi.fn();
+    api.getSession.mockResolvedValue(completedSession);
+
+    const view = render(
+      <ImbalancePatchReview
+        session={partialSession}
+        updateSession={updateSession}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", {
+        name: /finalizing the authoritative evidence record/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        name: /completed one verified rare-event loop/i,
+      }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /check proof finalization/i }),
+    );
+    expect(api.getSession).toHaveBeenCalledWith(completedSession.sessionId);
+    expect(updateSession).toHaveBeenCalledWith(completedSession);
+
+    view.rerender(
+      <ImbalancePatchReview
+        session={completedSession}
+        updateSession={updateSession}
+      />,
+    );
+    expect(
+      screen.getByRole("heading", {
+        name: /completed one verified rare-event loop/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("offers explicit replay publication for a completed live Proof Capsule", async () => {
     const user = userEvent.setup();
     const replay = replayFixture("class_imbalance");
@@ -482,6 +534,19 @@ describe("ImbalancePatchReview", () => {
 
   it("withholds a persisted patch that did not pass verification", () => {
     const replay = replayFixture("class_imbalance");
+    const verifiedSession = {
+      sessionId: replay.sourceSessionId,
+      state: "PROOF_CAPSULE_ISSUED",
+      mode: { kind: "live_notebook" },
+      transferResult: replay.transferResult,
+      patchResult: replay.patchResult,
+      beliefSpec: replay.beliefSpec,
+      prediction: replay.prediction,
+      evidenceVerdict: replay.evidenceVerdict,
+      reasoningDiffV2: replay.reasoningDiff,
+      proofCapsule: replay.proofCapsule,
+      revision: replay.revision.statement,
+    } as SessionView;
     const rejectedPatch = {
       ...replay.patchResult,
       status: "REJECTED" as const,
@@ -498,7 +563,17 @@ describe("ImbalancePatchReview", () => {
       evidenceVerdict: replay.evidenceVerdict,
     } as SessionView;
 
-    render(
+    const view = render(
+      <ImbalancePatchReview
+        session={verifiedSession}
+        updateSession={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /download repaired notebook/i }),
+    ).toBeInTheDocument();
+
+    view.rerender(
       <ImbalancePatchReview
         session={rejectedSession}
         updateSession={vi.fn()}

@@ -537,6 +537,14 @@ function requireExclusiveBeliefAuthority(
     });
   }
   if (value.reasoningDiffV2 !== undefined) {
+    if (value.proofCapsule === undefined) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "native Reasoning Diff is released only with Proof Capsule authority",
+        path: ["reasoningDiffV2"],
+      });
+    }
     const hostedResult = HostedVerifiedResultSetV2Schema.safeParse(
       value.verifiedResult,
     );
@@ -1879,18 +1887,23 @@ export class CounterLabApiClient {
     return artifact;
   }
 
-  getArtifact(artifactId: string): Promise<ArtifactManifest> {
-    return this.request(
+  async getArtifact(artifactId: string): Promise<ArtifactManifest> {
+    const artifact = await this.request(
       `/api/artifacts/${encodedId(artifactId)}`,
       ArtifactManifestSchema,
     );
+    return this.requireArtifactResponseLineage(artifactId, artifact);
   }
 
-  getSessionArtifact(sessionId: string): Promise<ArtifactManifest> {
-    return this.request(
+  async getSessionArtifact(
+    sessionId: string,
+    artifactId: string,
+  ): Promise<ArtifactManifest> {
+    const artifact = await this.request(
       `/api/sessions/${encodedId(sessionId)}/artifact`,
       ArtifactManifestSchema,
     );
+    return this.requireArtifactResponseLineage(artifactId, artifact);
   }
 
   createSampleSession(input: CreateSampleSessionInput): Promise<SessionView> {
@@ -1899,7 +1912,17 @@ export class CounterLabApiClient {
       body: JSON.stringify(
         validatedInput(CreateSampleSessionInputSchema, input),
       ),
-    }).then((created) => this.rememberCreatedSession(created));
+    }).then((created) => {
+      if (
+        created.mode.kind !== "sample_lesson" ||
+        created.mode.sampleId !== input.sampleId
+      ) {
+        throw this.sessionResponseLineageError(
+          "The created session does not match the requested sample",
+        );
+      }
+      return this.rememberCreatedSession(created);
+    });
   }
 
   createLiveSession(input: CreateLiveSessionInput): Promise<SessionView> {
@@ -1911,6 +1934,14 @@ export class CounterLabApiClient {
         ...(artifactCapability === undefined ? {} : { artifactCapability }),
       }),
     }).then((created) => {
+      if (
+        created.mode.kind !== "live_notebook" ||
+        created.artifactId !== input.artifactId
+      ) {
+        throw this.sessionResponseLineageError(
+          "The created session does not match the requested artifact",
+        );
+      }
       this.artifactCapabilities.delete(input.artifactId);
       return this.rememberCreatedSession(created);
     });
@@ -1934,14 +1965,25 @@ export class CounterLabApiClient {
       body: JSON.stringify(
         validatedInput(CreateReplaySessionInputSchema, input),
       ),
-    }).then((created) => this.rememberCreatedSession(created));
+    }).then((created) => {
+      if (
+        created.mode.kind !== "verified_replay" ||
+        created.mode.replayId !== input.replayId
+      ) {
+        throw this.sessionResponseLineageError(
+          "The created session does not match the requested replay",
+        );
+      }
+      return this.rememberCreatedSession(created);
+    });
   }
 
-  getSession(sessionId: string): Promise<SessionView> {
-    return this.request(
+  async getSession(sessionId: string): Promise<SessionView> {
+    const session = await this.request(
       `/api/sessions/${encodedId(sessionId)}`,
       SessionViewSchema,
     );
+    return this.requireSessionResponseLineage(sessionId, session);
   }
 
   proposeBeliefTest(
@@ -1955,6 +1997,8 @@ export class CounterLabApiClient {
         method: "POST",
         body: JSON.stringify(validatedInput(BeliefProposalInputSchema, input)),
       },
+    ).then((response) =>
+      this.requireSessionResponseLineage(sessionId, response),
     );
   }
 
@@ -1990,6 +2034,8 @@ export class CounterLabApiClient {
         method: "POST",
         body: JSON.stringify(validatedInput(BeliefResponseInputSchema, input)),
       },
+    ).then((response) =>
+      this.requireSessionResponseLineage(sessionId, response),
     );
   }
 
@@ -2006,6 +2052,8 @@ export class CounterLabApiClient {
           validatedInput(LearningDirectorAnswerInputSchema, { answer }),
         ),
       },
+    ).then((response) =>
+      this.requireSessionResponseLineage(sessionId, response),
     );
   }
 
@@ -2024,6 +2072,8 @@ export class CounterLabApiClient {
         method: "POST",
         body: JSON.stringify(validatedInput(PredictionInputSchema, input)),
       },
+    ).then((response) =>
+      this.requireSessionResponseLineage(sessionId, response),
     );
   }
 
@@ -2031,6 +2081,8 @@ export class CounterLabApiClient {
     return this.postRunnerActionWithoutInput(
       `/api/sessions/${encodedId(sessionId)}/lab/compile`,
       LabCompileResponseSchema,
+    ).then((response) =>
+      this.requireSessionResponseLineage(sessionId, response),
     );
   }
 
@@ -2067,6 +2119,8 @@ export class CounterLabApiClient {
         body: JSON.stringify({}),
         ...(signal === undefined ? {} : { signal }),
       },
+    ).then((response) =>
+      this.requireSessionResponseLineage(sessionId, response),
     );
   }
 
@@ -2074,6 +2128,8 @@ export class CounterLabApiClient {
     return this.postRunnerActionWithoutInput(
       `/api/sessions/${encodedId(sessionId)}/lab/run`,
       RunnerActionResponseSchema,
+    ).then((response) =>
+      this.requireSessionResponseLineage(sessionId, response),
     );
   }
 
@@ -2081,6 +2137,8 @@ export class CounterLabApiClient {
     return this.postRunnerActionWithoutInput(
       `/api/sessions/${encodedId(sessionId)}/boundary/run`,
       BoundaryRunResponseSchema,
+    ).then((response) =>
+      this.requireSessionResponseLineage(sessionId, response),
     );
   }
 
@@ -2130,6 +2188,8 @@ export class CounterLabApiClient {
           validatedInput(InteractiveLeakageRunRequestSchema, input),
         ),
       },
+    ).then((response) =>
+      this.requireSessionResponseLineage(sessionId, response),
     );
   }
 
@@ -2146,6 +2206,8 @@ export class CounterLabApiClient {
           validatedInput(InteractiveImbalanceRunRequestSchema, input),
         ),
       },
+    ).then((response) =>
+      this.requireSessionResponseLineage(sessionId, response),
     );
   }
 
@@ -2187,6 +2249,8 @@ export class CounterLabApiClient {
         method: "POST",
         body: JSON.stringify(validatedInput(RevisionInputSchema, input)),
       },
+    ).then((response) =>
+      this.requireSessionResponseLineage(sessionId, response),
     );
   }
 
@@ -2201,6 +2265,8 @@ export class CounterLabApiClient {
         method: "POST",
         body: JSON.stringify(validatedInput(TransferInputSchema, input)),
       },
+    ).then((response) =>
+      this.requireSessionResponseLineage(sessionId, response),
     );
   }
 
@@ -2220,11 +2286,23 @@ export class CounterLabApiClient {
     );
   }
 
-  compilePatch(sessionId: string): Promise<PatchCompileResponse> {
-    return this.postRunnerActionWithoutInput(
+  async compilePatch(sessionId: string): Promise<PatchCompileResponse> {
+    const response = await this.postRunnerActionWithoutInput(
       `/api/sessions/${encodedId(sessionId)}/patch/compile`,
       PatchCompileResponseSchema,
     );
+    if (
+      response.sessionId !== sessionId ||
+      (response.runnerJob !== undefined &&
+        response.runnerJob.sessionId !== sessionId)
+    ) {
+      throw new ApiClientError({
+        code: "PATCH_AUTHORITY_LINEAGE_INVALID",
+        message: "The patch response belongs to a different session",
+        status: 0,
+      });
+    }
+    return response;
   }
 
   patchDownloadUrl(sessionId: string): string {
@@ -2304,6 +2382,13 @@ export class CounterLabApiClient {
       `/api/replays/${encodedId(replayId)}`,
       ReplaySchema,
     );
+    if (replay.replayId !== replayId) {
+      throw new ApiClientError({
+        code: "REPLAY_LINEAGE_INVALID",
+        message: "The replay response does not match the requested replay",
+        status: 0,
+      });
+    }
     if ("projectionKind" in replay) await validatePublicReplayContent(replay);
     return replay;
   }
@@ -2344,6 +2429,43 @@ export class CounterLabApiClient {
       }
       return result;
     });
+  }
+
+  private sessionResponseLineageError(message: string): ApiClientError {
+    return new ApiClientError({
+      code: "SESSION_RESPONSE_LINEAGE_INVALID",
+      message,
+      status: 0,
+    });
+  }
+
+  private requireSessionResponseLineage<
+    T extends { sessionId: string; runnerJob?: RunnerJob | undefined },
+  >(sessionId: string, response: T): T {
+    if (
+      response.sessionId !== sessionId ||
+      (response.runnerJob !== undefined &&
+        response.runnerJob.sessionId !== sessionId)
+    ) {
+      throw this.sessionResponseLineageError(
+        "The API response belongs to a different session",
+      );
+    }
+    return response;
+  }
+
+  private requireArtifactResponseLineage(
+    artifactId: string,
+    artifact: ArtifactManifest,
+  ): ArtifactManifest {
+    if (artifact.artifactId !== artifactId) {
+      throw new ApiClientError({
+        code: "ARTIFACT_RESPONSE_LINEAGE_INVALID",
+        message: "The artifact response does not match the requested artifact",
+        status: 0,
+      });
+    }
+    return artifact;
   }
 
   private rememberCreatedSession(

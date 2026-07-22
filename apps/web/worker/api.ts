@@ -884,10 +884,7 @@ function runnerObjectStore(
     get: (key) => store.get(key),
     put: async (key, body, contentType) => {
       const jobs = runnerJobService(context, options);
-      await jobs.assertCallbackClaim(
-        callbackClaim.jobId,
-        callbackClaim.claim,
-      );
+      await jobs.assertCallbackClaim(callbackClaim.jobId, callbackClaim.claim);
       await store.put(key, body, contentType);
       await jobs.assertCallbackClaim(callbackClaim.jobId, callbackClaim.claim);
     },
@@ -4416,7 +4413,8 @@ async function statePayload(
     ...(session.proofBundle === undefined
       ? {}
       : { proofBundle: session.proofBundle }),
-    ...(session.reasoningDiffV2 === undefined
+    ...(session.reasoningDiffV2 === undefined ||
+    publicProofCapsule === undefined
       ? {}
       : { reasoningDiffV2: session.reasoningDiffV2 }),
     ...(publicProofCapsule === undefined
@@ -10636,7 +10634,11 @@ export function createApi(options: ApiOptions = {}) {
     );
     requireStoredSampleClaimScope(session);
     const reasoningDiff = session.reasoningDiffV2 ?? session.reasoningDiff;
-    if (reasoningDiff === undefined) {
+    if (
+      reasoningDiff === undefined ||
+      (session.reasoningDiffV2 !== undefined &&
+        session.proofCapsule === undefined)
+    ) {
       throw new ApiInputError(
         "REASONING_DIFF_NOT_READY",
         "Reasoning Diff is issued only after a verified patch",

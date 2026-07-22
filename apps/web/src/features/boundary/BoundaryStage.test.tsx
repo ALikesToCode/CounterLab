@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BoundaryResponse, SessionView } from "../../api";
@@ -274,6 +280,76 @@ describe("BoundaryStage", () => {
     fireEvent.click(screen.getByRole("button", { name: /skip the hunt/i }));
     expect(await screen.findByTestId("boundary-map")).toBeInTheDocument();
     expect(api.runBoundary).not.toHaveBeenCalled();
+  });
+
+  it("ignores an older Boundary response after the session authority changes", async () => {
+    const first = deferred<BoundaryResponse>();
+    const second = deferred<BoundaryResponse>();
+    const nextAuthority = {
+      ...authority,
+      jobId: "job_boundary_2",
+      resultHash: digest("8"),
+      receipt: {
+        ...authority.receipt,
+        resultHash: digest("8"),
+        receiptHash: digest("9"),
+      },
+    };
+    const nextBoundary = {
+      ...boundaryResponse,
+      result: { ...boundaryResponse.result, resultHash: digest("8") },
+      receipt: nextAuthority.receipt,
+      authority: nextAuthority,
+    } as BoundaryResponse;
+    api.getBoundary
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    window.localStorage.setItem(
+      `counterlab.boundary-hunt.${authority.resultHash}`,
+      "revealed",
+    );
+    window.localStorage.setItem(
+      `counterlab.boundary-hunt.${nextAuthority.resultHash}`,
+      "revealed",
+    );
+    const updateSession = vi.fn();
+    const view = render(
+      <BoundaryStage
+        session={{
+          ...experimentCompleted,
+          state: "BOUNDARY_VERIFIED",
+          boundaryMapAuthority: authority,
+        }}
+        updateSession={updateSession}
+      />,
+    );
+    await waitFor(() => expect(api.getBoundary).toHaveBeenCalledTimes(1));
+
+    view.rerender(
+      <BoundaryStage
+        session={{
+          ...experimentCompleted,
+          state: "BOUNDARY_VERIFIED",
+          boundaryMapAuthority: nextAuthority,
+        }}
+        updateSession={updateSession}
+      />,
+    );
+    await waitFor(() => expect(api.getBoundary).toHaveBeenCalledTimes(2));
+    await act(async () => second.resolve(nextBoundary));
+    expect(await screen.findByTestId("boundary-map")).toHaveTextContent(
+      nextAuthority.resultHash,
+    );
+
+    await act(async () => first.resolve(boundaryResponse));
+    await waitFor(() =>
+      expect(screen.getByTestId("boundary-map")).toHaveTextContent(
+        nextAuthority.resultHash,
+      ),
+    );
+    expect(screen.getByTestId("boundary-map")).not.toHaveTextContent(
+      authority.resultHash,
+    );
   });
 
   it("keeps a revealed hunt complete when the learner reviews the stage", async () => {

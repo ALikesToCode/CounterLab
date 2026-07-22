@@ -80,25 +80,40 @@ export function BoundaryStage({
   >(null);
   const activeJobId = useRef<string | null>(null);
   const loadedReceiptHash = useRef<string | null>(null);
+  const loadingReceiptHash = useRef<string | null>(null);
+  const loadGeneration = useRef(0);
 
   const loadBoundary = useCallback(
     async (expectedAuthority: BoundaryMapAuthorityRefV1) => {
-      const response = await counterLabApi.getBoundary(
-        session.sessionId,
-        expectedAuthority,
-      );
-      setBoundary(response);
-      const alreadyRevealed = huntWasRevealed(response.result.resultHash);
-      setRevealedBoundaryHash(
-        alreadyRevealed ? response.result.resultHash : null,
-      );
-      loadedReceiptHash.current = response.receipt.receiptHash;
-      if (alreadyRevealed) {
-        window.requestAnimationFrame(() => {
-          document.getElementById("boundary-map-title")?.focus();
-        });
+      const generation = loadGeneration.current + 1;
+      loadGeneration.current = generation;
+      loadingReceiptHash.current = expectedAuthority.receipt.receiptHash;
+      try {
+        const response = await counterLabApi.getBoundary(
+          session.sessionId,
+          expectedAuthority,
+        );
+        if (loadGeneration.current !== generation) return null;
+        setBoundary(response);
+        const alreadyRevealed = huntWasRevealed(response.result.resultHash);
+        setRevealedBoundaryHash(
+          alreadyRevealed ? response.result.resultHash : null,
+        );
+        loadedReceiptHash.current = response.receipt.receiptHash;
+        if (alreadyRevealed) {
+          window.requestAnimationFrame(() => {
+            document.getElementById("boundary-map-title")?.focus();
+          });
+        }
+        return response;
+      } catch (caught) {
+        if (loadGeneration.current !== generation) return null;
+        throw caught;
+      } finally {
+        if (loadGeneration.current === generation) {
+          loadingReceiptHash.current = null;
+        }
       }
-      return response;
     },
     [session.sessionId],
   );
@@ -183,11 +198,21 @@ export function BoundaryStage({
   useEffect(() => {
     const boundaryAuthority = session.boundaryMapAuthority;
     const receiptHash = boundaryAuthority?.receipt.receiptHash;
+    if (boundaryAuthority === undefined) {
+      loadGeneration.current += 1;
+      loadingReceiptHash.current = null;
+      loadedReceiptHash.current = null;
+      setBoundary(null);
+      setRevealedBoundaryHash(null);
+    }
     if (
       boundaryAuthority !== undefined &&
       receiptHash !== undefined &&
-      loadedReceiptHash.current !== receiptHash
+      loadedReceiptHash.current !== receiptHash &&
+      loadingReceiptHash.current !== receiptHash
     ) {
+      setBoundary(null);
+      setRevealedBoundaryHash(null);
       void loadBoundary(boundaryAuthority).catch((caught: unknown) => {
         setError(
           caught instanceof Error
