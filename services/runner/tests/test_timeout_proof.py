@@ -309,9 +309,11 @@ def test_rootless_rlimit_validator_matches_the_runtime_contract() -> None:
 
 def test_timeout_candidate_observes_the_exact_address_space_limit() -> None:
     source = timeout_proof_module._timeout_public_test(512 * 1024 * 1024)
+    assert timeout_proof_module.TIMEOUT_PROOF_WALL_SECONDS == 10
     assert "resource.getrlimit(resource.RLIMIT_AS)" in source
     assert "expected = (536870912, 536870912)" in source
     assert "subprocess.Popen" in source
+    assert "time.sleep(30)" in source
     assert "child.wait" in source
     with pytest.raises(RuntimeError, match="address-space"):
         timeout_proof_module._timeout_public_test(0)

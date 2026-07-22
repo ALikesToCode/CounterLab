@@ -29,6 +29,8 @@ _SOURCE_COMMIT = re.compile(r"^[a-f0-9]{40}$")
 _SESSION_ID = re.compile(r"^rt-[a-z0-9][a-z0-9-]{7,13}$")
 _QUALIFIED_AGGREGATE_LIMIT_MODE = "container-cgroup-and-process-rlimit"
 _AGGREGATE_TIMEOUT_QUALIFICATION_MODE = "aggregate-timeout-proof-v1"
+TIMEOUT_PROOF_WALL_SECONDS = 10
+_TIMEOUT_SENTINEL_SLEEP_SECONDS = 30
 _BUILD_KEYS = {
     "schemaVersion",
     "status",
@@ -165,13 +167,17 @@ observed = resource.getrlimit(resource.RLIMIT_AS)
 if observed != expected:
     raise AssertionError(f"address-space limit mismatch: {{observed!r}}")
 child = subprocess.Popen(
-    [sys.executable, "-c", "import time; time.sleep(30)"],
+    [
+        sys.executable,
+        "-c",
+        "import time; time.sleep({_TIMEOUT_SENTINEL_SLEEP_SECONDS})",
+    ],
     stdin=subprocess.DEVNULL,
     stdout=subprocess.DEVNULL,
     stderr=subprocess.DEVNULL,
 )
 try:
-    time.sleep(5)
+    time.sleep({_TIMEOUT_SENTINEL_SLEEP_SECONDS})
 finally:
     child.terminate()
     try:
@@ -902,7 +908,7 @@ def run_timeout_cleanup_proof(
     limits = plan.get("resourceLimits")
     if not isinstance(limits, dict):
         raise RuntimeError("fixed timeout plan has no resource limits")
-    limits["wallSeconds"] = 1
+    limits["wallSeconds"] = TIMEOUT_PROOF_WALL_SECONDS
     memory_mb = limits.get("memoryMb")
     if not _safe_integer(memory_mb, positive=True):
         raise RuntimeError("fixed timeout plan has no memory limit")
@@ -942,7 +948,7 @@ def run_timeout_cleanup_proof(
     except DockerExecutionError as exc:
         if (
             exc.code != "wall_clock_limit"
-            or exc.details.get("maximumSeconds") != 1
+            or exc.details.get("maximumSeconds") != TIMEOUT_PROOF_WALL_SECONDS
             or exc.details.get("timeoutKind") != "WALL_CLOCK"
             or exc.details.get("controlStatus") != "TIMED_OUT_CLEAN"
             or exc.details.get("cleanupVerified") is not True
@@ -973,7 +979,7 @@ def run_timeout_cleanup_proof(
 
     control = validate_control_receipt(
         _read_json(control_path),
-        expected_wall_seconds=1,
+        expected_wall_seconds=TIMEOUT_PROOF_WALL_SECONDS,
         expected_runtime_policy_sha256=build["runtimePolicySha256"],
     )
     if (
