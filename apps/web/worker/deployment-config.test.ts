@@ -688,6 +688,10 @@ describe("Cloudflare static asset routing", () => {
     // archive, so the Dockerfile must not attempt to mutate the mounted path.
     expect(dockerfile).not.toContain("chmod 0644 /etc/hosts");
     expect(dockerfile).not.toMatch(/chown root:root[\s\S]*?\/etc\/hosts/);
+    // Docker and BuildKit mount the cgroup hierarchy read-only while image
+    // layers are assembled. Its placeholder is already root-owned and 0755.
+    expect(dockerfile).not.toMatch(/chown root:root[\s\S]*?\/sys\/fs\/cgroup/);
+    expect(dockerfile).not.toMatch(/chmod 0755[\s\S]*?\/sys\/fs\/cgroup/);
     expect(dockerfile).toContain("bubblewrap=0.11.0-2+deb13u1");
     expect(dockerfile).toContain(
       'test "$(/usr/bin/bwrap --version)" = "bubblewrap 0.11.0"',
