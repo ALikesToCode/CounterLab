@@ -506,7 +506,10 @@ class ConcurrentProofSessionRepository extends InterruptibleSessionRepository {
     try {
       await super.save(session, expectedVersion, event);
     } catch (error) {
-      if (error instanceof Error && error.message === "stale test session write") {
+      if (
+        error instanceof Error &&
+        error.message === "stale test session write"
+      ) {
         throw new ConcurrentD1SessionUpdateError(session.id);
       }
       throw error;
@@ -6719,6 +6722,15 @@ describe("Cloudflare Worker API", () => {
         scientificEngineSnapshotHash: "f".repeat(64),
       }),
     ).toThrow(/scientific engine snapshot/i);
+    const contentAddressedPatchKey = `patches/${sessionId}/${patchedNotebookFileHash}.ipynb`;
+    const legacyPatchKey = `patches/${sessionId}/patched-notebook.ipynb`;
+    expect(runnerObjects.objects.has(contentAddressedPatchKey)).toBe(true);
+    expect(runnerObjects.objects.has(legacyPatchKey)).toBe(false);
+    await runnerObjects.put(
+      legacyPatchKey,
+      '{"stale":"losing callback bytes"}',
+      "application/x-ipynb+json; charset=utf-8",
+    );
     const download = await app.request(
       `/api/sessions/${sessionId}/patch/download`,
     );
@@ -6729,6 +6741,18 @@ describe("Cloudflare Worker API", () => {
     expect(download.headers.get("x-content-type-options")).toBe("nosniff");
     expect(download.headers.get("cache-control")).toBe("private, no-store");
     await expect(download.text()).resolves.toBe(patchedNotebookText);
+
+    runnerObjects.objects.delete(contentAddressedPatchKey);
+    await runnerObjects.put(
+      legacyPatchKey,
+      patchedNotebookText,
+      "application/x-ipynb+json; charset=utf-8",
+    );
+    const legacyDownload = await app.request(
+      `/api/sessions/${sessionId}/patch/download`,
+    );
+    expect(legacyDownload.status).toBe(200);
+    await expect(legacyDownload.text()).resolves.toBe(patchedNotebookText);
 
     const restored = await app.request(`/api/sessions/${sessionId}`);
     expect(restored.status).toBe(200);
@@ -8931,6 +8955,16 @@ describe("Cloudflare Worker API", () => {
         path,
       ).toBe(true);
     }
+    expect(
+      harness.runnerObjects.objects.has(
+        `patches/${bundle.sessionId}/${patchedNotebookHash}.ipynb`,
+      ),
+    ).toBe(true);
+    expect(
+      harness.runnerObjects.objects.has(
+        `patches/${bundle.sessionId}/patched-notebook.ipynb`,
+      ),
+    ).toBe(false);
     const patchedDownload = await harness.app.request(
       `/api/sessions/${bundle.sessionId}/patch/download`,
     );

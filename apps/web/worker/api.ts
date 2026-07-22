@@ -891,6 +891,17 @@ function runnerObjectStore(
   };
 }
 
+function patchedNotebookObjectKey(
+  sessionId: string,
+  patchedArtifactHash: string,
+): string {
+  return `patches/${sessionId}/${patchedArtifactHash}.ipynb`;
+}
+
+function legacyPatchedNotebookObjectKey(sessionId: string): string {
+  return `patches/${sessionId}/patched-notebook.ipynb`;
+}
+
 function proofCapsuleReplays(
   context: Context<AppBindings>,
   options: ApiOptions,
@@ -7906,7 +7917,10 @@ export function createApi(options: ApiOptions = {}) {
               patchedArtifactHash: rawHashes[2],
             };
             await store.put(
-              `patches/${currentSession.id}/patched-notebook.ipynb`,
+              patchedNotebookObjectKey(
+                currentSession.id,
+                parsedPatch.patchedArtifactHash,
+              ),
               notebookObject.body,
               "application/x-ipynb+json; charset=utf-8",
             );
@@ -8055,7 +8069,10 @@ export function createApi(options: ApiOptions = {}) {
             }
             patchResult = parsedPatch;
             await store.put(
-              `patches/${currentSession.id}/patched-notebook.ipynb`,
+              patchedNotebookObjectKey(
+                currentSession.id,
+                parsedPatch.patchedArtifactHash,
+              ),
               notebookObject.body,
               "application/x-ipynb+json; charset=utf-8",
             );
@@ -10670,14 +10687,22 @@ export function createApi(options: ApiOptions = {}) {
         404,
       );
     }
-    const body =
-      session.mode.kind === "sample_lesson"
-        ? samplePatchedNotebookText
-        : (
-            await runnerObjectStore(context, options).get(
-              `patches/${sessionId}/patched-notebook.ipynb`,
-            )
-          )?.body;
+    let body: string | undefined;
+    if (session.mode.kind === "sample_lesson") {
+      body = samplePatchedNotebookText;
+    } else {
+      const store = runnerObjectStore(context, options);
+      const contentAddressed = await store.get(
+        patchedNotebookObjectKey(
+          sessionId,
+          session.patchResult.patchedArtifactHash,
+        ),
+      );
+      const stored =
+        contentAddressed ??
+        (await store.get(legacyPatchedNotebookObjectKey(sessionId)));
+      body = stored?.body;
+    }
     if (
       body === undefined ||
       (await sha256Text(body)) !== session.patchResult.patchedArtifactHash
