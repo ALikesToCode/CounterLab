@@ -29,8 +29,8 @@ _SOURCE_COMMIT = re.compile(r"^[a-f0-9]{40}$")
 _SESSION_ID = re.compile(r"^rt-[a-z0-9][a-z0-9-]{7,13}$")
 _QUALIFIED_AGGREGATE_LIMIT_MODE = "container-cgroup-and-process-rlimit"
 _AGGREGATE_TIMEOUT_QUALIFICATION_MODE = "aggregate-timeout-proof-v1"
-TIMEOUT_PROOF_WALL_SECONDS = 10
-_TIMEOUT_SENTINEL_SLEEP_SECONDS = 30
+TIMEOUT_PROOF_WALL_SECONDS = 30
+_TIMEOUT_SENTINEL_SLEEP_SECONDS = 90
 _BUILD_KEYS = {
     "schemaVersion",
     "status",
@@ -1074,7 +1074,7 @@ def run_timeout_cleanup_proof(
         "invocationId": control["invocationId"],
         "finalContainerId": control["finalContainerId"],
         "commandSha256": control["commandSha256"],
-        "candidateWallSeconds": 1,
+        "candidateWallSeconds": TIMEOUT_PROOF_WALL_SECONDS,
         "elapsedMs": elapsed_ms,
         "resultReleased": False,
         "cleanup": {field: control[field] for field in _CLEANUP_FIELDS},
