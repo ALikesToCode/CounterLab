@@ -5685,6 +5685,16 @@ claimed at this checkpoint. Release remains **NO-GO**.
   client **497.88 kB / 139.83 kB gzip**; client CSS **209.58 kB / 36.17 kB
   gzip**.
 - Repository secret scan: **passed across 1,480 files**.
+- Critical fixed-verifier mutations: leakage **14/14 detected** and imbalance
+  **19/19 detected**.
+- Held-out intake/routing: **10/10**; fixed full-loop completion: **7/8**;
+  tracked held-out evidence matched. The residual held-out limitation is not
+  hidden or waived.
+- Sample Boundary fixture: **25 cells** verified with result hash
+  `c948d25fef6ab5f5f33322dde2025557f0704f01bff2bde48ee93149066ccbd3`.
+- Sample Proof Capsule: root
+  `e45cf88f1bbdd470723f83def9550d47ac272f7c5aaf8554bec52c2a34f9856b`,
+  **94,236 bytes**, verified.
 - Capability-dependent hosted-runner and Codex isolation suites: **4 files,
   51/51 passed** with the already-authorized localhost/process permissions.
 - The broad root run currently reports **69 files passed, 6 failed; 770 tests
