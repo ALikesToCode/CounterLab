@@ -989,7 +989,8 @@ describe("RunnerJobService", () => {
       callback,
       "request_before_deadline_release",
     );
-    if (initialClaim.duplicate) throw new Error("callback claim was duplicated");
+    if (initialClaim.duplicate)
+      throw new Error("callback claim was duplicated");
     await jobs.releaseCallbackClaim(callback.jobId, initialClaim.claim);
 
     now = new Date("2026-07-15T00:01:31.000Z");

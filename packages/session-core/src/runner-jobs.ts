@@ -866,10 +866,7 @@ export class RunnerJobService {
     }
     if (
       current.eventCursor !== parsed.finalEventCursor &&
-      !(
-        recovering &&
-        current.eventCursor > parsed.finalEventCursor
-      )
+      !(recovering && current.eventCursor > parsed.finalEventCursor)
     ) {
       throw new RunnerEventCursorError(
         current.jobId,
