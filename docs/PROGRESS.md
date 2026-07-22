@@ -5481,3 +5481,53 @@ The public deployment has not yet been replaced by the current source. No exact
 runner image, refreshed scientific evidence, qualification receipt, Cloudflare
 deployment, production smoke, public live journey, push, or merge is claimed at
 this checkpoint. Release remains **NO-GO** until those gates occur.
+
+## Delegated-cgroup observer correction — 2026-07-22T05:50:11Z
+
+### Completed and committed
+
+- The earlier exact runner/adapter build for source `0a66f47` completed, but it
+  is not reused for the current commit identity. The corrective revert pair
+  left an identical source tree at `4e1cd66`, while the release protocol
+  correctly requires a new exact-commit build receipt.
+- A one-run, read-only observation from the rootless runtime's user, mount,
+  cgroup, and PID namespaces located the real candidate at
+  `/sys/fs/cgroup/containerd/counterlab-v6.1-<invocation>` with the requested
+  512 MiB memory, zero swap, 16 PID, and one-CPU limits. The observer manifest
+  had incorrectly requested `/sys/fs/cgroup/counterlab-v6.1-<invocation>` and
+  therefore timed out without observing the cgroup.
+- `2b43b51` now binds manifests, JavaScript/TypeScript validators, Python
+  timeout validation, and evidence tests to RootlessKit's fixed `containerd`
+  delegation without removing `--pidns`, `--cgroupns`, or
+  `--evacuate-cgroup2=containerd`.
+
+### Verification actually run
+
+- The new protocol expectation failed before the implementation change with
+  **2/4 tests failing**, proving the old path bug.
+- Contained-runtime and cgroup Vitest: **17 files, 124/124 passed**.
+- Python timeout-proof validation: **10/10 passed**.
+- Repository TypeScript: **passed**.
+- Scoped Prettier and Git whitespace checks: **passed**.
+
+### Immediate remaining release order
+
+1. Commit this factual checkpoint, freeze the resulting clean source commit,
+   and start a fresh attested runtime that includes the delegated-path fix.
+2. Rebuild the exact runner/adapter tuple and execute the genuine aggregate
+   timeout proof. Any next observer failure remains fail-closed and must be
+   diagnosed before evidence refresh.
+3. Refresh and commit only the allowlisted source/image-bound scientific,
+   SBOM, VEX, license, held-out, and health evidence.
+4. Qualify and registry-promote the exact source/image/evidence tuple, run the
+   release gate, and deploy through `deploy-qualified.sh` only after it passes.
+5. Run the public CloakBrowser sample, replay, both supported live paths,
+   refusal, transfer fail/pass, Repair, Proof Capsule, refresh/reconnect,
+   accessibility, responsive, console/network, and performance journeys.
+6. Push the feature branch, fast-forward `main`, and push `main` only after the
+   deployed tuple and public journeys are directly evidenced.
+
+No current exact-commit image, timeout receipt, refreshed release evidence,
+qualification receipt, Cloudflare deployment, production smoke, public browser
+qualification, push, merge, learner observation, or submission receipt is
+claimed here. Release remains **NO-GO** until those gates occur.
