@@ -1321,6 +1321,13 @@ const CreateLiveSessionInputSchema = z
 const CreateReplaySessionInputSchema = z
   .object({ replayId: z.literal("leakage-01") })
   .strict();
+const RestartSessionSourceSchema = z
+  .object({
+    sessionId: NonEmptyString,
+    artifactId: NonEmptyString,
+    mode: SessionModeSchema,
+  })
+  .strict();
 
 const BeliefProposalInputSchema = z
   .object({
@@ -1473,6 +1480,17 @@ function validatedInput<T extends z.ZodType>(
     });
   }
   return parsed.data;
+}
+
+function runnerStateVersionMatches(
+  responseVersion: number,
+  runnerJob: RunnerJob,
+): boolean {
+  return (
+    runnerJob.stateVersion === responseVersion ||
+    (runnerJob.status === "VERIFIED" &&
+      runnerJob.stateVersion < responseVersion)
+  );
 }
 
 async function canonicalSha256(value: unknown): Promise<string> {
@@ -1907,15 +1925,14 @@ export class CounterLabApiClient {
   }
 
   createSampleSession(input: CreateSampleSessionInput): Promise<SessionView> {
+    const request = validatedInput(CreateSampleSessionInputSchema, input);
     return this.request("/api/sample/sessions", SessionCreationViewSchema, {
       method: "POST",
-      body: JSON.stringify(
-        validatedInput(CreateSampleSessionInputSchema, input),
-      ),
+      body: JSON.stringify(request),
     }).then((created) => {
       if (
         created.mode.kind !== "sample_lesson" ||
-        created.mode.sampleId !== input.sampleId
+        created.mode.sampleId !== request.sampleId
       ) {
         throw this.sessionResponseLineageError(
           "The created session does not match the requested sample",
@@ -1926,49 +1943,74 @@ export class CounterLabApiClient {
   }
 
   createLiveSession(input: CreateLiveSessionInput): Promise<SessionView> {
-    const artifactCapability = this.artifactCapabilities.get(input.artifactId);
+    const request = validatedInput(CreateLiveSessionInputSchema, input);
+    const artifactCapability = this.artifactCapabilities.get(
+      request.artifactId,
+    );
     return this.request("/api/live/sessions", SessionCreationViewSchema, {
       method: "POST",
       body: JSON.stringify({
-        ...validatedInput(CreateLiveSessionInputSchema, input),
+        ...request,
         ...(artifactCapability === undefined ? {} : { artifactCapability }),
       }),
     }).then((created) => {
       if (
         created.mode.kind !== "live_notebook" ||
-        created.artifactId !== input.artifactId
+        created.artifactId !== request.artifactId
       ) {
         throw this.sessionResponseLineageError(
           "The created session does not match the requested artifact",
         );
       }
-      this.artifactCapabilities.delete(input.artifactId);
+      this.artifactCapabilities.delete(request.artifactId);
       return this.rememberCreatedSession(created);
     });
   }
 
-  restartSession(sessionId: string): Promise<SessionView> {
-    return this.request(
-      `/api/sessions/${encodedId(sessionId)}/restart`,
+  async restartSession(
+    source: Pick<SessionView, "sessionId" | "artifactId" | "mode">,
+  ): Promise<SessionView> {
+    const requestSource = validatedInput(RestartSessionSourceSchema, {
+      sessionId: source.sessionId,
+      artifactId: source.artifactId,
+      mode: source.mode,
+    });
+    const expectedSessionId = `session_restart_${await canonicalSha256({
+      schemaVersion: "1",
+      operation: "restart-closed-belief-response",
+      sourceSessionId: requestSource.sessionId,
+      idempotencyKey: RESTART_IDEMPOTENCY_KEY,
+    })}`;
+    const created = await this.request(
+      `/api/sessions/${encodedId(requestSource.sessionId)}/restart`,
       SessionCreationViewSchema,
       {
         method: "POST",
         headers: { "idempotency-key": RESTART_IDEMPOTENCY_KEY },
         body: JSON.stringify({}),
       },
-    ).then((created) => this.rememberCreatedSession(created));
+    );
+    if (
+      created.sessionId !== expectedSessionId ||
+      created.artifactId !== requestSource.artifactId ||
+      canonicalJsonV1(created.mode) !== canonicalJsonV1(requestSource.mode)
+    ) {
+      throw this.sessionResponseLineageError(
+        "The restarted session does not match its source investigation",
+      );
+    }
+    return this.rememberCreatedSession(created);
   }
 
   createReplaySession(input: CreateReplaySessionInput): Promise<SessionView> {
+    const request = validatedInput(CreateReplaySessionInputSchema, input);
     return this.request("/api/replay/sessions", SessionCreationViewSchema, {
       method: "POST",
-      body: JSON.stringify(
-        validatedInput(CreateReplaySessionInputSchema, input),
-      ),
+      body: JSON.stringify(request),
     }).then((created) => {
       if (
         created.mode.kind !== "verified_replay" ||
-        created.mode.replayId !== input.replayId
+        created.mode.replayId !== request.replayId
       ) {
         throw this.sessionResponseLineageError(
           "The created session does not match the requested replay",
@@ -2082,7 +2124,10 @@ export class CounterLabApiClient {
       `/api/sessions/${encodedId(sessionId)}/lab/compile`,
       LabCompileResponseSchema,
     ).then((response) =>
-      this.requireSessionResponseLineage(sessionId, response),
+      this.requireSessionResponseLineage(sessionId, response, {
+        kind: "LAB_COMPILE",
+        bindStateVersion: true,
+      }),
     );
   }
 
@@ -2103,7 +2148,14 @@ export class CounterLabApiClient {
     return this.request(
       `/api/sessions/${encodedId(sessionId)}/jobs/${encodedId(jobId)}/events?after=${after}`,
       RunnerEventsResponseSchema,
-    );
+    ).then((response) => {
+      if (response.events.some((event) => event.jobId !== jobId)) {
+        throw this.sessionResponseLineageError(
+          "The runner event stream does not match the requested job",
+        );
+      }
+      return response;
+    });
   }
 
   cancelRunnerJob(
@@ -2120,7 +2172,7 @@ export class CounterLabApiClient {
         ...(signal === undefined ? {} : { signal }),
       },
     ).then((response) =>
-      this.requireSessionResponseLineage(sessionId, response),
+      this.requireSessionResponseLineage(sessionId, response, { jobId }),
     );
   }
 
@@ -2129,7 +2181,10 @@ export class CounterLabApiClient {
       `/api/sessions/${encodedId(sessionId)}/lab/run`,
       RunnerActionResponseSchema,
     ).then((response) =>
-      this.requireSessionResponseLineage(sessionId, response),
+      this.requireSessionResponseLineage(sessionId, response, {
+        kind: "LAB_RUN",
+        bindStateVersion: true,
+      }),
     );
   }
 
@@ -2138,7 +2193,10 @@ export class CounterLabApiClient {
       `/api/sessions/${encodedId(sessionId)}/boundary/run`,
       BoundaryRunResponseSchema,
     ).then((response) =>
-      this.requireSessionResponseLineage(sessionId, response),
+      this.requireSessionResponseLineage(sessionId, response, {
+        kind: "LAB_RUN",
+        bindStateVersion: true,
+      }),
     );
   }
 
@@ -2189,7 +2247,10 @@ export class CounterLabApiClient {
         ),
       },
     ).then((response) =>
-      this.requireSessionResponseLineage(sessionId, response),
+      this.requireSessionResponseLineage(sessionId, response, {
+        kind: "LAB_RUN",
+        bindStateVersion: true,
+      }),
     );
   }
 
@@ -2207,7 +2268,10 @@ export class CounterLabApiClient {
         ),
       },
     ).then((response) =>
-      this.requireSessionResponseLineage(sessionId, response),
+      this.requireSessionResponseLineage(sessionId, response, {
+        kind: "LAB_RUN",
+        bindStateVersion: true,
+      }),
     );
   }
 
@@ -2294,7 +2358,10 @@ export class CounterLabApiClient {
     if (
       response.sessionId !== sessionId ||
       (response.runnerJob !== undefined &&
-        response.runnerJob.sessionId !== sessionId)
+        (response.runnerJob.sessionId !== sessionId ||
+          response.runnerJob.artifactId !== response.artifactId ||
+          response.runnerJob.kind !== "PATCH_COMPILE" ||
+          !runnerStateVersionMatches(response.version, response.runnerJob)))
     ) {
       throw new ApiClientError({
         code: "PATCH_AUTHORITY_LINEAGE_INVALID",
@@ -2440,12 +2507,33 @@ export class CounterLabApiClient {
   }
 
   private requireSessionResponseLineage<
-    T extends { sessionId: string; runnerJob?: RunnerJob | undefined },
-  >(sessionId: string, response: T): T {
+    T extends {
+      sessionId: string;
+      artifactId: string;
+      version: number;
+      runnerJob?: RunnerJob | undefined;
+    },
+  >(
+    sessionId: string,
+    response: T,
+    expectedRunner: {
+      jobId?: string;
+      kind?: RunnerJob["kind"];
+      bindStateVersion?: boolean;
+    } = {},
+  ): T {
+    const runnerJob = response.runnerJob;
     if (
       response.sessionId !== sessionId ||
-      (response.runnerJob !== undefined &&
-        response.runnerJob.sessionId !== sessionId)
+      (runnerJob !== undefined &&
+        (runnerJob.sessionId !== sessionId ||
+          runnerJob.artifactId !== response.artifactId ||
+          (expectedRunner.jobId !== undefined &&
+            runnerJob.jobId !== expectedRunner.jobId) ||
+          (expectedRunner.kind !== undefined &&
+            runnerJob.kind !== expectedRunner.kind) ||
+          (expectedRunner.bindStateVersion === true &&
+            !runnerStateVersionMatches(response.version, runnerJob))))
     ) {
       throw this.sessionResponseLineageError(
         "The API response belongs to a different session",

@@ -6,6 +6,7 @@ import {
   migrateBeliefTestV1ToV2,
   type ArtifactManifest,
   type BeliefTest,
+  type RunnerJob,
   VerifiedResultSetSchema,
 } from "@counterlab/contracts";
 
@@ -1371,9 +1372,16 @@ describe("CounterLabApiClient", () => {
   });
 
   it("starts a source-bound fresh investigation and remembers its new owner capability", async () => {
+    const source = { ...session, sessionId: "session/source" };
+    const restartedSessionId = `session_restart_${await canonicalHash({
+      schemaVersion: "1",
+      operation: "restart-closed-belief-response",
+      sourceSessionId: source.sessionId,
+      idempotencyKey: "counterlab.restart.v1",
+    })}`;
     const restarted = {
-      ...session,
-      sessionId: "session_revision",
+      ...source,
+      sessionId: restartedSessionId,
       state: "INGESTED" as const,
       version: 1,
       ownerCapability: `cl_owner_${"a".repeat(43)}`,
@@ -1391,10 +1399,8 @@ describe("CounterLabApiClient", () => {
       },
     });
 
-    await expect(
-      client.restartSession("session/source"),
-    ).resolves.toMatchObject({
-      sessionId: "session_revision",
+    await expect(client.restartSession(source)).resolves.toMatchObject({
+      sessionId: restartedSessionId,
       state: "INGESTED",
     });
     expect(fetcher).toHaveBeenCalledWith(
@@ -1407,13 +1413,20 @@ describe("CounterLabApiClient", () => {
         }),
       }),
     );
-    expect(client.hasSessionAccess("session_revision")).toBe(true);
+    expect(client.hasSessionAccess(restartedSessionId)).toBe(true);
   });
 
   it("reuses the same restart key after a response is lost", async () => {
+    const source = { ...session, sessionId: "session_source" };
+    const restartedSessionId = `session_restart_${await canonicalHash({
+      schemaVersion: "1",
+      operation: "restart-closed-belief-response",
+      sourceSessionId: source.sessionId,
+      idempotencyKey: "counterlab.restart.v1",
+    })}`;
     const restarted = {
-      ...session,
-      sessionId: "session_revision",
+      ...source,
+      sessionId: restartedSessionId,
       state: "INGESTED" as const,
       version: 1,
       ownerCapability: `cl_owner_${"b".repeat(43)}`,
@@ -1426,12 +1439,13 @@ describe("CounterLabApiClient", () => {
     });
     const client = new CounterLabApiClient({ fetch: fetcher });
 
-    await expect(client.restartSession("session_source")).rejects.toMatchObject(
-      { code: "NETWORK_ERROR", retryable: true },
-    );
-    await expect(
-      client.restartSession("session_source"),
-    ).resolves.toMatchObject({ sessionId: "session_revision" });
+    await expect(client.restartSession(source)).rejects.toMatchObject({
+      code: "NETWORK_ERROR",
+      retryable: true,
+    });
+    await expect(client.restartSession(source)).resolves.toMatchObject({
+      sessionId: restartedSessionId,
+    });
     expect(fetcher).toHaveBeenCalledTimes(2);
     for (const call of fetcher.mock.calls) {
       expect(call[1]).toEqual(
@@ -1944,6 +1958,89 @@ describe("CounterLabApiClient", () => {
     ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
   });
 
+  it("binds creation responses to the validated request snapshot", async () => {
+    const requestedArtifactId = artifact.artifactId;
+    const input = { artifactId: requestedArtifactId };
+    let releaseResponse: ((response: Response) => void) | undefined;
+    const fetcher = vi.fn<typeof fetch>(
+      () =>
+        new Promise<Response>((resolve) => {
+          releaseResponse = resolve;
+        }),
+    );
+    const client = new CounterLabApiClient({ fetch: fetcher });
+    const created = client.createLiveSession(input);
+
+    input.artifactId = "artifact_mutated_after_dispatch";
+    releaseResponse?.(
+      jsonResponse(
+        {
+          ok: true,
+          data: {
+            ...session,
+            artifactId: requestedArtifactId,
+            mode: { kind: "live_notebook" },
+          },
+        },
+        201,
+      ),
+    );
+
+    await expect(created).resolves.toMatchObject({
+      artifactId: requestedArtifactId,
+      mode: { kind: "live_notebook" },
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/live/sessions",
+      expect.objectContaining({
+        body: JSON.stringify({ artifactId: requestedArtifactId }),
+      }),
+    );
+  });
+
+  it("rejects restarted sessions detached from source lineage", async () => {
+    const source = {
+      ...session,
+      sessionId: "session_restart_source",
+      mode: { kind: "live_notebook" as const },
+    };
+    const expectedSessionId = `session_restart_${await canonicalHash({
+      schemaVersion: "1",
+      operation: "restart-closed-belief-response",
+      sourceSessionId: source.sessionId,
+      idempotencyKey: "counterlab.restart.v1",
+    })}`;
+    const restarted = {
+      ...source,
+      sessionId: expectedSessionId,
+      state: "INGESTED" as const,
+      version: 1,
+    };
+    const clientFor = (data: unknown) =>
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({ ok: true, data }, 201),
+        ),
+      });
+
+    await expect(
+      clientFor({ ...restarted, sessionId: "session_unbound" }).restartSession(
+        source,
+      ),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+    await expect(
+      clientFor({ ...restarted, artifactId: "artifact_other" }).restartSession(
+        source,
+      ),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+    await expect(
+      clientFor({
+        ...restarted,
+        mode: { kind: "sample_lesson", sampleId: "leakage-01" },
+      }).restartSession(source),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+  });
+
   it("rejects session artifacts and runner jobs detached from request authority", async () => {
     await expect(
       new CounterLabApiClient({
@@ -1975,6 +2072,69 @@ describe("CounterLabApiClient", () => {
         ),
       }).runLab(session.sessionId),
     ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+  });
+
+  it("cross-binds queued runner jobs to action kind, artifact, and state version", async () => {
+    const liveSession = {
+      ...session,
+      mode: { kind: "live_notebook" as const },
+      state: "LAB_VERIFIED" as const,
+      version: 8,
+    };
+    const clientFor = (job: RunnerJob) =>
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({ ok: true, data: { ...liveSession, runnerJob: job } }),
+        ),
+      });
+
+    await expect(
+      clientFor({ ...runnerJob, kind: "LAB_COMPILE" }).compileLab(
+        session.sessionId,
+      ),
+    ).resolves.toMatchObject({
+      runnerJob: { kind: "LAB_COMPILE", stateVersion: 8 },
+    });
+    await expect(
+      clientFor({ ...runnerJob, kind: "PATCH_COMPILE" }).runLab(
+        session.sessionId,
+      ),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+    await expect(
+      clientFor({ ...runnerJob, artifactId: "artifact_other" }).runLab(
+        session.sessionId,
+      ),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+    await expect(
+      clientFor({ ...runnerJob, stateVersion: 7 }).runLab(session.sessionId),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
+
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({
+            ok: true,
+            data: {
+              ...liveSession,
+              state: "EXPERIMENT_COMPLETED",
+              version: 9,
+              runnerJob: {
+                ...runnerJob,
+                status: "VERIFIED",
+                stateVersion: 8,
+                jobVersion: 3,
+                runnerIdentity: "cloudflare-container-runner-v1",
+                completedAt: "2026-07-14T10:03:00.000Z",
+                outputHashes: [digest("d")],
+              },
+            },
+          }),
+        ),
+      }).runLab(session.sessionId),
+    ).resolves.toMatchObject({
+      version: 9,
+      runnerJob: { status: "VERIFIED", stateVersion: 8 },
+    });
   });
 
   it("accepts queued live lab and patch jobs without substituting sample outputs", async () => {
@@ -2017,6 +2177,52 @@ describe("CounterLabApiClient", () => {
         runnerJob: { kind: "PATCH_COMPILE", status: "QUEUED" },
       },
     );
+  });
+
+  it("cross-binds queued patch jobs to patch authority", async () => {
+    const queuedPatch = {
+      ...session,
+      mode: { kind: "live_notebook" as const },
+      state: "TRANSFER_PASSED" as const,
+      version: 12,
+      runnerJob: {
+        ...runnerJob,
+        jobId: "job_patch_1",
+        kind: "PATCH_COMPILE" as const,
+        stateVersion: 12,
+      },
+    };
+    const clientFor = (data: unknown) =>
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({ ok: true, data }),
+        ),
+      });
+
+    await expect(
+      clientFor(queuedPatch).compilePatch(session.sessionId),
+    ).resolves.toMatchObject({ runnerJob: { kind: "PATCH_COMPILE" } });
+    await expect(
+      clientFor({
+        ...queuedPatch,
+        runnerJob: { ...queuedPatch.runnerJob, kind: "LAB_RUN" },
+      }).compilePatch(session.sessionId),
+    ).rejects.toMatchObject({ code: "PATCH_AUTHORITY_LINEAGE_INVALID" });
+    await expect(
+      clientFor({
+        ...queuedPatch,
+        runnerJob: {
+          ...queuedPatch.runnerJob,
+          artifactId: "artifact_other",
+        },
+      }).compilePatch(session.sessionId),
+    ).rejects.toMatchObject({ code: "PATCH_AUTHORITY_LINEAGE_INVALID" });
+    await expect(
+      clientFor({
+        ...queuedPatch,
+        runnerJob: { ...queuedPatch.runnerJob, stateVersion: 11 },
+      }).compilePatch(session.sessionId),
+    ).rejects.toMatchObject({ code: "PATCH_AUTHORITY_LINEAGE_INVALID" });
   });
 
   it("accepts only a verified patch bound to the returned session authority", async () => {
@@ -2113,6 +2319,7 @@ describe("CounterLabApiClient", () => {
               runnerJob: {
                 ...runnerJob,
                 status: "STARTING",
+                stateVersion: liveSession.version,
                 jobVersion: 2,
                 attempt: 1,
                 runnerIdentity: "cloudflare-container-runner-v1",
@@ -2187,6 +2394,37 @@ describe("CounterLabApiClient", () => {
       "/api/sessions/session%2Fwith%20space/jobs/job%2Fwith%20space/cancel",
       expect.objectContaining({ method: "POST" }),
     );
+
+    await expect(
+      new CounterLabApiClient({
+        fetch: vi.fn<typeof fetch>(async () =>
+          jsonResponse({
+            ok: true,
+            data: {
+              ...session,
+              mode: { kind: "live_notebook" },
+              state: "LAB_REJECTED",
+              version: 9,
+              runnerJob: {
+                ...runnerJob,
+                jobId: "job_other",
+                status: "CANCELLED",
+                jobVersion: 2,
+                runnerIdentity: "counterlab-control-plane-cancel",
+                completedAt: "2026-07-14T10:03:00.000Z",
+                error: {
+                  code: "RUNNER_JOB_CANCELLED",
+                  message: "The learner cancelled this runner job.",
+                  retryable: true,
+                },
+              },
+              reused: false,
+              runnerAcknowledged: true,
+            },
+          }),
+        ),
+      }).cancelRunnerJob(session.sessionId, runnerJob.jobId),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
   });
 
   it("maps every learning-loop method to its encoded route without swallowing errors", async () => {
@@ -2487,6 +2725,35 @@ describe("CounterLabApiClient", () => {
       client.listRunnerEvents("session_1", "job_1", -1),
     ).rejects.toMatchObject({ code: "INVALID_EVENT_CURSOR", status: 400 });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("binds runner event streams to the requested job", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        ok: true,
+        data: {
+          events: [
+            {
+              schemaVersion: "1",
+              eventId: "compiler_event_other",
+              jobId: "job_other",
+              cursor: 1,
+              at: "2026-07-14T10:02:00.000Z",
+              kind: "job.started",
+            },
+          ],
+          nextCursor: 1,
+          terminal: false,
+        },
+      }),
+    );
+
+    await expect(
+      new CounterLabApiClient({ fetch: fetcher }).listRunnerEvents(
+        "session_1",
+        "job_1",
+      ),
+    ).rejects.toMatchObject({ code: "SESSION_RESPONSE_LINEAGE_INVALID" });
   });
 
   it("posts only the strict learner interaction contract", async () => {

@@ -429,6 +429,9 @@ const liveRunnerJob = {
   eventCursor: 0,
 };
 
+const restartedSessionId =
+  "session_restart_d97fe9f6854ad0ac2b036b0942552e90c5cbabd7f467c6877949fbc5cadc2366";
+
 function session(
   state: string,
   version: number,
@@ -696,7 +699,7 @@ function installApi(
       if (path.endsWith("/restart")) {
         return response(
           session(options.restartSessionState ?? "INGESTED", 1, {
-            sessionId: "session_revision",
+            sessionId: restartedSessionId,
             artifactId: activeArtifactId,
             mode: activeMode,
             ...(options.restartSessionExtra ?? {}),
@@ -721,13 +724,13 @@ function installApi(
       if (path === "/api/sessions/session_ui/lab-scene") {
         return response(liveLabSceneView);
       }
-      if (path === "/api/sessions/session_revision/artifact") {
+      if (path === `/api/sessions/${restartedSessionId}/artifact`) {
         return response(uploadedArtifact);
       }
-      if (path === "/api/sessions/session_revision") {
+      if (path === `/api/sessions/${restartedSessionId}`) {
         return response(
           session(options.restartSessionState ?? "INGESTED", 1, {
-            sessionId: "session_revision",
+            sessionId: restartedSessionId,
             artifactId: activeArtifactId,
             mode: activeMode,
             ...(options.restartSessionExtra ?? {}),
@@ -2356,7 +2359,7 @@ describe("CounterLab judged flow", () => {
       expect(
         fetcher.mock.calls.some(
           ([path]) =>
-            String(path) === "/api/sessions/session_revision/belief-test",
+            String(path) === `/api/sessions/${restartedSessionId}/belief-test`,
         ),
       ).toBe(true);
       const responseRequests = fetcher.mock.calls.filter(
@@ -2390,7 +2393,7 @@ describe("CounterLab judged flow", () => {
         expect(
           fetcher.mock.calls.map(([path]) => String(path)),
           fetcher.mock.calls.map(([path]) => String(path)).join("\n"),
-        ).toContain("/api/sessions/session_revision/prediction"),
+        ).toContain(`/api/sessions/${restartedSessionId}/prediction`),
       );
     },
   );
@@ -2460,9 +2463,9 @@ describe("CounterLab judged flow", () => {
       progressedClaim,
     );
     expect(window.localStorage.getItem("counterlab.claimSessionId")).toBe(
-      "session_revision",
+      restartedSessionId,
     );
-    expect(window.location.pathname).toBe("/session/session_revision");
+    expect(window.location.pathname).toBe(`/session/${restartedSessionId}`);
   });
 
   it("withholds adversarial live explanation prose before Prediction", async () => {
@@ -2717,13 +2720,13 @@ describe("CounterLab judged flow", () => {
         }),
       );
       await vi.waitFor(() =>
-        expect(window.location.pathname).toBe("/session/session_revision"),
+        expect(window.location.pathname).toBe(`/session/${restartedSessionId}`),
       );
       expect(window.localStorage.getItem("counterlab.sessionId")).toBe(
-        "session_revision",
+        restartedSessionId,
       );
       expect(window.localStorage.getItem("counterlab.claimSessionId")).toBe(
-        "session_revision",
+        restartedSessionId,
       );
       expect(window.localStorage.getItem("counterlab.claim")).toBe(
         learnerClaim,
@@ -2748,7 +2751,7 @@ describe("CounterLab judged flow", () => {
 
       await act(async () => window.history.forward());
       await vi.waitFor(() =>
-        expect(window.location.pathname).toBe("/session/session_revision"),
+        expect(window.location.pathname).toBe(`/session/${restartedSessionId}`),
       );
       expect(await screen.findByLabelText(/your claim/i)).toHaveValue(
         learnerClaim,
@@ -2762,7 +2765,7 @@ describe("CounterLab judged flow", () => {
       );
       const proposal = fetcher.mock.calls.find(
         ([path]) =>
-          String(path) === "/api/sessions/session_revision/belief-test",
+          String(path) === `/api/sessions/${restartedSessionId}/belief-test`,
       );
       expect(proposal).toBeDefined();
       expect(JSON.parse(String(proposal?.[1]?.body))).toMatchObject({

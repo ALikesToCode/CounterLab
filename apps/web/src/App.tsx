@@ -6288,7 +6288,7 @@ export function App() {
     if (session === null || !beliefResponseClosed(session)) return;
     const sourceClaim = claim.trim();
     void withRequest(async (request) => {
-      const restarted = await counterLabApi.restartSession(session.sessionId);
+      const restarted = await counterLabApi.restartSession(session);
       request.assertCurrent();
       const restartedClaim =
         sessionBeliefPresentation(restarted)?.claim ?? sourceClaim;
