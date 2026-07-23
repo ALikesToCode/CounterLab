@@ -17,7 +17,6 @@ def _fixture_layer() -> bytes:
                 ("usr/local/bin/", tarfile.DIRTYPE, b""),
                 ("usr/local/bin/node", tarfile.REGTYPE, b"node"),
                 ("usr/bin/", tarfile.DIRTYPE, b""),
-                ("usr/bin/bwrap", tarfile.REGTYPE, b"bwrap"),
                 ("usr/bin/setpriv", tarfile.REGTYPE, b"setpriv"),
                 ("usr/bin/bash", tarfile.REGTYPE, b"bash"),
                 ("usr/lib/", tarfile.DIRTYPE, b""),
@@ -55,6 +54,13 @@ def _fixture_layer() -> bytes:
                 ("app/", tarfile.DIRTYPE, b""),
                 ("app/runner.mjs", tarfile.REGTYPE, b"runner"),
                 ("app/config.json", tarfile.REGTYPE, b"{}"),
+                ("opt/", tarfile.DIRTYPE, b""),
+                ("opt/counterlab/", tarfile.DIRTYPE, b""),
+                (
+                    "opt/counterlab/landlock_launcher.py",
+                    tarfile.REGTYPE,
+                    b"launcher",
+                ),
                 ("work/", tarfile.DIRTYPE, b""),
                 ("work/jobs/", tarfile.DIRTYPE, b""),
                 ("run/", tarfile.DIRTYPE, b""),
@@ -80,7 +86,7 @@ def test_rewrites_only_reviewed_runtime_metadata() -> None:
     normalized, report = rewrite_layer_bytes(_fixture_layer())
     members = _members(normalized)
 
-    assert report.changed_entries == 42
+    assert report.changed_entries == 44
     assert members["usr"].mode == 0o755
     assert members["usr/local/bin/node"].mode == 0o555
     assert members["usr/local/bin/node"].uid == 0
@@ -92,12 +98,13 @@ def test_rewrites_only_reviewed_runtime_metadata() -> None:
         == 0o755
     )
     assert members["usr/bin"].mode == 0o755
-    assert members["usr/bin/bwrap"].mode == 0o555
     assert members["usr/bin/setpriv"].mode == 0o555
     assert members["usr/bin/bash"].mode == 0o555
     assert members["usr/lib/x86_64-linux-gnu/libexample.so"].mode == 0o444
     assert members["usr/share"].mode == 0o555
     assert members["usr/share/data.txt"].mode == 0o444
+    assert members["opt/counterlab"].mode == 0o555
+    assert members["opt/counterlab/landlock_launcher.py"].mode == 0o555
     assert members["repo"].mode == 0o555
     assert members["repo/scripts/verify.py"].mode == 0o444
     for mount_target in (

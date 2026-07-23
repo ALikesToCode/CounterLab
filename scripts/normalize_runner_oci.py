@@ -145,6 +145,15 @@ def _normalized_identity(
             "root",
         )
 
+    if _under(path, "opt/counterlab"):
+        return (
+            0,
+            0,
+            _mode_for(member, directory=0o555, regular=0o555),
+            "root",
+            "root",
+        )
+
     if _under(path, "opt/counterlab-wheelhouse"):
         return (
             0,

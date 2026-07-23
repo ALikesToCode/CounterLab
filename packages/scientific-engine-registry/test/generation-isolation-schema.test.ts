@@ -8,6 +8,7 @@ import {
   DeploymentReceiptV6Schema,
   DeploymentReceiptV7Schema,
   GenerationIsolationEvidenceV1Schema,
+  GenerationIsolationEvidenceV2Schema,
   QualifiedRunnerReleaseV6Schema,
   ReleaseCheckReceiptV4Schema,
   ReleaseCheckReceiptV5Schema,
@@ -61,6 +62,52 @@ function evidence() {
   } as const;
 }
 
+function landlockEvidence() {
+  return {
+    schemaVersion: "2",
+    status: "VERIFIED",
+    generationFilesystemReadIsolation: "OS_ENFORCED",
+    sourceCommit,
+    sourceTreeSha256: "b".repeat(64),
+    localImageTag: `counterlab-runner:git-${sourceCommit}`,
+    localImageDigest: `sha256:${"c".repeat(64)}`,
+    imageUser: "10001:10001",
+    policyVersion: "counterlab-landlock-path-policy-v1",
+    probePayload: {
+      schemaVersion: "2",
+      probeVersion: "counterlab-generation-isolation-v2",
+      service: "counterlab-hosted-runner",
+      probe: "non-root-startup",
+      checks: [
+        "entrypoint",
+        "non-root-user",
+        "immutable-paths",
+        "codex",
+        "python",
+        "landlock",
+        "landlock-read-isolation",
+        "setpriv",
+        "writable-roots",
+      ],
+      generationFilesystemReadIsolation: "OS_ENFORCED",
+      mechanism: "landlock",
+      landlockAbi: 9,
+      landlock: {
+        forbiddenHostPathsUnreadable: true,
+        forbiddenHostWritesDenied: true,
+        crossTreeReferDenied: true,
+        execInheritanceEnforced: true,
+        parentEnvironmentUnreadable: true,
+        workspaceVisible: true,
+        workspaceWritable: true,
+      },
+    },
+    probePayloadSha256: "d".repeat(64),
+    verifiedAt: "2026-07-23T13:30:00.000Z",
+    verifierVersion: "counterlab-generation-isolation-evidence-v2",
+  } as const;
+}
+
 describe("generation isolation evidence schema", () => {
   it("accepts only the pinned, source-bound, all-true probe envelope", () => {
     expect(GenerationIsolationEvidenceV1Schema.parse(evidence())).toEqual(
@@ -88,6 +135,24 @@ describe("generation isolation evidence schema", () => {
       GenerationIsolationEvidenceV1Schema.parse({
         ...evidence(),
         unverifiedClaim: true,
+      }),
+    ).toThrow();
+  });
+
+  it("accepts Landlock evidence without reinterpreting historical Bubblewrap receipts", () => {
+    expect(
+      GenerationIsolationEvidenceV2Schema.parse(landlockEvidence()),
+    ).toEqual(landlockEvidence());
+    expect(() =>
+      GenerationIsolationEvidenceV2Schema.parse({
+        ...landlockEvidence(),
+        probePayload: {
+          ...landlockEvidence().probePayload,
+          landlock: {
+            ...landlockEvidence().probePayload.landlock,
+            forbiddenHostWritesDenied: false,
+          },
+        },
       }),
     ).toThrow();
   });
@@ -139,6 +204,7 @@ describe("generation isolation evidence schema", () => {
   it("publishes the evidence and next-version receipt schemas", () => {
     for (const path of [
       "generation-isolation-evidence-v1.schema.json",
+      "generation-isolation-evidence-v2.schema.json",
       "qualified-runner-release-v6.schema.json",
       "release-check-receipt-v4.schema.json",
       "release-check-receipt-v5.schema.json",

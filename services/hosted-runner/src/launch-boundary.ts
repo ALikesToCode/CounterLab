@@ -4,10 +4,13 @@ import {
   access,
   chmod,
   lstat,
+  readdir,
+  mkdir,
   open,
   readFile,
   realpath,
   stat,
+  symlink,
   unlink,
   writeFile,
 } from "node:fs/promises";
@@ -32,16 +35,18 @@ const CodexAuthSchema = z
 
 const CREDENTIAL_EXCLUSIONS =
   'shell_environment_policy.exclude=["CODEX_ACCESS_TOKEN","OPENAI_API_KEY"]';
-const GUEST_CODEX_ROOT = "/opt/codex";
-const GUEST_CODEX_HOME = "/home/counterlab";
-const GUEST_WORKSPACE = "/workspace";
-const NETWORK_RUNTIME_MOUNTS = [
+const NETWORK_RUNTIME_PATHS = [
   "/etc/ca-certificates",
   "/etc/hosts",
+  "/etc/ld.so.cache",
   "/etc/nsswitch.conf",
+  "/etc/passwd",
+  "/etc/group",
   "/etc/resolv.conf",
   "/etc/ssl",
 ] as const;
+const READ_ONLY_DEVICE_PATHS = ["/dev/random", "/dev/urandom"] as const;
+const READ_WRITE_DEVICE_PATHS = ["/dev/null"] as const;
 
 export type ContainerCodexLaunchBoundaryOptions = {
   authJson: string;
@@ -49,38 +54,44 @@ export type ContainerCodexLaunchBoundaryOptions = {
   codexHomeRoot: string;
   codexRoot: string;
   codexExecutable: string;
-  bwrapExecutable: string;
+  landlockLauncher: string;
+  pythonExecutable: string;
   setprivExecutable: string;
   ptraceScopePath?: string;
   uid: number;
   gid: number;
 };
 
-export type ContainerBubblewrapLaunchPlan = PreparedAppServerLaunch & {
-  mountedHostPaths: string[];
+export type ContainerLandlockLaunchPlan = PreparedAppServerLaunch & {
+  allowedHostPaths: string[];
 };
 
-type BuildContainerBubblewrapLaunchOptions = {
+type BuildContainerLandlockLaunchOptions = {
   appServerArgs: string[];
-  bwrapExecutable: string;
   codexExecutable: string;
   codexRoot: string;
+  codexHome: string;
+  landlockLauncher: string;
+  pythonExecutable: string;
   setprivExecutable: string;
   stagedAuthFile: string;
   workspace: string;
 };
 
-export type BuildContainerBubblewrapProbeOptions = {
-  bwrapExecutable: string;
+export type BuildContainerLandlockProbeOptions = {
+  codexHome: string;
   codexRoot: string;
+  landlockLauncher: string;
+  pythonExecutable: string;
+  setprivExecutable: string;
   workspace: string;
 };
 
-export type ContainerBubblewrapProbePlan = {
+export type ContainerLandlockProbePlan = {
   command: string;
   args: string[];
   environment: NodeJS.ProcessEnv;
-  mountedHostPaths: string[];
+  allowedHostPaths: string[];
 };
 
 function isolationError(message: string, cause?: unknown): CompilerSetupError {
@@ -108,7 +119,27 @@ function requireAbsolutePath(label: string, value: string): void {
   }
 }
 
-function guestCodexExecutable(codexRoot: string, codexExecutable: string) {
+async function assertWorkspaceEntriesBounded(directory: string): Promise<void> {
+  for (const name of await readdir(directory)) {
+    const path = join(directory, name);
+    const metadata = await lstat(path);
+    if (metadata.isSymbolicLink()) {
+      throw isolationError(
+        "Generation workspace must not contain symbolic links before launch.",
+      );
+    }
+    if (metadata.isFile() && metadata.nlink !== 1) {
+      throw isolationError(
+        "Generation workspace must not contain multiply-linked files before launch.",
+      );
+    }
+    if (metadata.isDirectory()) {
+      await assertWorkspaceEntriesBounded(path);
+    }
+  }
+}
+
+function requireCodexExecutable(codexRoot: string, codexExecutable: string) {
   const fromRoot = relative(codexRoot, codexExecutable);
   if (
     fromRoot === "" ||
@@ -120,18 +151,22 @@ function guestCodexExecutable(codexRoot: string, codexExecutable: string) {
       "The Codex executable must resolve beneath the mounted Codex root.",
     );
   }
-  return `${GUEST_CODEX_ROOT}/${fromRoot}`;
+  return codexExecutable;
 }
 
-function buildContainerBubblewrapBase(options: {
-  bwrapExecutable: string;
+function buildContainerLandlockBase(options: {
+  codexHome: string;
   codexRoot: string;
+  landlockLauncher: string;
+  pythonExecutable: string;
   stagedAuthFile?: string;
   workspace: string;
-}): ContainerBubblewrapProbePlan {
+}): ContainerLandlockProbePlan {
   for (const [label, value] of [
-    ["Bubblewrap executable", options.bwrapExecutable],
+    ["Landlock launcher", options.landlockLauncher],
+    ["Python executable", options.pythonExecutable],
     ["Codex root", options.codexRoot],
+    ["Codex home", options.codexHome],
     ["Generation workspace", options.workspace],
   ] as const) {
     requireAbsolutePath(label, value);
@@ -139,104 +174,45 @@ function buildContainerBubblewrapBase(options: {
   if (options.stagedAuthFile !== undefined) {
     requireAbsolutePath("Staged Codex auth file", options.stagedAuthFile);
   }
-  const mountedHostPaths = [
-    "/usr",
-    ...NETWORK_RUNTIME_MOUNTS,
-    options.codexRoot,
+  const readExecutePaths = ["/usr", options.codexRoot];
+  const readOnlyPaths = [
+    ...NETWORK_RUNTIME_PATHS,
+    ...READ_ONLY_DEVICE_PATHS,
     ...(options.stagedAuthFile === undefined ? [] : [options.stagedAuthFile]),
+  ];
+  const readWritePaths = [
+    ...READ_WRITE_DEVICE_PATHS,
+    options.codexHome,
     options.workspace,
   ];
   const environment: NodeJS.ProcessEnv = {
-    HOME: GUEST_CODEX_HOME,
-    CODEX_HOME: GUEST_CODEX_HOME,
+    HOME: options.codexHome,
+    CODEX_HOME: options.codexHome,
     LANG: "C.UTF-8",
-    PATH: "/usr/bin",
-    TMPDIR: "/tmp",
+    PATH: "/usr/local/bin:/usr/bin",
+    TMPDIR: options.codexHome,
   };
   return {
-    command: options.bwrapExecutable,
+    command: options.pythonExecutable,
     args: [
-      "--die-with-parent",
-      "--new-session",
-      "--unshare-user",
-      "--unshare-pid",
-      "--unshare-ipc",
-      "--unshare-uts",
-      "--unshare-cgroup-try",
-      "--cap-drop",
-      "ALL",
-      "--clearenv",
-      "--ro-bind",
-      "/usr",
-      "/usr",
-      "--symlink",
-      "usr/bin",
-      "/bin",
-      "--symlink",
-      "usr/lib",
-      "/lib",
-      "--symlink",
-      "usr/lib",
-      "/lib64",
-      "--dir",
-      "/etc",
-      ...NETWORK_RUNTIME_MOUNTS.flatMap((path) => ["--ro-bind", path, path]),
-      "--dev",
-      "/dev",
-      "--proc",
-      "/proc",
-      "--ro-bind",
-      "/dev/null",
-      "/proc/1/environ",
-      "--dir",
-      "/opt",
-      "--ro-bind",
-      options.codexRoot,
-      GUEST_CODEX_ROOT,
-      "--tmpfs",
-      "/tmp",
-      "--dir",
-      "/home",
-      "--tmpfs",
-      GUEST_CODEX_HOME,
-      ...(options.stagedAuthFile === undefined
-        ? []
-        : [
-            "--ro-bind",
-            options.stagedAuthFile,
-            `${GUEST_CODEX_HOME}/auth.json`,
-          ]),
-      "--dir",
-      GUEST_WORKSPACE,
-      "--bind",
-      options.workspace,
-      GUEST_WORKSPACE,
-      "--setenv",
-      "HOME",
-      GUEST_CODEX_HOME,
-      "--setenv",
-      "CODEX_HOME",
-      GUEST_CODEX_HOME,
-      "--setenv",
-      "LANG",
-      "C.UTF-8",
-      "--setenv",
-      "PATH",
-      "/usr/bin",
-      "--setenv",
-      "TMPDIR",
-      "/tmp",
-      "--chdir",
-      GUEST_WORKSPACE,
+      options.landlockLauncher,
+      ...readOnlyPaths.flatMap((path) => ["--ro", path]),
+      ...readExecutePaths.flatMap((path) => ["--ro-exec", path]),
+      ...readWritePaths.flatMap((path) => ["--rw", path]),
+      "--",
     ],
     environment,
-    mountedHostPaths,
+    allowedHostPaths: [
+      ...readOnlyPaths,
+      ...readExecutePaths,
+      ...readWritePaths,
+    ],
   };
 }
 
-export function buildContainerBubblewrapLaunch(
-  options: BuildContainerBubblewrapLaunchOptions,
-): ContainerBubblewrapLaunchPlan {
+export function buildContainerLandlockLaunch(
+  options: BuildContainerLandlockLaunchOptions,
+): ContainerLandlockLaunchPlan {
   for (const [label, value] of [
     ["Codex executable", options.codexExecutable],
     ["setpriv executable", options.setprivExecutable],
@@ -246,11 +222,11 @@ export function buildContainerBubblewrapLaunch(
   if (options.appServerArgs.some((argument) => argument.includes("\0"))) {
     throw isolationError("Codex App Server arguments contain an invalid byte.");
   }
-  const codexCommand = guestCodexExecutable(
+  const codexCommand = requireCodexExecutable(
     options.codexRoot,
     options.codexExecutable,
   );
-  const base = buildContainerBubblewrapBase(options);
+  const base = buildContainerLandlockBase(options);
 
   return {
     ...base,
@@ -266,28 +242,36 @@ export function buildContainerBubblewrapLaunch(
       "-c",
       CREDENTIAL_EXCLUSIONS,
     ],
-    protocolCwd: GUEST_WORKSPACE,
+    protocolCwd: options.workspace,
+    spawnCwd: options.workspace,
   };
 }
 
-export function buildContainerBubblewrapProbe(
-  options: BuildContainerBubblewrapProbeOptions,
-): ContainerBubblewrapProbePlan {
-  const base = buildContainerBubblewrapBase(options);
+export function buildContainerLandlockProbe(
+  options: BuildContainerLandlockProbeOptions,
+): ContainerLandlockProbePlan {
+  const base = buildContainerLandlockBase(options);
   const probeScript = String.raw`
 set -euo pipefail
-test -x /opt/codex/bin/codex
-test ! -s /proc/1/environ
-test ! -e /app
-test ! -e /repo
-test ! -e /opt/counterlab-venv
-test ! -e /work/jobs
-test ! -e /run/counterlab-codex
-test -f /workspace/approved.txt
-/usr/bin/setpriv --no-new-privs /opt/codex/bin/codex --version >/dev/null
-printf 'bounded output\n' > /workspace/probe-output.txt
-test "$(cat /workspace/probe-output.txt)" = 'bounded output'
-printf '{"forbiddenHostPathsHidden":true,"parentEnvironmentHidden":true,"workspaceVisible":true,"workspaceWritable":true}\n'
+codex_root="$1"
+workspace="$2"
+setpriv_executable="$3"
+test -x "$codex_root/bin/codex"
+! cat /proc/1/environ >/dev/null 2>&1
+! cat /app/runner.mjs >/dev/null 2>&1
+! ls /repo >/dev/null 2>&1
+! ls /opt/counterlab-venv >/dev/null 2>&1
+! ls /work/jobs >/dev/null 2>&1
+! ls /run/counterlab-codex >/dev/null 2>&1
+test "$(cat "$workspace/approved.txt")" = 'approved'
+! sh -c 'printf denied > /app/counterlab-landlock-write' >/dev/null 2>&1
+! truncate -s 0 /app/runner.mjs >/dev/null 2>&1
+! ln "$workspace/approved.txt" /app/counterlab-landlock-link >/dev/null 2>&1
+/usr/bin/bash --noprofile --norc -c '! cat /app/runner.mjs >/dev/null 2>&1'
+"$setpriv_executable" --no-new-privs "$codex_root/bin/codex" --version >/dev/null
+printf 'bounded output\n' > "$workspace/probe-output.txt"
+test "$(cat "$workspace/probe-output.txt")" = 'bounded output'
+printf '{"forbiddenHostPathsUnreadable":true,"forbiddenHostWritesDenied":true,"crossTreeReferDenied":true,"execInheritanceEnforced":true,"parentEnvironmentUnreadable":true,"workspaceVisible":true,"workspaceWritable":true}\n'
 `;
   return {
     ...base,
@@ -298,6 +282,10 @@ printf '{"forbiddenHostPathsHidden":true,"parentEnvironmentHidden":true,"workspa
       "--norc",
       "-c",
       probeScript,
+      "counterlab-landlock-probe",
+      options.codexRoot,
+      options.workspace,
+      options.setprivExecutable,
     ],
   };
 }
@@ -326,7 +314,8 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
       !isAbsolute(this.options.codexHomeRoot) ||
       !isAbsolute(this.options.codexRoot) ||
       !isAbsolute(this.options.codexExecutable) ||
-      !isAbsolute(this.options.bwrapExecutable) ||
+      !isAbsolute(this.options.landlockLauncher) ||
+      !isAbsolute(this.options.pythonExecutable) ||
       !isAbsolute(this.options.setprivExecutable)
     ) {
       return {
@@ -352,16 +341,24 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
           realpath(this.options.codexRoot),
           realpath(this.options.codexExecutable),
         ]);
-      const [bwrapExecutable, setprivExecutable, systemRoot] =
-        await Promise.all([
-          realpath(this.options.bwrapExecutable),
-          realpath(this.options.setprivExecutable),
-          realpath("/usr"),
-        ]);
+      const [
+        landlockLauncher,
+        pythonExecutable,
+        setprivExecutable,
+        systemRoot,
+      ] = await Promise.all([
+        realpath(this.options.landlockLauncher),
+        realpath(this.options.pythonExecutable),
+        realpath(this.options.setprivExecutable),
+        realpath("/usr"),
+      ]);
       if (
         !isContained(codexRoot, codexExecutable) ||
-        !isContained(systemRoot, bwrapExecutable) ||
         !isContained(systemRoot, setprivExecutable) ||
+        pathsOverlap(workspaceRoot, landlockLauncher) ||
+        pathsOverlap(codexHomeRoot, landlockLauncher) ||
+        pathsOverlap(workspaceRoot, pythonExecutable) ||
+        pathsOverlap(codexHomeRoot, pythonExecutable) ||
         pathsOverlap(workspaceRoot, codexHomeRoot) ||
         pathsOverlap(workspaceRoot, codexRoot) ||
         pathsOverlap(codexHomeRoot, codexRoot)
@@ -383,12 +380,17 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
       }
       await Promise.all([
         access(this.options.codexExecutable, constants.X_OK),
-        access(this.options.bwrapExecutable, constants.X_OK),
+        access(this.options.landlockLauncher, constants.R_OK),
+        access(this.options.pythonExecutable, constants.X_OK),
         access(this.options.setprivExecutable, constants.X_OK),
         access(this.options.codexRoot, constants.R_OK | constants.X_OK),
         access(this.options.workspaceRoot, constants.R_OK | constants.W_OK),
         access(this.options.codexHomeRoot, constants.R_OK | constants.W_OK),
-        ...NETWORK_RUNTIME_MOUNTS.map((path) => access(path, constants.R_OK)),
+        ...NETWORK_RUNTIME_PATHS.map((path) => access(path, constants.R_OK)),
+        ...READ_ONLY_DEVICE_PATHS.map((path) => access(path, constants.R_OK)),
+        ...READ_WRITE_DEVICE_PATHS.map((path) =>
+          access(path, constants.R_OK | constants.W_OK),
+        ),
       ]);
       return { available: true };
     } catch {
@@ -441,6 +443,7 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
         "Generation directory is outside the hosted runner workspace.",
       );
     }
+    await assertWorkspaceEntriesBounded(workspace);
     if (!isAbsolute(request.command)) {
       throw isolationError("The requested Codex executable must be absolute.");
     }
@@ -454,31 +457,40 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
         "The requested Codex executable does not match the configured executable.",
       );
     }
-    const authPath = join(
+    const launchRoot = join(
       resolve(this.options.codexHomeRoot),
-      `counterlab-codex-${randomUUID()}.auth.json`,
+      `counterlab-codex-${randomUUID()}`,
     );
+    const codexHome = join(launchRoot, "state");
+    const authPath = join(launchRoot, "auth.json");
+    const authLink = join(codexHome, "auth.json");
     let disposed = false;
     let revoked = false;
     let authHandle: Awaited<ReturnType<typeof open>> | undefined;
     try {
+      await mkdir(codexHome, { recursive: true, mode: 0o700 });
+      await chmod(codexHome, 0o700);
       authHandle = await open(authPath, "wx", 0o600);
       await authHandle.writeFile(this.parsedAuth, "utf8");
       await authHandle.close();
       authHandle = undefined;
+      await symlink("../auth.json", authLink);
       await chmod(workspace, 0o700);
     } catch (error) {
       await authHandle?.close().catch(() => undefined);
+      await unlink(authLink).catch(() => undefined);
       await writeFile(authPath, "", { flag: "w" }).catch(() => undefined);
       await unlink(authPath).catch(() => undefined);
       throw isolationError("Codex credential staging failed.", error);
     }
 
-    const plan = buildContainerBubblewrapLaunch({
+    const plan = buildContainerLandlockLaunch({
       appServerArgs: request.args,
-      bwrapExecutable: this.options.bwrapExecutable,
       codexExecutable,
+      codexHome,
       codexRoot,
+      landlockLauncher: this.options.landlockLauncher,
+      pythonExecutable: this.options.pythonExecutable,
       setprivExecutable: this.options.setprivExecutable,
       stagedAuthFile: authPath,
       workspace,
@@ -513,6 +525,7 @@ export class ContainerCodexLaunchBoundary implements AppServerLaunchBoundary {
           revoked = true;
         }
         await unlink(authPath);
+        await unlink(authLink);
         disposed = true;
       },
     };

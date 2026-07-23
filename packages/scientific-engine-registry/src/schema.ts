@@ -677,8 +677,83 @@ export const GenerationIsolationEvidenceV1Schema = z
     }
   });
 
-export const GenerationIsolationEvidenceSchema =
-  GenerationIsolationEvidenceV1Schema;
+export const GENERATION_ISOLATION_PROBE_VERSION_V2 =
+  "counterlab-generation-isolation-v2" as const;
+
+export const GENERATION_ISOLATION_POLICY_VERSION_V2 =
+  "counterlab-landlock-path-policy-v1" as const;
+
+export const GenerationIsolationProbePayloadV2Schema = z.strictObject({
+  schemaVersion: z.literal("2"),
+  probeVersion: z.literal(GENERATION_ISOLATION_PROBE_VERSION_V2),
+  service: z.literal("counterlab-hosted-runner"),
+  probe: z.literal("non-root-startup"),
+  checks: z.tuple([
+    z.literal("entrypoint"),
+    z.literal("non-root-user"),
+    z.literal("immutable-paths"),
+    z.literal("codex"),
+    z.literal("python"),
+    z.literal("landlock"),
+    z.literal("landlock-read-isolation"),
+    z.literal("setpriv"),
+    z.literal("writable-roots"),
+  ]),
+  generationFilesystemReadIsolation: z.literal("OS_ENFORCED"),
+  mechanism: z.literal("landlock"),
+  landlockAbi: z.number().int().min(3),
+  landlock: z.strictObject({
+    forbiddenHostPathsUnreadable: z.literal(true),
+    forbiddenHostWritesDenied: z.literal(true),
+    crossTreeReferDenied: z.literal(true),
+    execInheritanceEnforced: z.literal(true),
+    parentEnvironmentUnreadable: z.literal(true),
+    workspaceVisible: z.literal(true),
+    workspaceWritable: z.literal(true),
+  }),
+});
+
+export const GenerationIsolationEvidenceV2Schema = z
+  .strictObject({
+    schemaVersion: z.literal("2"),
+    status: z.literal("VERIFIED"),
+    generationFilesystemReadIsolation: z.literal("OS_ENFORCED"),
+    sourceCommit: GitCommitSchema,
+    sourceTreeSha256: Sha256Schema,
+    localImageTag: z.string().regex(/^counterlab-runner:git-[a-f0-9]{40}$/),
+    localImageDigest: OciDigestSchema,
+    imageUser: z.literal("10001:10001"),
+    policyVersion: z.literal(GENERATION_ISOLATION_POLICY_VERSION_V2),
+    probePayload: GenerationIsolationProbePayloadV2Schema,
+    probePayloadSha256: Sha256Schema,
+    verifiedAt: z.iso.datetime({ offset: true }),
+    verifierVersion: z.literal("counterlab-generation-isolation-evidence-v2"),
+  })
+  .superRefine((evidence, context) => {
+    if (
+      evidence.localImageTag !==
+      `counterlab-runner:git-${evidence.sourceCommit}`
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["localImageTag"],
+        message: "generation-isolation image tag must bind the source commit",
+      });
+    }
+  });
+
+export const GenerationIsolationProbePayloadAnySchema = z.discriminatedUnion(
+  "schemaVersion",
+  [
+    GenerationIsolationProbePayloadSchema,
+    GenerationIsolationProbePayloadV2Schema,
+  ],
+);
+
+export const GenerationIsolationEvidenceSchema = z.discriminatedUnion(
+  "schemaVersion",
+  [GenerationIsolationEvidenceV1Schema, GenerationIsolationEvidenceV2Schema],
+);
 
 export const QualifiedRunnerReleaseV1Schema = z
   .strictObject({
@@ -1062,7 +1137,7 @@ export const QualifiedRunnerReleaseV6Schema = z
   .strictObject({
     ...QualifiedRunnerReleaseV5Schema.shape,
     schemaVersion: z.literal("6"),
-    generationIsolationEvidence: GenerationIsolationEvidenceV1Schema,
+    generationIsolationEvidence: GenerationIsolationEvidenceSchema,
     generationIsolationEvidenceSha256: Sha256Schema,
     generationIsolationProbeSha256: Sha256Schema,
     generationIsolationVerifiedAt: z.iso.datetime({ offset: true }),
@@ -1350,8 +1425,7 @@ export const ReleaseCheckReceiptV5Schema = z
   .strictObject({
     ...ReleaseCheckReceiptV4Schema.shape,
     schemaVersion: z.literal("5"),
-    releaseCheckGenerationIsolationEvidence:
-      GenerationIsolationEvidenceV1Schema,
+    releaseCheckGenerationIsolationEvidence: GenerationIsolationEvidenceSchema,
     releaseCheckGenerationIsolationEvidenceSha256: Sha256Schema,
     releaseCheckGenerationIsolationProbeSha256: Sha256Schema,
     releaseCheckGenerationIsolationVerifiedAt: z.iso.datetime({ offset: true }),

@@ -10,7 +10,7 @@ import {
   DeploymentReceiptV5Schema,
   DeploymentReceiptV6Schema,
   DeploymentReceiptV7Schema,
-  GenerationIsolationEvidenceV1Schema,
+  GenerationIsolationEvidenceSchema,
   RELEASE_CHECK_IDS,
   QualifiedRunnerReleaseV5Schema,
   ReleaseCheckReceiptV4Schema,
@@ -273,7 +273,7 @@ export function createReleaseCheckReceipt(input: {
     input.runtimeAttestation,
   );
   const checkedAt = input.checkedAt ?? new Date().toISOString();
-  const freshEvidence = GenerationIsolationEvidenceV1Schema.parse(
+  const freshEvidence = GenerationIsolationEvidenceSchema.parse(
     input.generationIsolationEvidence,
   );
   const freshVerification = verifyGenerationIsolationEvidence({

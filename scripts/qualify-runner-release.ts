@@ -18,7 +18,7 @@ import {
 } from "./contained-runtime-attestation.mjs";
 import {
   ContainedRuntimeAttestationSchema,
-  GenerationIsolationEvidenceV1Schema,
+  GenerationIsolationEvidenceSchema,
   assertCurrentGrypeReleaseEvidenceBinding,
 } from "../packages/scientific-engine-registry/src/index.js";
 import {
@@ -679,7 +679,7 @@ async function main(): Promise<void> {
     },
   );
   const readGenerationIsolation = async () => {
-    const evidence = GenerationIsolationEvidenceV1Schema.parse(
+    const evidence = GenerationIsolationEvidenceSchema.parse(
       JSON.parse(await readFile(isolationOutput, "utf8")) as unknown,
     );
     return verifyGenerationIsolationEvidence({

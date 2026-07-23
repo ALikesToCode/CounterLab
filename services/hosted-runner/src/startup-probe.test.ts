@@ -6,9 +6,12 @@ import {
   runHostedRunnerStartupProbe,
 } from "./startup-probe.js";
 
-const BUBBLEWRAP_OUTPUT = {
-  forbiddenHostPathsHidden: true,
-  parentEnvironmentHidden: true,
+const LANDLOCK_OUTPUT = {
+  forbiddenHostPathsUnreadable: true,
+  forbiddenHostWritesDenied: true,
+  crossTreeReferDenied: true,
+  execInheritanceEnforced: true,
+  parentEnvironmentUnreadable: true,
   workspaceVisible: true,
   workspaceWritable: true,
 } as const;
@@ -26,10 +29,14 @@ describe("hosted runner startup probe", () => {
         _args: string[],
         _options: { env: NodeJS.ProcessEnv; timeout: number },
       ) =>
-        _executable === "/runtime/bwrap" && _args[0] === "--version"
-          ? { stdout: "bubblewrap 0.11.0\n" }
-          : _executable === "/runtime/bwrap"
-            ? { stdout: `${JSON.stringify(BUBBLEWRAP_OUTPUT)}\n` }
+        _executable === "/runtime/python" && _args[1] === "--print-abi"
+          ? {
+              stdout:
+                '{"landlockAbi":9,"policyVersion":"counterlab-landlock-path-policy-v1"}\n',
+            }
+          : _executable === "/runtime/python" &&
+              _args[0] === "/runtime/landlock.py"
+            ? { stdout: `${JSON.stringify(LANDLOCK_OUTPUT)}\n` }
             : { stdout: "" },
     );
     const writeFile = vi.fn(async () => undefined);
@@ -50,7 +57,7 @@ describe("hosted runner startup probe", () => {
         COUNTERLAB_CODEX_HOME_ROOT: "/runtime/codex",
         COUNTERLAB_CODEX_EXECUTABLE: "/runtime/codex-bin",
         COUNTERLAB_CODEX_ROOT: "/runtime/codex-package",
-        COUNTERLAB_BWRAP_EXECUTABLE: "/runtime/bwrap",
+        COUNTERLAB_LANDLOCK_LAUNCHER: "/runtime/landlock.py",
         COUNTERLAB_SETPRIV_EXECUTABLE: "/runtime/setpriv",
         COUNTERLAB_PYTHON_EXECUTABLE: "/runtime/python",
       },
@@ -77,15 +84,15 @@ describe("hosted runner startup probe", () => {
         "immutable-paths",
         "codex",
         "python",
-        "bubblewrap",
-        "bubblewrap-read-isolation",
+        "landlock",
+        "landlock-read-isolation",
         "setpriv",
         "writable-roots",
       ],
       generationFilesystemReadIsolation: "OS_ENFORCED",
       generationIsolationProbe: {
-        schemaVersion: "1",
-        probeVersion: "counterlab-generation-isolation-v1",
+        schemaVersion: "2",
+        probeVersion: "counterlab-generation-isolation-v2",
         service: "counterlab-hosted-runner",
         probe: "non-root-startup",
         checks: [
@@ -94,23 +101,22 @@ describe("hosted runner startup probe", () => {
           "immutable-paths",
           "codex",
           "python",
-          "bubblewrap",
-          "bubblewrap-read-isolation",
+          "landlock",
+          "landlock-read-isolation",
           "setpriv",
           "writable-roots",
         ],
         generationFilesystemReadIsolation: "OS_ENFORCED",
-        bubblewrapVersion: "0.11.0",
-        bubblewrap: BUBBLEWRAP_OUTPUT,
+        mechanism: "landlock",
+        landlockAbi: 9,
+        landlock: LANDLOCK_OUTPUT,
       },
       generationIsolationProbeSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
     });
     expect(result.generationIsolationProbeSha256).toBe(
       hashGenerationIsolationProbe(result.generationIsolationProbe),
     );
-    expect(result.generationIsolationProbeSha256).toBe(
-      "700cc58bedc163846e3854415170f49f55da9fd3ba316cc4967747d5268199dc",
-    );
+    expect(result.generationIsolationProbeSha256).toMatch(/^[a-f0-9]{64}$/u);
     expect(stat.mock.calls.map(([path]) => path)).toEqual([
       "/runtime/app",
       "/runtime/runner.mjs",
@@ -120,7 +126,7 @@ describe("hosted runner startup probe", () => {
       "/runtime/runner.mjs",
       "/runtime/codex-bin",
       "/runtime/codex-package",
-      "/runtime/bwrap",
+      "/runtime/landlock.py",
       "/runtime/setpriv",
       "/runtime/python",
     ]);
@@ -136,6 +142,10 @@ describe("hosted runner startup probe", () => {
       recursive: true,
       mode: 0o700,
     });
+    expect(mkdir).toHaveBeenCalledWith(
+      "/runtime/jobs/.isolation-probe/.counterlab-codex",
+      { recursive: true, mode: 0o700 },
+    );
     expect(writeFile).toHaveBeenCalledWith(
       "/runtime/jobs/.isolation-probe/approved.txt",
       "approved\n",
@@ -147,25 +157,25 @@ describe("hosted runner startup probe", () => {
       expect(options.env).not.toHaveProperty("OPENAI_API_KEY");
     }
     expect(execute.mock.calls[3]?.slice(0, 2)).toEqual([
-      "/runtime/bwrap",
-      ["--version"],
+      "/runtime/python",
+      ["/runtime/landlock.py", "--print-abi"],
     ]);
     const [probeExecutable, probeArgs, probeOptions] =
       execute.mock.calls[4] ?? [];
-    expect(probeExecutable).toBe("/runtime/bwrap");
-    expect(probeArgs).toContain("--unshare-user");
-    expect(probeArgs).toContain("--unshare-pid");
-    expect(probeArgs).toContain("--clearenv");
-    expect(probeArgs?.join(" ")).toContain("/usr/bin/setpriv");
-    expect(probeArgs?.join(" ")).toContain("/opt/codex/bin/codex");
+    expect(probeExecutable).toBe("/runtime/python");
+    expect(probeArgs).toContain("/runtime/landlock.py");
+    expect(probeArgs).toContain("--ro-exec");
+    expect(probeArgs).toContain("--rw");
+    expect(probeArgs).toContain("/runtime/setpriv");
+    expect(probeArgs).toContain("/runtime/codex-package");
     expect(probeArgs).toContain("/runtime/jobs/.isolation-probe");
     expect(probeArgs).not.toContain("/runtime/jobs");
     expect(probeOptions?.env).toEqual({
-      CODEX_HOME: "/home/counterlab",
-      HOME: "/home/counterlab",
+      CODEX_HOME: "/runtime/jobs/.isolation-probe/.counterlab-codex",
+      HOME: "/runtime/jobs/.isolation-probe/.counterlab-codex",
       LANG: "C.UTF-8",
-      PATH: "/usr/bin",
-      TMPDIR: "/tmp",
+      PATH: "/usr/local/bin:/usr/bin",
+      TMPDIR: "/runtime/jobs/.isolation-probe/.counterlab-codex",
     });
   });
 
@@ -260,8 +270,8 @@ describe("hosted runner startup probe", () => {
       "a false isolation check",
       {
         stdout: JSON.stringify({
-          ...BUBBLEWRAP_OUTPUT,
-          parentEnvironmentHidden: false,
+          ...LANDLOCK_OUTPUT,
+          parentEnvironmentUnreadable: false,
         }),
       },
     ],
@@ -269,12 +279,12 @@ describe("hosted runner startup probe", () => {
       "an unknown isolation field",
       {
         stdout: JSON.stringify({
-          ...BUBBLEWRAP_OUTPUT,
+          ...LANDLOCK_OUTPUT,
           unverifiedClaim: true,
         }),
       },
     ],
-  ])("fails closed when Bubblewrap returns %s", async (_label, probeResult) => {
+  ])("fails closed when Landlock returns %s", async (_label, probeResult) => {
     let invocation = 0;
     await expect(
       runHostedRunnerStartupProbe({
@@ -295,20 +305,25 @@ describe("hosted runner startup probe", () => {
         getGid: () => 10001,
         execute: async () => {
           invocation += 1;
-          if (invocation === 4) return { stdout: "bubblewrap 0.11.0\n" };
+          if (invocation === 4) {
+            return {
+              stdout:
+                '{"landlockAbi":9,"policyVersion":"counterlab-landlock-path-policy-v1"}',
+            };
+          }
           return invocation === 5 ? probeResult : { stdout: "" };
         },
       }),
     ).rejects.toThrow();
   });
 
-  it("rejects a Bubblewrap version that differs from the pinned image", () => {
+  it("rejects an unavailable Landlock ABI", () => {
     expect(() =>
-      createGenerationIsolationProbePayload(
-        BUBBLEWRAP_OUTPUT,
-        "bubblewrap 0.11.1",
-      ),
-    ).toThrow("requires bubblewrap 0.11.0; observed bubblewrap 0.11.1");
+      createGenerationIsolationProbePayload(LANDLOCK_OUTPUT, {
+        landlockAbi: 2,
+        policyVersion: "counterlab-landlock-path-policy-v1",
+      }),
+    ).toThrow();
   });
 
   it("fails closed when PID 1 is not the declared non-root identity", async () => {

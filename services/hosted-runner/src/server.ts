@@ -290,8 +290,12 @@ async function startProductionServer(): Promise<void> {
   const codexExecutable =
     process.env.COUNTERLAB_CODEX_EXECUTABLE ?? "/usr/local/bin/codex";
   const codexRoot = process.env.COUNTERLAB_CODEX_ROOT ?? "/opt/codex";
-  const bwrapExecutable =
-    process.env.COUNTERLAB_BWRAP_EXECUTABLE ?? "/usr/bin/bwrap";
+  const landlockLauncher =
+    process.env.COUNTERLAB_LANDLOCK_LAUNCHER ??
+    "/opt/counterlab/landlock_launcher.py";
+  const pythonExecutable =
+    process.env.COUNTERLAB_PYTHON_EXECUTABLE ??
+    "/opt/counterlab-venv/bin/python";
   const setprivExecutable =
     process.env.COUNTERLAB_SETPRIV_EXECUTABLE ?? "/usr/bin/setpriv";
   const uid = Number(process.env.COUNTERLAB_CODEX_UID ?? "10001");
@@ -306,7 +310,8 @@ async function startProductionServer(): Promise<void> {
     codexHomeRoot: resolve(codexHomeRoot),
     codexRoot: resolve(codexRoot),
     codexExecutable: resolve(codexExecutable),
-    bwrapExecutable: resolve(bwrapExecutable),
+    landlockLauncher: resolve(landlockLauncher),
+    pythonExecutable: resolve(pythonExecutable),
     setprivExecutable: resolve(setprivExecutable),
     uid,
     gid,

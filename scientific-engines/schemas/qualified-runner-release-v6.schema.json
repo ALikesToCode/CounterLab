@@ -185,186 +185,393 @@
       "const": "OS_ENFORCED"
     },
     "generationIsolationEvidence": {
-      "type": "object",
-      "properties": {
-        "schemaVersion": {
-          "type": "string",
-          "const": "1"
-        },
-        "status": {
-          "type": "string",
-          "const": "VERIFIED"
-        },
-        "generationFilesystemReadIsolation": {
-          "type": "string",
-          "const": "OS_ENFORCED"
-        },
-        "sourceCommit": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{40}$"
-        },
-        "sourceTreeSha256": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
-        },
-        "localImageTag": {
-          "type": "string",
-          "pattern": "^counterlab-runner:git-[a-f0-9]{40}$"
-        },
-        "localImageDigest": {
-          "type": "string",
-          "pattern": "^sha256:[a-f0-9]{64}$"
-        },
-        "imageUser": {
-          "type": "string",
-          "const": "10001:10001"
-        },
-        "mountPolicyVersion": {
-          "type": "string",
-          "const": "counterlab-bwrap-mount-policy-v1"
-        },
-        "probePayload": {
+      "oneOf": [
+        {
           "type": "object",
           "properties": {
             "schemaVersion": {
               "type": "string",
               "const": "1"
             },
-            "probeVersion": {
+            "status": {
               "type": "string",
-              "const": "counterlab-generation-isolation-v1"
-            },
-            "service": {
-              "type": "string",
-              "const": "counterlab-hosted-runner"
-            },
-            "probe": {
-              "type": "string",
-              "const": "non-root-startup"
-            },
-            "checks": {
-              "type": "array",
-              "prefixItems": [
-                {
-                  "type": "string",
-                  "const": "entrypoint"
-                },
-                {
-                  "type": "string",
-                  "const": "non-root-user"
-                },
-                {
-                  "type": "string",
-                  "const": "immutable-paths"
-                },
-                {
-                  "type": "string",
-                  "const": "codex"
-                },
-                {
-                  "type": "string",
-                  "const": "python"
-                },
-                {
-                  "type": "string",
-                  "const": "bubblewrap"
-                },
-                {
-                  "type": "string",
-                  "const": "bubblewrap-read-isolation"
-                },
-                {
-                  "type": "string",
-                  "const": "setpriv"
-                },
-                {
-                  "type": "string",
-                  "const": "writable-roots"
-                }
-              ],
-              "minItems": 9,
-              "maxItems": 9,
-              "items": false
+              "const": "VERIFIED"
             },
             "generationFilesystemReadIsolation": {
               "type": "string",
               "const": "OS_ENFORCED"
             },
-            "bubblewrapVersion": {
+            "sourceCommit": {
               "type": "string",
-              "const": "0.11.0"
+              "pattern": "^[a-f0-9]{40}$"
             },
-            "bubblewrap": {
+            "sourceTreeSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "localImageTag": {
+              "type": "string",
+              "pattern": "^counterlab-runner:git-[a-f0-9]{40}$"
+            },
+            "localImageDigest": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            },
+            "imageUser": {
+              "type": "string",
+              "const": "10001:10001"
+            },
+            "mountPolicyVersion": {
+              "type": "string",
+              "const": "counterlab-bwrap-mount-policy-v1"
+            },
+            "probePayload": {
               "type": "object",
               "properties": {
-                "forbiddenHostPathsHidden": {
-                  "type": "boolean",
-                  "const": true
+                "schemaVersion": {
+                  "type": "string",
+                  "const": "1"
                 },
-                "parentEnvironmentHidden": {
-                  "type": "boolean",
-                  "const": true
+                "probeVersion": {
+                  "type": "string",
+                  "const": "counterlab-generation-isolation-v1"
                 },
-                "workspaceVisible": {
-                  "type": "boolean",
-                  "const": true
+                "service": {
+                  "type": "string",
+                  "const": "counterlab-hosted-runner"
                 },
-                "workspaceWritable": {
-                  "type": "boolean",
-                  "const": true
+                "probe": {
+                  "type": "string",
+                  "const": "non-root-startup"
+                },
+                "checks": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "string",
+                      "const": "entrypoint"
+                    },
+                    {
+                      "type": "string",
+                      "const": "non-root-user"
+                    },
+                    {
+                      "type": "string",
+                      "const": "immutable-paths"
+                    },
+                    {
+                      "type": "string",
+                      "const": "codex"
+                    },
+                    {
+                      "type": "string",
+                      "const": "python"
+                    },
+                    {
+                      "type": "string",
+                      "const": "bubblewrap"
+                    },
+                    {
+                      "type": "string",
+                      "const": "bubblewrap-read-isolation"
+                    },
+                    {
+                      "type": "string",
+                      "const": "setpriv"
+                    },
+                    {
+                      "type": "string",
+                      "const": "writable-roots"
+                    }
+                  ],
+                  "minItems": 9,
+                  "maxItems": 9,
+                  "items": false
+                },
+                "generationFilesystemReadIsolation": {
+                  "type": "string",
+                  "const": "OS_ENFORCED"
+                },
+                "bubblewrapVersion": {
+                  "type": "string",
+                  "const": "0.11.0"
+                },
+                "bubblewrap": {
+                  "type": "object",
+                  "properties": {
+                    "forbiddenHostPathsHidden": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "parentEnvironmentHidden": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "workspaceVisible": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "workspaceWritable": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "forbiddenHostPathsHidden",
+                    "parentEnvironmentHidden",
+                    "workspaceVisible",
+                    "workspaceWritable"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
-                "forbiddenHostPathsHidden",
-                "parentEnvironmentHidden",
-                "workspaceVisible",
-                "workspaceWritable"
+                "schemaVersion",
+                "probeVersion",
+                "service",
+                "probe",
+                "checks",
+                "generationFilesystemReadIsolation",
+                "bubblewrapVersion",
+                "bubblewrap"
               ],
               "additionalProperties": false
+            },
+            "probePayloadSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "verifiedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "verifierVersion": {
+              "type": "string",
+              "const": "counterlab-generation-isolation-evidence-v1"
             }
           },
           "required": [
             "schemaVersion",
-            "probeVersion",
-            "service",
-            "probe",
-            "checks",
+            "status",
             "generationFilesystemReadIsolation",
-            "bubblewrapVersion",
-            "bubblewrap"
+            "sourceCommit",
+            "sourceTreeSha256",
+            "localImageTag",
+            "localImageDigest",
+            "imageUser",
+            "mountPolicyVersion",
+            "probePayload",
+            "probePayloadSha256",
+            "verifiedAt",
+            "verifierVersion"
           ],
           "additionalProperties": false
         },
-        "probePayloadSha256": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
-        },
-        "verifiedAt": {
-          "type": "string",
-          "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
-        },
-        "verifierVersion": {
-          "type": "string",
-          "const": "counterlab-generation-isolation-evidence-v1"
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "type": "string",
+              "const": "2"
+            },
+            "status": {
+              "type": "string",
+              "const": "VERIFIED"
+            },
+            "generationFilesystemReadIsolation": {
+              "type": "string",
+              "const": "OS_ENFORCED"
+            },
+            "sourceCommit": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{40}$"
+            },
+            "sourceTreeSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "localImageTag": {
+              "type": "string",
+              "pattern": "^counterlab-runner:git-[a-f0-9]{40}$"
+            },
+            "localImageDigest": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            },
+            "imageUser": {
+              "type": "string",
+              "const": "10001:10001"
+            },
+            "policyVersion": {
+              "type": "string",
+              "const": "counterlab-landlock-path-policy-v1"
+            },
+            "probePayload": {
+              "type": "object",
+              "properties": {
+                "schemaVersion": {
+                  "type": "string",
+                  "const": "2"
+                },
+                "probeVersion": {
+                  "type": "string",
+                  "const": "counterlab-generation-isolation-v2"
+                },
+                "service": {
+                  "type": "string",
+                  "const": "counterlab-hosted-runner"
+                },
+                "probe": {
+                  "type": "string",
+                  "const": "non-root-startup"
+                },
+                "checks": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "string",
+                      "const": "entrypoint"
+                    },
+                    {
+                      "type": "string",
+                      "const": "non-root-user"
+                    },
+                    {
+                      "type": "string",
+                      "const": "immutable-paths"
+                    },
+                    {
+                      "type": "string",
+                      "const": "codex"
+                    },
+                    {
+                      "type": "string",
+                      "const": "python"
+                    },
+                    {
+                      "type": "string",
+                      "const": "landlock"
+                    },
+                    {
+                      "type": "string",
+                      "const": "landlock-read-isolation"
+                    },
+                    {
+                      "type": "string",
+                      "const": "setpriv"
+                    },
+                    {
+                      "type": "string",
+                      "const": "writable-roots"
+                    }
+                  ],
+                  "minItems": 9,
+                  "maxItems": 9,
+                  "items": false
+                },
+                "generationFilesystemReadIsolation": {
+                  "type": "string",
+                  "const": "OS_ENFORCED"
+                },
+                "mechanism": {
+                  "type": "string",
+                  "const": "landlock"
+                },
+                "landlockAbi": {
+                  "type": "integer",
+                  "minimum": 3,
+                  "maximum": 9007199254740991
+                },
+                "landlock": {
+                  "type": "object",
+                  "properties": {
+                    "forbiddenHostPathsUnreadable": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "forbiddenHostWritesDenied": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "crossTreeReferDenied": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "execInheritanceEnforced": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "parentEnvironmentUnreadable": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "workspaceVisible": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "workspaceWritable": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "forbiddenHostPathsUnreadable",
+                    "forbiddenHostWritesDenied",
+                    "crossTreeReferDenied",
+                    "execInheritanceEnforced",
+                    "parentEnvironmentUnreadable",
+                    "workspaceVisible",
+                    "workspaceWritable"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "schemaVersion",
+                "probeVersion",
+                "service",
+                "probe",
+                "checks",
+                "generationFilesystemReadIsolation",
+                "mechanism",
+                "landlockAbi",
+                "landlock"
+              ],
+              "additionalProperties": false
+            },
+            "probePayloadSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "verifiedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "verifierVersion": {
+              "type": "string",
+              "const": "counterlab-generation-isolation-evidence-v2"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "status",
+            "generationFilesystemReadIsolation",
+            "sourceCommit",
+            "sourceTreeSha256",
+            "localImageTag",
+            "localImageDigest",
+            "imageUser",
+            "policyVersion",
+            "probePayload",
+            "probePayloadSha256",
+            "verifiedAt",
+            "verifierVersion"
+          ],
+          "additionalProperties": false
         }
-      },
-      "required": [
-        "schemaVersion",
-        "status",
-        "generationFilesystemReadIsolation",
-        "sourceCommit",
-        "sourceTreeSha256",
-        "localImageTag",
-        "localImageDigest",
-        "imageUser",
-        "mountPolicyVersion",
-        "probePayload",
-        "probePayloadSha256",
-        "verifiedAt",
-        "verifierVersion"
-      ],
-      "additionalProperties": false
+      ]
     },
     "generationIsolationEvidenceSha256": {
       "type": "string",

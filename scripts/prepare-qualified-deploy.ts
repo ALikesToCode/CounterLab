@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import {
   ContainedRuntimeAttestationSchema,
-  type GenerationIsolationEvidenceV1,
+  type GenerationIsolationEvidence,
 } from "../packages/scientific-engine-registry/src/index.js";
 import { canonicalJson } from "../packages/session-core/src/index.js";
 import {
@@ -76,7 +76,7 @@ export type RunnerReleaseObservation = {
 
 export type QualifiedReleaseObservation = RunnerReleaseObservation & {
   generationFilesystemReadIsolation: "OS_ENFORCED";
-  generationIsolationEvidence: GenerationIsolationEvidenceV1;
+  generationIsolationEvidence: GenerationIsolationEvidence;
   generationIsolationEvidenceSha256: string;
   generationIsolationProbeSha256: string;
   generationIsolationVerifiedAt: string;

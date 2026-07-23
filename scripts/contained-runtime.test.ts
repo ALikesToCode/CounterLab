@@ -708,6 +708,15 @@ function rootlessSpec(
           { names: ["exit", "exit_group"], action: "SCMP_ACT_ALLOW" },
           { names: ["fork", "vfork"], action: "SCMP_ACT_ALLOW" },
           {
+            names: [
+              "landlock_add_rule",
+              "landlock_create_ruleset",
+              "landlock_restrict_self",
+              "prctl",
+            ],
+            action: "SCMP_ACT_ALLOW",
+          },
+          {
             names: ["clone"],
             action: "SCMP_ACT_ALLOW",
             args: [
@@ -1848,7 +1857,6 @@ describe("contained runtime command policy", () => {
         gid: 0,
       },
       { path: "/usr/bin", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
-      { path: "/usr/bin/bwrap", kind: "file", mode: 0o555, uid: 0, gid: 0 },
       { path: "/usr/bin/setpriv", kind: "file", mode: 0o555, uid: 0, gid: 0 },
       { path: "/usr/bin/bash", kind: "file", mode: 0o555, uid: 0, gid: 0 },
       { path: "/usr/lib", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
@@ -1876,6 +1884,21 @@ describe("contained runtime command policy", () => {
       { path: "/app", kind: "directory", mode: 0o555, uid: 0, gid: 0 },
       {
         path: "/app/runner.mjs",
+        kind: "file",
+        mode: 0o555,
+        uid: 0,
+        gid: 0,
+      },
+      { path: "/opt", kind: "directory", mode: 0o755, uid: 0, gid: 0 },
+      {
+        path: "/opt/counterlab",
+        kind: "directory",
+        mode: 0o555,
+        uid: 0,
+        gid: 0,
+      },
+      {
+        path: "/opt/counterlab/landlock_launcher.py",
         kind: "file",
         mode: 0o555,
         uid: 0,
@@ -2612,6 +2635,18 @@ describe("contained runtime command policy", () => {
             names: ["mount"],
             action: "SCMP_ACT_ALLOW",
           });
+        },
+      ],
+      [
+        "missing Landlock syscall",
+        (value) => {
+          const rule = value.linux.seccomp.syscalls.find(
+            (entry: { names: string[] }) =>
+              entry.names.includes("landlock_create_ruleset"),
+          );
+          rule.names = rule.names.filter(
+            (name: string) => name !== "landlock_restrict_self",
+          );
         },
       ],
       [

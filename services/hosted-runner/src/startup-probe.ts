@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { canonicalJson } from "@counterlab/session-core";
 import { z } from "zod";
 
-import { buildContainerBubblewrapProbe } from "./launch-boundary.js";
+import { buildContainerLandlockProbe } from "./launch-boundary.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -24,67 +24,71 @@ const STARTUP_CHECKS = [
   "immutable-paths",
   "codex",
   "python",
-  "bubblewrap",
-  "bubblewrap-read-isolation",
+  "landlock",
+  "landlock-read-isolation",
   "setpriv",
   "writable-roots",
 ] as const;
 
-const BubblewrapReadIsolationOutputSchema = z.strictObject({
-  forbiddenHostPathsHidden: z.literal(true),
-  parentEnvironmentHidden: z.literal(true),
+const LandlockReadIsolationOutputSchema = z.strictObject({
+  forbiddenHostPathsUnreadable: z.literal(true),
+  forbiddenHostWritesDenied: z.literal(true),
+  crossTreeReferDenied: z.literal(true),
+  execInheritanceEnforced: z.literal(true),
+  parentEnvironmentUnreadable: z.literal(true),
   workspaceVisible: z.literal(true),
   workspaceWritable: z.literal(true),
 });
 
-const EXPECTED_BUBBLEWRAP_VERSION = "bubblewrap 0.11.0" as const;
+const LandlockStatusSchema = z.strictObject({
+  landlockAbi: z.number().int().min(3),
+  policyVersion: z.literal("counterlab-landlock-path-policy-v1"),
+});
 
 export const GENERATION_ISOLATION_PROBE_VERSION =
-  "counterlab-generation-isolation-v1" as const;
+  "counterlab-generation-isolation-v2" as const;
 
 export type GenerationIsolationProbePayload = {
-  schemaVersion: "1";
+  schemaVersion: "2";
   probeVersion: typeof GENERATION_ISOLATION_PROBE_VERSION;
   service: "counterlab-hosted-runner";
   probe: "non-root-startup";
   checks: typeof STARTUP_CHECKS;
   generationFilesystemReadIsolation: "OS_ENFORCED";
-  bubblewrapVersion: "0.11.0";
-  bubblewrap: z.infer<typeof BubblewrapReadIsolationOutputSchema>;
+  mechanism: "landlock";
+  landlockAbi: number;
+  landlock: z.infer<typeof LandlockReadIsolationOutputSchema>;
 };
 
 function readExecutionStdout(result: unknown): string {
   if (typeof result !== "object" || result === null || !("stdout" in result)) {
     throw new Error(
-      "Hosted runner Bubblewrap probe did not return inspectable stdout",
+      "Hosted runner Landlock probe did not return inspectable stdout",
     );
   }
   const stdout = result.stdout;
   if (typeof stdout === "string") return stdout;
   if (Buffer.isBuffer(stdout)) return stdout.toString("utf8");
   throw new Error(
-    "Hosted runner Bubblewrap probe returned an invalid stdout payload",
+    "Hosted runner Landlock probe returned an invalid stdout payload",
   );
 }
 
 export function createGenerationIsolationProbePayload(
-  bubblewrapOutput: unknown,
-  bubblewrapVersionOutput: string,
+  landlockOutput: unknown,
+  landlockStatusOutput: unknown,
 ): GenerationIsolationProbePayload {
-  if (bubblewrapVersionOutput.trim() !== EXPECTED_BUBBLEWRAP_VERSION) {
-    throw new Error(
-      `Hosted runner requires ${EXPECTED_BUBBLEWRAP_VERSION}; observed ${bubblewrapVersionOutput.trim() || "no version"}`,
-    );
-  }
+  const status = LandlockStatusSchema.parse(landlockStatusOutput);
   return {
-    schemaVersion: "1",
+    schemaVersion: "2",
     probeVersion: GENERATION_ISOLATION_PROBE_VERSION,
     service: "counterlab-hosted-runner",
     probe: "non-root-startup",
     checks: STARTUP_CHECKS,
     generationFilesystemReadIsolation: "OS_ENFORCED",
-    bubblewrapVersion: "0.11.0",
-    bubblewrap: BubblewrapReadIsolationOutputSchema.parse(bubblewrapOutput),
+    mechanism: "landlock",
+    landlockAbi: status.landlockAbi,
+    landlock: LandlockReadIsolationOutputSchema.parse(landlockOutput),
   };
 }
 
@@ -142,8 +146,9 @@ export async function runHostedRunnerStartupProbe(
   const codexExecutable =
     environment.COUNTERLAB_CODEX_EXECUTABLE ?? "/usr/local/bin/codex";
   const codexRoot = environment.COUNTERLAB_CODEX_ROOT ?? "/opt/codex";
-  const bwrapExecutable =
-    environment.COUNTERLAB_BWRAP_EXECUTABLE ?? "/usr/bin/bwrap";
+  const landlockLauncher =
+    environment.COUNTERLAB_LANDLOCK_LAUNCHER ??
+    "/opt/counterlab/landlock_launcher.py";
   const setprivExecutable =
     environment.COUNTERLAB_SETPRIV_EXECUTABLE ?? "/usr/bin/setpriv";
   const pythonExecutable =
@@ -191,12 +196,16 @@ export async function runHostedRunnerStartupProbe(
     accessFile(bundlePath, constants.R_OK),
     accessFile(codexExecutable, constants.X_OK),
     accessFile(codexRoot, constants.R_OK | constants.X_OK),
-    accessFile(bwrapExecutable, constants.X_OK),
+    accessFile(landlockLauncher, constants.R_OK),
     accessFile(setprivExecutable, constants.X_OK),
     accessFile(pythonExecutable, constants.X_OK),
     makeDirectory(workspaceRoot, { recursive: true, mode: 0o700 }),
     makeDirectory(codexHomeRoot, { recursive: true, mode: 0o700 }),
     makeDirectory(probeWorkspace, { recursive: true, mode: 0o700 }),
+    makeDirectory(join(probeWorkspace, ".counterlab-codex"), {
+      recursive: true,
+      mode: 0o700,
+    }),
   ]);
   await writeProbeFile(join(probeWorkspace, "approved.txt"), "approved\n", {
     encoding: "utf8",
@@ -236,17 +245,20 @@ export async function runHostedRunnerStartupProbe(
     env: childEnvironment,
     timeout: 30_000,
   });
-  const bubblewrapVersionExecution = await execute(
-    bwrapExecutable,
-    ["--version"],
+  const landlockStatusExecution = await execute(
+    pythonExecutable,
+    [landlockLauncher, "--print-abi"],
     {
       env: childEnvironment,
       timeout: 30_000,
     },
   );
-  const isolationProbe = buildContainerBubblewrapProbe({
-    bwrapExecutable,
+  const isolationProbe = buildContainerLandlockProbe({
+    codexHome: join(probeWorkspace, ".counterlab-codex"),
     codexRoot,
+    landlockLauncher,
+    pythonExecutable,
+    setprivExecutable,
     workspace: probeWorkspace,
   });
   const isolationProbeExecution = await execute(
@@ -257,20 +269,24 @@ export async function runHostedRunnerStartupProbe(
       timeout: 30_000,
     },
   );
-  let bubblewrapOutput: unknown;
+  let landlockOutput: unknown;
+  let landlockStatusOutput: unknown;
   try {
-    bubblewrapOutput = JSON.parse(
+    landlockOutput = JSON.parse(
       readExecutionStdout(isolationProbeExecution).trim(),
+    ) as unknown;
+    landlockStatusOutput = JSON.parse(
+      readExecutionStdout(landlockStatusExecution).trim(),
     ) as unknown;
   } catch (error) {
     throw new Error(
-      "Hosted runner Bubblewrap probe returned invalid JSON evidence",
+      "Hosted runner Landlock probe returned invalid JSON evidence",
       { cause: error },
     );
   }
   const generationIsolationProbe = createGenerationIsolationProbePayload(
-    bubblewrapOutput,
-    readExecutionStdout(bubblewrapVersionExecution),
+    landlockOutput,
+    landlockStatusOutput,
   );
 
   return {

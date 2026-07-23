@@ -4,14 +4,15 @@ import {
   createGenerationIsolationEvidence,
   verifyGenerationIsolationEvidence,
 } from "./generation-isolation-evidence.js";
+import { hashGenerationIsolationProbe } from "../services/hosted-runner/src/startup-probe.js";
 
 const sourceCommit = "a".repeat(40);
 const sourceTreeSha256 = "b".repeat(64);
 const localImageTag = `counterlab-runner:git-${sourceCommit}`;
 const localImageDigest = `sha256:${"c".repeat(64)}`;
 const probePayload = {
-  schemaVersion: "1",
-  probeVersion: "counterlab-generation-isolation-v1",
+  schemaVersion: "2",
+  probeVersion: "counterlab-generation-isolation-v2",
   service: "counterlab-hosted-runner",
   probe: "non-root-startup",
   checks: [
@@ -20,22 +21,25 @@ const probePayload = {
     "immutable-paths",
     "codex",
     "python",
-    "bubblewrap",
-    "bubblewrap-read-isolation",
+    "landlock",
+    "landlock-read-isolation",
     "setpriv",
     "writable-roots",
   ],
   generationFilesystemReadIsolation: "OS_ENFORCED",
-  bubblewrapVersion: "0.11.0",
-  bubblewrap: {
-    forbiddenHostPathsHidden: true,
-    parentEnvironmentHidden: true,
+  mechanism: "landlock",
+  landlockAbi: 9,
+  landlock: {
+    forbiddenHostPathsUnreadable: true,
+    forbiddenHostWritesDenied: true,
+    crossTreeReferDenied: true,
+    execInheritanceEnforced: true,
+    parentEnvironmentUnreadable: true,
     workspaceVisible: true,
     workspaceWritable: true,
   },
 } as const;
-const probeSha256 =
-  "700cc58bedc163846e3854415170f49f55da9fd3ba316cc4967747d5268199dc";
+const probeSha256 = hashGenerationIsolationProbe(probePayload);
 
 function startupProbe() {
   return {
@@ -148,7 +152,7 @@ describe("generation-isolation evidence", () => {
           ...result.evidence,
           probePayload: {
             ...result.evidence.probePayload,
-            bubblewrapVersion: "0.11.1",
+            landlockAbi: 2,
           },
         },
         evidenceSha256: result.evidenceSha256,

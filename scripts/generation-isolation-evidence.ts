@@ -5,10 +5,14 @@ import { fileURLToPath } from "node:url";
 
 import {
   GENERATION_ISOLATION_MOUNT_POLICY_VERSION,
+  GENERATION_ISOLATION_POLICY_VERSION_V2,
+  GenerationIsolationEvidenceSchema,
   GenerationIsolationEvidenceV1Schema,
+  GenerationIsolationEvidenceV2Schema,
   GenerationIsolationProbePayloadSchema,
+  GenerationIsolationProbePayloadV2Schema,
   QualifiedRunnerReleaseV6Schema,
-  type GenerationIsolationEvidenceV1,
+  type GenerationIsolationEvidence,
   type QualifiedRunnerReleaseV6,
 } from "../packages/scientific-engine-registry/src/index.js";
 import { canonicalJson } from "../packages/session-core/src/index.js";
@@ -16,49 +20,60 @@ import { z } from "zod";
 
 const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
 
-const StartupProbeResultSchema = z
-  .strictObject({
-    status: z.literal("ready"),
-    service: z.literal("counterlab-hosted-runner"),
-    probe: z.literal("non-root-startup"),
-    checks: GenerationIsolationProbePayloadSchema.shape.checks,
-    generationFilesystemReadIsolation: z.literal("OS_ENFORCED"),
-    generationIsolationProbe: GenerationIsolationProbePayloadSchema,
-    generationIsolationProbeSha256: Sha256Schema,
-  })
-  .superRefine((result, context) => {
-    for (const [field, outer, inner] of [
-      ["service", result.service, result.generationIsolationProbe.service],
-      ["probe", result.probe, result.generationIsolationProbe.probe],
-      [
-        "checks",
-        canonicalJson(result.checks),
-        canonicalJson(result.generationIsolationProbe.checks),
-      ],
-      [
-        "generationFilesystemReadIsolation",
-        result.generationFilesystemReadIsolation,
-        result.generationIsolationProbe.generationFilesystemReadIsolation,
-      ],
-    ] as const) {
-      if (outer !== inner) {
-        context.addIssue({
-          code: "custom",
-          path: [field],
-          message: `${field} must match the nested isolation probe`,
-        });
+function startupProbeResultSchema(
+  probeSchema:
+    | typeof GenerationIsolationProbePayloadSchema
+    | typeof GenerationIsolationProbePayloadV2Schema,
+) {
+  return z
+    .strictObject({
+      status: z.literal("ready"),
+      service: z.literal("counterlab-hosted-runner"),
+      probe: z.literal("non-root-startup"),
+      checks: probeSchema.shape.checks,
+      generationFilesystemReadIsolation: z.literal("OS_ENFORCED"),
+      generationIsolationProbe: probeSchema,
+      generationIsolationProbeSha256: Sha256Schema,
+    })
+    .superRefine((result, context) => {
+      for (const [field, outer, inner] of [
+        ["service", result.service, result.generationIsolationProbe.service],
+        ["probe", result.probe, result.generationIsolationProbe.probe],
+        [
+          "checks",
+          canonicalJson(result.checks),
+          canonicalJson(result.generationIsolationProbe.checks),
+        ],
+        [
+          "generationFilesystemReadIsolation",
+          result.generationFilesystemReadIsolation,
+          result.generationIsolationProbe.generationFilesystemReadIsolation,
+        ],
+      ] as const) {
+        if (outer !== inner) {
+          context.addIssue({
+            code: "custom",
+            path: [field],
+            message: `${field} must match the nested isolation probe`,
+          });
+        }
       }
-    }
-  });
+    });
+}
+
+const StartupProbeResultSchema = z.union([
+  startupProbeResultSchema(GenerationIsolationProbePayloadSchema),
+  startupProbeResultSchema(GenerationIsolationProbePayloadV2Schema),
+]);
 
 function sha256Canonical(value: unknown): string {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
 }
 
 export function hashGenerationIsolationEvidence(
-  evidence: GenerationIsolationEvidenceV1,
+  evidence: GenerationIsolationEvidence,
 ): string {
-  return sha256Canonical(GenerationIsolationEvidenceV1Schema.parse(evidence));
+  return sha256Canonical(GenerationIsolationEvidenceSchema.parse(evidence));
 }
 
 export function createGenerationIsolationEvidence(input: {
@@ -70,7 +85,7 @@ export function createGenerationIsolationEvidence(input: {
   startupProbe: unknown;
   verifiedAt?: string;
 }): {
-  evidence: GenerationIsolationEvidenceV1;
+  evidence: GenerationIsolationEvidence;
   evidenceSha256: string;
   probeSha256: string;
 } {
@@ -81,8 +96,7 @@ export function createGenerationIsolationEvidence(input: {
       "Generation-isolation probe hash does not match the exact-image payload",
     );
   }
-  const evidence = GenerationIsolationEvidenceV1Schema.parse({
-    schemaVersion: "1",
+  const common = {
     status: "VERIFIED",
     generationFilesystemReadIsolation: "OS_ENFORCED",
     sourceCommit: input.sourceCommit,
@@ -90,12 +104,24 @@ export function createGenerationIsolationEvidence(input: {
     localImageTag: input.localImageTag,
     localImageDigest: input.localImageDigest,
     imageUser: input.imageUser,
-    mountPolicyVersion: GENERATION_ISOLATION_MOUNT_POLICY_VERSION,
     probePayload: startupProbe.generationIsolationProbe,
     probePayloadSha256: probeSha256,
     verifiedAt: input.verifiedAt ?? new Date().toISOString(),
-    verifierVersion: "counterlab-generation-isolation-evidence-v1",
-  });
+  };
+  const evidence =
+    startupProbe.generationIsolationProbe.schemaVersion === "2"
+      ? GenerationIsolationEvidenceV2Schema.parse({
+          ...common,
+          schemaVersion: "2",
+          policyVersion: GENERATION_ISOLATION_POLICY_VERSION_V2,
+          verifierVersion: "counterlab-generation-isolation-evidence-v2",
+        })
+      : GenerationIsolationEvidenceV1Schema.parse({
+          ...common,
+          schemaVersion: "1",
+          mountPolicyVersion: GENERATION_ISOLATION_MOUNT_POLICY_VERSION,
+          verifierVersion: "counterlab-generation-isolation-evidence-v1",
+        });
   return {
     evidence,
     evidenceSha256: hashGenerationIsolationEvidence(evidence),
@@ -116,11 +142,11 @@ export function verifyGenerationIsolationEvidence(input: {
     verifiedAt?: string;
   };
 }): {
-  evidence: GenerationIsolationEvidenceV1;
+  evidence: GenerationIsolationEvidence;
   evidenceSha256: string;
   probeSha256: string;
 } {
-  const evidence = GenerationIsolationEvidenceV1Schema.parse(input.evidence);
+  const evidence = GenerationIsolationEvidenceSchema.parse(input.evidence);
   const evidenceSha256 = hashGenerationIsolationEvidence(evidence);
   if (evidenceSha256 !== Sha256Schema.parse(input.evidenceSha256)) {
     throw new Error("Generation-isolation evidence hash mismatch");

@@ -11,7 +11,9 @@ import {
   DeploymentReceiptV7Schema,
   GenerationIsolationEvidenceSchema,
   GenerationIsolationEvidenceV1Schema,
+  GenerationIsolationEvidenceV2Schema,
   GenerationIsolationProbePayloadSchema,
+  GenerationIsolationProbePayloadV2Schema,
   ScientificEngineDescriptorSchema,
   ScientificEngineEvidenceCatalogSchema,
   ScientificEngineEvidenceKindSchema,
@@ -57,8 +59,14 @@ export type GenerationIsolationEvidence = z.infer<
 export type GenerationIsolationEvidenceV1 = z.infer<
   typeof GenerationIsolationEvidenceV1Schema
 >;
+export type GenerationIsolationEvidenceV2 = z.infer<
+  typeof GenerationIsolationEvidenceV2Schema
+>;
 export type GenerationIsolationProbePayload = z.infer<
   typeof GenerationIsolationProbePayloadSchema
+>;
+export type GenerationIsolationProbePayloadV2 = z.infer<
+  typeof GenerationIsolationProbePayloadV2Schema
 >;
 
 export type ScientificEngineRole = z.infer<typeof ScientificEngineRoleSchema>;

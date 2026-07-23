@@ -1266,6 +1266,13 @@ function assertSeccomp(linux) {
     throw new Error("contained rootless OCI spec seccomp default is unsafe");
   }
   const restrictedRuleIndexes = [];
+  const requiredIsolationSyscalls = new Set([
+    "landlock_add_rule",
+    "landlock_create_ruleset",
+    "landlock_restrict_self",
+    "prctl",
+  ]);
+  const allowedIsolationSyscalls = new Set();
   for (const [index, entry] of seccomp.syscalls.entries()) {
     const syscall = object(entry, "seccomp syscall rule");
     assertKnownKeys(
@@ -1356,6 +1363,11 @@ function assertSeccomp(linux) {
       "userfaultfd",
     ]);
     if (syscall.action === "SCMP_ACT_ALLOW") {
+      for (const name of syscall.names) {
+        if (requiredIsolationSyscalls.has(name) && args.length === 0) {
+          allowedIsolationSyscalls.add(name);
+        }
+      }
       const forbiddenNames = syscall.names.filter((name) =>
         forbiddenAllowedSyscalls.has(name),
       );
@@ -1403,6 +1415,15 @@ function assertSeccomp(linux) {
   if (restrictedRuleIndexes.length !== 1) {
     throw new Error(
       "contained rootless OCI spec restricted trace rule changed",
+    );
+  }
+  if (
+    [...requiredIsolationSyscalls].some(
+      (name) => !allowedIsolationSyscalls.has(name),
+    )
+  ) {
+    throw new Error(
+      "contained rootless OCI spec does not admit the Landlock launch boundary",
     );
   }
   return restrictedRuleIndexes;

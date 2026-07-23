@@ -10,6 +10,7 @@ import {
   qualifiedDeployConfig as generateQualifiedDeployConfig,
 } from "../../../scripts/prepare-qualified-deploy";
 import { createGenerationIsolationEvidence } from "../../../scripts/generation-isolation-evidence";
+import { hashGenerationIsolationProbe } from "../../../services/hosted-runner/src/startup-probe";
 
 function productionDeployConfig() {
   return {
@@ -151,8 +152,8 @@ function generationIsolationQualification(input: {
   verifiedAt?: string;
 }) {
   const probePayload = {
-    schemaVersion: "1",
-    probeVersion: "counterlab-generation-isolation-v1",
+    schemaVersion: "2",
+    probeVersion: "counterlab-generation-isolation-v2",
     service: "counterlab-hosted-runner",
     probe: "non-root-startup",
     checks: [
@@ -161,22 +162,25 @@ function generationIsolationQualification(input: {
       "immutable-paths",
       "codex",
       "python",
-      "bubblewrap",
-      "bubblewrap-read-isolation",
+      "landlock",
+      "landlock-read-isolation",
       "setpriv",
       "writable-roots",
     ],
     generationFilesystemReadIsolation: "OS_ENFORCED",
-    bubblewrapVersion: "0.11.0",
-    bubblewrap: {
-      forbiddenHostPathsHidden: true,
-      parentEnvironmentHidden: true,
+    mechanism: "landlock",
+    landlockAbi: 9,
+    landlock: {
+      forbiddenHostPathsUnreadable: true,
+      forbiddenHostWritesDenied: true,
+      crossTreeReferDenied: true,
+      execInheritanceEnforced: true,
+      parentEnvironmentUnreadable: true,
       workspaceVisible: true,
       workspaceWritable: true,
     },
   } as const;
-  const probeSha256 =
-    "700cc58bedc163846e3854415170f49f55da9fd3ba316cc4967747d5268199dc";
+  const probeSha256 = hashGenerationIsolationProbe(probePayload);
   const result = createGenerationIsolationEvidence({
     ...input,
     imageUser: "10001:10001",
@@ -692,13 +696,15 @@ describe("Cloudflare static asset routing", () => {
     // layers are assembled. Its placeholder is already root-owned and 0755.
     expect(dockerfile).not.toMatch(/chown root:root[\s\S]*?\/sys\/fs\/cgroup/);
     expect(dockerfile).not.toMatch(/chmod 0755[\s\S]*?\/sys\/fs\/cgroup/);
-    expect(dockerfile).toContain("bubblewrap=0.11.0-2+deb13u1");
     expect(dockerfile).toContain(
-      'test "$(/usr/bin/bwrap --version)" = "bubblewrap 0.11.0"',
+      "services/hosted-runner/runtime/landlock_launcher.py /opt/counterlab/landlock_launcher.py",
     );
-    expect(dockerfile.indexOf("bubblewrap=0.11.0-2+deb13u1")).toBeLessThan(
-      dockerfile.indexOf("USER 10001:10001"),
+    expect(dockerfile).toContain(
+      "chmod 0555 /usr/local/bin/node /opt/counterlab/landlock_launcher.py",
     );
+    expect(
+      dockerfile.indexOf("/opt/counterlab/landlock_launcher.py"),
+    ).toBeLessThan(dockerfile.indexOf("USER 10001:10001"));
     expect(dockerfile.indexOf("chmod 0555 /usr/local/bin/node")).toBeLessThan(
       dockerfile.indexOf("USER 10001:10001"),
     );
