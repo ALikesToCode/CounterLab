@@ -5,10 +5,10 @@
   "packageName": "numpy",
   "exactVersion": "2.4.6",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:96eaa458c9214da658e7d991479c25705c8112d4bbe6fb9d94a4e63273040555",
+  "imageDigest": "sha256:10c41d7ece1755ca1f0777c4c2edc4a01abfe36270e1cc9b64cc47853c8f3176",
   "sourceBinding": {
     "status": "BOUND",
-    "commit": "b5388b9ba3edd4f47d1402ec3d5472ef958dfd0a",
+    "commit": "4cfa808e92651c025f4ddc2d3e3d5a18e0eb7917",
     "ociLabel": "org.opencontainers.image.revision"
   },
   "artifact": {
