@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { parseContainedCgroupControl } from "./contained-cgroup-control-helper.mjs";
@@ -46,5 +47,15 @@ describe("contained cgroup negative-control helper", () => {
         /cgroup control/u,
       );
     }
+  });
+
+  it("uses worker threads for CPU pressure without multiplying Node processes", () => {
+    const source = readFileSync(
+      new URL("./contained-cgroup-control-helper.mjs", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain('from "node:worker_threads"');
+    expect(source).not.toContain('[scriptPath, "--internal-busy"');
   });
 });

@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { realpathSync, writeFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
+import { isMainThread, Worker, workerData } from "node:worker_threads";
 
 const minimumMemoryBytes = 64 * 1024 * 1024;
 const maximumMemoryBytes = 1280 * 1024 * 1024;
@@ -98,6 +99,17 @@ function childCompletion(child) {
 
 function childRunning(child) {
   return child.exitCode === null && child.signalCode === null;
+}
+
+function workerCompletion(worker) {
+  return new Promise((accept) => {
+    let online = false;
+    worker.once("online", () => {
+      online = true;
+    });
+    worker.once("error", (error) => accept({ online, code: null, error }));
+    worker.once("exit", (code) => accept({ online, code }));
+  });
 }
 
 async function bounded(promise, timeoutMs, label) {
@@ -232,25 +244,18 @@ async function processControl(
   );
 }
 
-async function cpuControl(
-  busyWindowMs,
-  workers,
-  scriptPath,
-  activeChildren,
-  controller,
-) {
-  const children = Array.from({ length: workers }, () =>
-    spawn(
-      process.execPath,
-      [scriptPath, "--internal-busy", String(busyWindowMs)],
-      {
-        env: { LANG: "C", LC_ALL: "C", TZ: "UTC" },
-        stdio: "ignore",
-      },
-    ),
+async function cpuControl(busyWindowMs, workers, scriptPath, controller) {
+  const cpuWorkers = Array.from(
+    { length: workers },
+    () =>
+      new Worker(scriptPath, {
+        workerData: {
+          mode: "cpu",
+          busyWindowMs,
+        },
+      }),
   );
-  children.forEach((child) => activeChildren.add(child));
-  const completions = children.map(childCompletion);
+  const completions = cpuWorkers.map(workerCompletion);
   let results;
   try {
     results = await bounded(
@@ -259,14 +264,40 @@ async function cpuControl(
       "CPU worker completion",
     );
   } finally {
-    await reapChildren(children, completions);
-    children.forEach((child) => activeChildren.delete(child));
+    await Promise.all(cpuWorkers.map((worker) => worker.terminate()));
   }
   controller.assertActive();
-  if (results.some((result) => !result.started || result.code !== 0)) {
+  if (
+    results.some(
+      (result) =>
+        result.online !== true ||
+        result.code !== 0 ||
+        result.error !== undefined,
+    )
+  ) {
     throw new Error("contained cgroup CPU control worker failed");
   }
   process.stdout.write(`${JSON.stringify({ busyWindowMs, workers })}\n`);
+}
+
+function runCpuWorker(value) {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.keys(value).sort().join(",") !== "busyWindowMs,mode" ||
+    value.mode !== "cpu"
+  ) {
+    throw new Error("contained cgroup CPU worker data is invalid");
+  }
+  const busyWindowMs = integer(String(value.busyWindowMs));
+  if (busyWindowMs < 100 || busyWindowMs > 5_000) {
+    throw new Error("contained cgroup CPU worker bound is invalid");
+  }
+  const deadline = performance.now() + busyWindowMs;
+  while (performance.now() < deadline) {
+    // Fixed release-only CPU load. Kernel counters are authoritative.
+  }
 }
 
 async function main() {
@@ -277,17 +308,6 @@ async function main() {
       throw new Error("contained cgroup internal hold bound is invalid");
     }
     await new Promise((accept) => setTimeout(accept, holdMs));
-    return;
-  }
-  if (process.argv[2] === "--internal-busy" && process.argv.length === 4) {
-    const busyMs = integer(process.argv[3]);
-    if (busyMs > 5_000) {
-      throw new Error("contained cgroup internal CPU bound is invalid");
-    }
-    const deadline = performance.now() + busyMs;
-    while (performance.now() < deadline) {
-      // Fixed release-only CPU load. Kernel counters are authoritative.
-    }
     return;
   }
   const control = parseContainedCgroupControl(process.argv.slice(2));
@@ -313,7 +333,6 @@ async function main() {
       control.busyWindowMs,
       control.workers,
       scriptPath,
-      activeChildren,
       controller,
     );
   } finally {
@@ -321,7 +340,9 @@ async function main() {
   }
 }
 
-if (
+if (!isMainThread) {
+  runCpuWorker(workerData);
+} else if (
   process.argv[1] !== undefined &&
   realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
 ) {
