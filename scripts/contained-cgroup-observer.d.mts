@@ -49,6 +49,7 @@ export function selectContainedCgroupMembership(
     { pid: number; parentPid: number; startTimeTicks: string }
   >,
 ): Record<string, unknown>;
+export function validateContainedCgroupControlHelper(path: string): string;
 
 export function observeContainedCgroup(
   manifest: ContainedCgroupObserverManifest,

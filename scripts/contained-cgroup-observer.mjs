@@ -738,6 +738,24 @@ function artifactExists(path) {
   return lstatOrAbsent(path) !== null;
 }
 
+export function validateContainedCgroupControlHelper(path) {
+  const fromRoot = relative(repositoryRoot, path);
+  const metadata = lstatSync(path);
+  if (
+    fromRoot === "" ||
+    fromRoot.startsWith("..") ||
+    isAbsolute(fromRoot) ||
+    metadata.isSymbolicLink() ||
+    !metadata.isFile() ||
+    metadata.nlink !== 1 ||
+    (metadata.mode & 0o022) !== 0 ||
+    realpathSync(path) !== path
+  ) {
+    throw new Error("contained cgroup observer control helper is invalid");
+  }
+  return path;
+}
+
 async function waitUntil(predicate, label, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() <= deadline) {
@@ -767,7 +785,7 @@ function actualCgroupAdapter(manifest, paths, reportPhase) {
     repositoryRoot,
     "scripts/contained-cgroup-control-helper.py",
   );
-  repositoryFile(helperPath, "control helper");
+  validateContainedCgroupControlHelper(helperPath);
   const helperInterpreter = "/usr/bin/python3.14";
   let expectedCgroupIdentity;
   let expectedParentIdentity;

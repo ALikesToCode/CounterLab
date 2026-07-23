@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -15,6 +16,7 @@ import {
   parseContainedCgroupMembers,
   parseContainedProcessStat,
   selectContainedCgroupMembership,
+  validateContainedCgroupControlHelper,
   validateContainedCgroupObserverDraft,
   validateContainedCgroupObserverFailure,
   validateContainedCgroupObserverReady,
@@ -25,6 +27,7 @@ import {
 } from "./contained-cgroup-observer-protocol.mjs";
 
 const runtimeSessionId = "rt-v61-test1";
+const root = process.cwd();
 const invocationId = "1".repeat(64);
 const finalContainerId = "2".repeat(64);
 const sanitizedSpecSha256 = "3".repeat(64);
@@ -159,6 +162,14 @@ function adapter(overrides: Record<string, unknown> = {}) {
 }
 
 describe("contained cgroup observer", () => {
+  it("accepts the source-bound helper independently of namespace UID mapping", () => {
+    expect(
+      validateContainedCgroupControlHelper(
+        resolve(root, "scripts/contained-cgroup-control-helper.py"),
+      ),
+    ).toBe(resolve(root, "scripts/contained-cgroup-control-helper.py"));
+  });
+
   it("parses counters, candidate-only ancestry, and process identity", () => {
     expect(
       parseContainedCgroupKeyValues(
