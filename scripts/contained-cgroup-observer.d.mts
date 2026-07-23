@@ -2,6 +2,7 @@ import type { ContainedCgroupObserverManifest } from "./contained-cgroup-observe
 import type { ContainedCgroupObserverFinalization } from "./contained-cgroup-observer-protocol.mjs";
 
 export const cgroupStartupTimeoutMs: 30_000;
+export const containedCgroupObserverFailurePhases: readonly string[];
 
 export function createContainedCgroupObserverReady(
   manifest: ContainedCgroupObserverManifest,
@@ -15,7 +16,7 @@ export function validateContainedCgroupObserverReady<T>(
 
 export function createContainedCgroupObserverFailure(
   manifest: ContainedCgroupObserverManifest,
-  options?: { failedAt?: Date },
+  options?: { failedAt?: Date; phase?: string },
 ): Record<string, unknown>;
 
 export function validateContainedCgroupObserverFailure<T>(
@@ -64,4 +65,5 @@ export function observeContainedCgroup(
     waitForFinalization(): Promise<ContainedCgroupObserverFinalization>;
     waitForCgroupAbsent(): Promise<void>;
   },
+  options?: { onPhase?: (phase: string) => void },
 ): Promise<Record<string, unknown>>;

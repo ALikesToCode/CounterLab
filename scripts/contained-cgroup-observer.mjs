@@ -40,6 +40,42 @@ const allowedCgroupFiles = new Set([
   "pids.events",
   "pids.max",
 ]);
+export const containedCgroupObserverFailurePhases = Object.freeze([
+  "VALIDATE_BINDINGS",
+  "WAIT_CGROUP",
+  "READ_LIMITS",
+  "READ_MEMBERSHIP",
+  "CPU_COUNTERS_BEFORE",
+  "CPU_HELPER_READY",
+  "CPU_HELPER_MOVE",
+  "CPU_CONTROL",
+  "CPU_COUNTERS_AFTER",
+  "PROCESS_COUNTERS_BEFORE",
+  "PROCESS_HELPER_READY",
+  "PROCESS_HELPER_MOVE",
+  "PROCESS_CONTROL",
+  "PROCESS_COUNTERS_AFTER",
+  "MEMORY_COUNTERS_BEFORE",
+  "MEMORY_HELPER_READY",
+  "MEMORY_HELPER_MOVE",
+  "MEMORY_CONTROL",
+  "MEMORY_COUNTERS_AFTER",
+  "CANDIDATE_RECHECK",
+  "LIMITS_RECHECK",
+  "PUBLISH_DRAFT",
+  "WAIT_FINALIZATION",
+  "WAIT_CLEANUP",
+]);
+const containedCgroupObserverFailurePhaseSet = new Set(
+  containedCgroupObserverFailurePhases,
+);
+
+function validateObserverFailurePhase(value) {
+  if (!containedCgroupObserverFailurePhaseSet.has(value)) {
+    throw new Error("contained cgroup observer failure phase is invalid");
+  }
+  return value;
+}
 
 function object(value, label) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -133,15 +169,16 @@ export function validateContainedCgroupObserverReady(value, manifest) {
 
 export function createContainedCgroupObserverFailure(
   manifest,
-  { failedAt = new Date() } = {},
+  { failedAt = new Date(), phase = "VALIDATE_BINDINGS" } = {},
 ) {
   if (!(failedAt instanceof Date) || !Number.isFinite(failedAt.getTime())) {
     throw new Error("contained cgroup observer failure input is invalid");
   }
   const payload = {
-    schemaVersion: "1",
+    schemaVersion: "2",
     status: "FAILED",
     code: "OBSERVATION_FAILED",
+    phase: validateObserverFailurePhase(phase),
     manifestPayloadSha256: manifest.receiptPayloadSha256,
     invocationId: manifest.invocationId,
     finalContainerId: manifest.finalContainerId,
@@ -155,6 +192,7 @@ export function createContainedCgroupObserverFailure(
 
 export function validateContainedCgroupObserverFailure(value, manifest) {
   const failure = object(value, "failure receipt");
+  const legacy = failure.schemaVersion === "1";
   exactKeys(
     failure,
     [
@@ -163,6 +201,7 @@ export function validateContainedCgroupObserverFailure(value, manifest) {
       "finalContainerId",
       "invocationId",
       "manifestPayloadSha256",
+      ...(legacy ? [] : ["phase"]),
       "receiptPayloadSha256",
       "schemaVersion",
       "status",
@@ -171,9 +210,10 @@ export function validateContainedCgroupObserverFailure(value, manifest) {
   );
   const { receiptPayloadSha256, ...payload } = failure;
   if (
-    failure.schemaVersion !== "1" ||
+    !["1", "2"].includes(failure.schemaVersion) ||
     failure.status !== "FAILED" ||
     failure.code !== "OBSERVATION_FAILED" ||
+    (!legacy && !containedCgroupObserverFailurePhaseSet.has(failure.phase)) ||
     failure.manifestPayloadSha256 !== manifest.receiptPayloadSha256 ||
     failure.invocationId !== manifest.invocationId ||
     failure.finalContainerId !== manifest.finalContainerId ||
@@ -515,47 +555,68 @@ async function assertCandidateSurvived(adapter, initial) {
   }
 }
 
-export async function observeContainedCgroup(manifest, adapter) {
+export async function observeContainedCgroup(
+  manifest,
+  adapter,
+  { onPhase = () => undefined } = {},
+) {
+  const reportPhase = (phase) => {
+    onPhase(validateObserverFailurePhase(phase));
+  };
+  reportPhase("WAIT_CGROUP");
   await adapter.waitForCgroup();
+  reportPhase("READ_LIMITS");
   const observedLimits = await observedAggregateLimits(adapter);
+  reportPhase("READ_MEMBERSHIP");
   const initial = await stableMembership(adapter);
 
+  reportPhase("CPU_COUNTERS_BEFORE");
   const cpuBefore = parseContainedCgroupKeyValues(
     await adapter.readCgroupFile("cpu.stat"),
   );
+  reportPhase("CPU_CONTROL");
   await adapter.runControl(
     { mode: "cpu", busyWindowMs: 500, workers: 4 },
     initial.memberPids,
   );
+  reportPhase("CPU_COUNTERS_AFTER");
   const cpuAfter = parseContainedCgroupKeyValues(
     await adapter.readCgroupFile("cpu.stat"),
   );
 
+  reportPhase("PROCESS_COUNTERS_BEFORE");
   const processesBefore = parseContainedCgroupKeyValues(
     await adapter.readCgroupFile("pids.events"),
   );
   const attemptedProcesses = observedLimits.pidsMax + 1;
+  reportPhase("PROCESS_CONTROL");
   await adapter.runControl(
     { mode: "processes", attemptedProcesses },
     initial.memberPids,
   );
+  reportPhase("PROCESS_COUNTERS_AFTER");
   const processesAfter = parseContainedCgroupKeyValues(
     await adapter.readCgroupFile("pids.events"),
   );
 
+  reportPhase("MEMORY_COUNTERS_BEFORE");
   const memoryBefore = parseContainedCgroupKeyValues(
     await adapter.readCgroupFile("memory.events"),
   );
   const requestedBytes = observedLimits.memoryMaxBytes + 64 * 1024 * 1024;
+  reportPhase("MEMORY_CONTROL");
   await adapter.runControl(
     { mode: "memory", requestedBytes },
     initial.memberPids,
   );
+  reportPhase("MEMORY_COUNTERS_AFTER");
   const memoryAfter = parseContainedCgroupKeyValues(
     await adapter.readCgroupFile("memory.events"),
   );
 
+  reportPhase("CANDIDATE_RECHECK");
   await assertCandidateSurvived(adapter, initial);
+  reportPhase("LIMITS_RECHECK");
   const confirmedLimits = await observedAggregateLimits(adapter);
   if (
     canonicalCgroupJson(confirmedLimits) !== canonicalCgroupJson(observedLimits)
@@ -593,7 +654,9 @@ export async function observeContainedCgroup(manifest, adapter) {
     observedAt,
   };
   const draft = createContainedCgroupObserverDraft(manifest, observation);
+  reportPhase("PUBLISH_DRAFT");
   await adapter.publishDraft(draft);
+  reportPhase("WAIT_FINALIZATION");
   const finalization = validateContainedCgroupObserverFinalization(
     await adapter.waitForFinalization(),
     manifest,
@@ -605,6 +668,7 @@ export async function observeContainedCgroup(manifest, adapter) {
   if (finalization.observerDraftPayloadSha256 !== draft.receiptPayloadSha256) {
     throw new Error("contained cgroup observer finalization draft changed");
   }
+  reportPhase("WAIT_CLEANUP");
   await adapter.waitForCgroupAbsent();
   const completedObservation = {
     ...observation,
@@ -683,7 +747,7 @@ async function waitUntil(predicate, label, timeoutMs) {
   throw new Error(`contained cgroup observer ${label} timed out`);
 }
 
-function actualCgroupAdapter(manifest, paths) {
+function actualCgroupAdapter(manifest, paths, reportPhase) {
   const cgroupRoot = resolve(cgroupFilesystemRoot, manifest.cgroupPath);
   const cgroupParentRoot = resolve(
     cgroupFilesystemRoot,
@@ -879,6 +943,13 @@ function actualCgroupAdapter(manifest, paths) {
       }
     };
     try {
+      const phasePrefix =
+        control.mode === "cpu"
+          ? "CPU"
+          : control.mode === "processes"
+            ? "PROCESS"
+            : "MEMORY";
+      reportPhase(`${phasePrefix}_HELPER_READY`);
       await bounded(ready, 5_000, "helper readiness");
       if (!Number.isSafeInteger(child.pid) || child.pid < 1 || outputInvalid) {
         throw new Error("contained cgroup observer helper PID is invalid");
@@ -887,6 +958,7 @@ function actualCgroupAdapter(manifest, paths) {
         readFileSync(`/proc/${child.pid}/stat`, "utf8"),
         child.pid,
       );
+      reportPhase(`${phasePrefix}_HELPER_MOVE`);
       writeFileSync(cgroupFile("cgroup.procs"), `${child.pid}\n`, "utf8");
       const membersAfterMove = parseContainedCgroupMembers(
         readFileSync(cgroupFile("cgroup.procs"), "utf8"),
@@ -901,6 +973,7 @@ function actualCgroupAdapter(manifest, paths) {
       ) {
         throw new Error("contained cgroup observer helper identity changed");
       }
+      reportPhase(`${phasePrefix}_CONTROL`);
       child.stdin.end("GO\n");
       const result = await bounded(completion, 15_000, "helper completion");
       if (
@@ -1093,6 +1166,10 @@ async function main() {
   const observerBindings = resolveContainedCgroupObserverBindings({
     sessionRoot,
   });
+  let failurePhase = "VALIDATE_BINDINGS";
+  const reportPhase = (phase) => {
+    failurePhase = validateObserverFailurePhase(phase);
+  };
   privateFile(args.manifestPath, "manifest");
   const manifest = validateContainedCgroupObserverManifest(
     JSON.parse(readFileSync(args.manifestPath, "utf8")),
@@ -1136,13 +1213,15 @@ async function main() {
     ) {
       throw new Error("contained cgroup observer base receipt changed");
     }
-    const adapter = actualCgroupAdapter(manifest, paths);
+    const adapter = actualCgroupAdapter(manifest, paths, reportPhase);
     try {
       writeArtifact(
         paths.observerReadyPath,
         createContainedCgroupObserverReady(manifest),
       );
-      const evidence = await observeContainedCgroup(manifest, adapter);
+      const evidence = await observeContainedCgroup(manifest, adapter, {
+        onPhase: reportPhase,
+      });
       if (artifactExists(paths.failurePath)) {
         throw new Error("contained cgroup observer outcome already failed");
       }
@@ -1158,7 +1237,9 @@ async function main() {
       try {
         writeArtifact(
           paths.failurePath,
-          createContainedCgroupObserverFailure(manifest),
+          createContainedCgroupObserverFailure(manifest, {
+            phase: failurePhase,
+          }),
         );
       } catch {
         // Preserve the original fail-closed observation error.

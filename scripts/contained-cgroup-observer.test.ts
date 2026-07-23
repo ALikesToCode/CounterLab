@@ -182,12 +182,34 @@ describe("contained cgroup observer", () => {
   it("runs fixed controls in order and emits only complete evidence after cleanup", async () => {
     const input = manifest();
     const fake = adapter();
-    const evidence = await observeContainedCgroup(input, fake);
+    const phases: string[] = [];
+    const evidence = await observeContainedCgroup(input, fake, {
+      onPhase: (phase) => phases.push(phase),
+    });
 
     expect(fake.controls).toEqual([
       { mode: "cpu", busyWindowMs: 500, workers: 4 },
       { mode: "processes", attemptedProcesses: 17 },
       { mode: "memory", requestedBytes: 576 * 1024 * 1024 },
+    ]);
+    expect(phases).toEqual([
+      "WAIT_CGROUP",
+      "READ_LIMITS",
+      "READ_MEMBERSHIP",
+      "CPU_COUNTERS_BEFORE",
+      "CPU_CONTROL",
+      "CPU_COUNTERS_AFTER",
+      "PROCESS_COUNTERS_BEFORE",
+      "PROCESS_CONTROL",
+      "PROCESS_COUNTERS_AFTER",
+      "MEMORY_COUNTERS_BEFORE",
+      "MEMORY_CONTROL",
+      "MEMORY_COUNTERS_AFTER",
+      "CANDIDATE_RECHECK",
+      "LIMITS_RECHECK",
+      "PUBLISH_DRAFT",
+      "WAIT_FINALIZATION",
+      "WAIT_CLEANUP",
     ]);
     expect(fake.drafts).toHaveLength(1);
     expect(fake.finalizations).toHaveLength(1);
@@ -343,13 +365,21 @@ describe("contained cgroup observer", () => {
 
     const failure = createContainedCgroupObserverFailure(input, {
       failedAt: now,
+      phase: "CPU_HELPER_MOVE",
     });
     expect(validateContainedCgroupObserverFailure(failure, input)).toEqual(
       failure,
     );
+    expect(failure).toMatchObject({ phase: "CPU_HELPER_MOVE" });
     expect(() =>
       validateContainedCgroupObserverFailure(
         { ...failure, code: "PRIVATE_ERROR" },
+        input,
+      ),
+    ).toThrow(/failure binding/u);
+    expect(() =>
+      validateContainedCgroupObserverFailure(
+        { ...failure, phase: "PRIVATE_ERROR" },
         input,
       ),
     ).toThrow(/failure binding/u);
