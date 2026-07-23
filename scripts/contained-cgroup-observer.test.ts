@@ -160,8 +160,13 @@ function adapter(overrides: Record<string, unknown> = {}) {
 
 describe("contained cgroup observer", () => {
   it("parses counters, candidate-only ancestry, and process identity", () => {
-    expect(parseContainedCgroupKeyValues("max 0\noom_kill 2\n")).toEqual({
+    expect(
+      parseContainedCgroupKeyValues(
+        "max 0\ncore_sched.force_idle_usec 1\noom_kill 2\n",
+      ),
+    ).toEqual({
       max: 0,
+      "core_sched.force_idle_usec": 1,
       oom_kill: 2,
     });
     expect(parseContainedCgroupMembers("101\n100\n")).toEqual([100, 101]);

@@ -363,7 +363,7 @@ export function parseContainedCgroupKeyValues(source) {
   }
   const values = {};
   for (const line of source.trim().split("\n")) {
-    const match = line.match(/^([a-z_]+) ([0-9]+)$/u);
+    const match = line.match(/^([a-z_]+(?:\.[a-z_]+)*) ([0-9]+)$/u);
     if (match === null || Object.hasOwn(values, match[1])) {
       throw new Error("contained cgroup observer counter source is invalid");
     }
