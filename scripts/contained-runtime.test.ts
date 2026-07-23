@@ -106,7 +106,7 @@ function startupCommand(): string[] {
     "--memory-swap=1024m",
     "--cpus=2.0",
     "--ulimit=cpu=300:300",
-    "--ulimit=as=2147483648:2147483648",
+    "--ulimit=as=8589934592:8589934592",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
     "--tmpfs",
@@ -1615,7 +1615,7 @@ describe("contained runtime command policy", () => {
 
     expect(plan.create.args).toContain("create");
     expect(plan.create.args).not.toContain("run");
-    expect(plan.create.args).not.toContain("--ulimit=as=2147483648:2147483648");
+    expect(plan.create.args).not.toContain("--ulimit=as=8589934592:8589934592");
     expect(
       plan.create.args.filter((argument) => argument.startsWith("--ulimit=")),
     ).toHaveLength(3);
@@ -1626,7 +1626,7 @@ describe("contained runtime command policy", () => {
     ).toEqual(
       startupCommand()
         .slice(1, -1)
-        .filter((argument) => argument !== "--ulimit=as=2147483648:2147483648"),
+        .filter((argument) => argument !== "--ulimit=as=8589934592:8589934592"),
     );
     expect(plan.start.program).toBe(resolve(installRoot, "bin/ctr"));
     const cgroupIndex = plan.start.args.indexOf("--cgroup");
@@ -1685,7 +1685,7 @@ describe("contained runtime command policy", () => {
       .update(
         canonicalJson(
           startupCommand().filter(
-            (argument) => argument !== "--ulimit=as=2147483648:2147483648",
+            (argument) => argument !== "--ulimit=as=8589934592:8589934592",
           ),
         ),
       )
@@ -1694,13 +1694,13 @@ describe("contained runtime command policy", () => {
     expect(fullCommandAuthority.commandSha256).not.toBe(stagingCommandSha256);
     const splitUlimitCommand = startupCommand();
     const addressSpaceIndex = splitUlimitCommand.indexOf(
-      "--ulimit=as=2147483648:2147483648",
+      "--ulimit=as=8589934592:8589934592",
     );
     splitUlimitCommand.splice(
       addressSpaceIndex,
       1,
       "--ulimit",
-      "as=2147483648:2147483648",
+      "as=8589934592:8589934592",
     );
     const splitUlimitPlan = containedRunPlan({
       args: splitUlimitCommand,
@@ -1712,15 +1712,15 @@ describe("contained runtime command policy", () => {
       sessionRoot,
     });
     expect(splitUlimitPlan.create.args).not.toContain(
-      "as=2147483648:2147483648",
+      "as=8589934592:8589934592",
     );
     expect(splitUlimitPlan.expected.rlimits).toHaveLength(4);
     const invalidAddressSpaceCommands = [
       startupCommand().filter(
-        (argument) => argument !== "--ulimit=as=2147483648:2147483648",
+        (argument) => argument !== "--ulimit=as=8589934592:8589934592",
       ),
       startupCommand().map((argument) =>
-        argument === "--ulimit=as=2147483648:2147483648"
+        argument === "--ulimit=as=8589934592:8589934592"
           ? "--ulimit=as=536870912:536870912"
           : argument,
       ),
@@ -1729,7 +1729,7 @@ describe("contained runtime command policy", () => {
         command.splice(
           command.length - 1,
           0,
-          "--ulimit=as=2147483648:2147483648",
+          "--ulimit=as=8589934592:8589934592",
         );
         return command;
       })(),
@@ -3182,7 +3182,7 @@ describe("contained runtime command policy", () => {
               memoryBytes: 1024 * 1024 * 1024,
               rlimits: [
                 { type: "RLIMIT_CPU", soft: 300, hard: 300 },
-                { type: "RLIMIT_AS", soft: 2147483648, hard: 2147483648 },
+                { type: "RLIMIT_AS", soft: 8589934592, hard: 8589934592 },
                 { type: "RLIMIT_FSIZE", soft: 1048576, hard: 1048576 },
                 { type: "RLIMIT_NOFILE", soft: 64, hard: 64 },
               ],

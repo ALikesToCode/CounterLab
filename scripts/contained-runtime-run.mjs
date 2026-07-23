@@ -83,6 +83,7 @@ const cleanupReserveMs = runtimePolicy.cleanupReserveMs;
 // independently by the stricter container cgroup while retaining a finite
 // per-process address-space ceiling.
 export const CONTAINED_PROCESS_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024;
+export const HOSTED_RUNNER_PROCESS_ADDRESS_SPACE_BYTES = 8 * 1024 * 1024 * 1024;
 export const CONTAINED_RUNTIME_CONTROL_BUDGET_SECONDS =
   (executionControlOverheadMs + cleanupReserveMs) / 1_000;
 export const CONTAINED_RUNTIME_CALLER_GRACE_SECONDS =
@@ -242,7 +243,7 @@ function oneOption(args, name) {
   return values[0];
 }
 
-function resourceIntent(args) {
+function resourceIntent(args, image) {
   const memory = oneOption(args, "--memory").match(/^(\d{2,4})m$/);
   const maxProcesses = Number.parseInt(oneOption(args, "--pids-limit"), 10);
   const cpuCount = Number.parseFloat(oneOption(args, "--cpus"));
@@ -284,12 +285,15 @@ function resourceIntent(args) {
   }
   const memoryBytes = Number.parseInt(memory[1], 10) * 1024 * 1024;
   const byType = new Map(rlimits.map((entry) => [entry.type, entry.soft]));
+  const addressSpaceBytes = image.startsWith("counterlab-runner:git-")
+    ? HOSTED_RUNNER_PROCESS_ADDRESS_SPACE_BYTES
+    : CONTAINED_PROCESS_ADDRESS_SPACE_BYTES;
   if (
     memoryBytes < 64 * 1024 * 1024 ||
     memoryBytes > 1024 * 1024 * 1024 ||
     byType.get("RLIMIT_CPU") < 1 ||
     byType.get("RLIMIT_CPU") > 300 ||
-    byType.get("RLIMIT_AS") !== CONTAINED_PROCESS_ADDRESS_SPACE_BYTES ||
+    byType.get("RLIMIT_AS") !== addressSpaceBytes ||
     byType.get("RLIMIT_FSIZE") > 1_048_576 ||
     byType.get("RLIMIT_NOFILE") !== 64
   ) {
@@ -414,7 +418,7 @@ export function containedRunPlan({
   const imageAlias = `docker.io/library/counterlab-runtime-invocation:${invocationId}`;
   const invocationLabel = `io.counterlab.runtime.invocation=${invocationId}`;
   const expected = {
-    ...resourceIntent(args),
+    ...resourceIntent(args, image),
     containerName,
     sessionRoot,
   };

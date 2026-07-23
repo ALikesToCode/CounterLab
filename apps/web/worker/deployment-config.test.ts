@@ -723,7 +723,7 @@ describe("Cloudflare static asset routing", () => {
     expect(probe).toContain("COUNTERLAB_RUNNER_STARTUP_PROBE=1");
     expect(probe).not.toContain("--user");
     expect(probe).not.toContain("--entrypoint");
-    expect(probe).toContain("--ulimit=as=2147483648:2147483648");
+    expect(probe).toContain("--ulimit=as=8589934592:8589934592");
     expect(probe).toContain('"${IMAGE}"');
     expect(verifier.match(/"\$\{IMAGE\}"/gu)?.length).toBeGreaterThanOrEqual(2);
     expect(verifier).toContain("--generation-isolation-report");

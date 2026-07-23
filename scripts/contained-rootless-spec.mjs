@@ -22,6 +22,7 @@ const repositoryRoot = realpathSync(
 );
 const namespace = "counterlab-v6.1";
 const containedProcessAddressSpaceBytes = 2 * 1024 * 1024 * 1024;
+const hostedRunnerProcessAddressSpaceBytes = 8 * 1024 * 1024 * 1024;
 const containerIdPattern = /^[a-f0-9]{64}$/;
 const supportedRlimits = new Set([
   "RLIMIT_AS",
@@ -425,7 +426,10 @@ function validateReceiptResourceBindings(receipt) {
     receipt.enforcedRlimits.map((entry) => [entry.type, entry.soft]),
   );
   if (
-    byType.get("RLIMIT_AS") !== containedProcessAddressSpaceBytes ||
+    ![
+      containedProcessAddressSpaceBytes,
+      hostedRunnerProcessAddressSpaceBytes,
+    ].includes(byType.get("RLIMIT_AS")) ||
     byType.get("RLIMIT_NOFILE") !== 64 ||
     (byType.get("RLIMIT_CPU") ?? 0) < 1 ||
     (byType.get("RLIMIT_CPU") ?? 0) > 300 ||

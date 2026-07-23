@@ -336,7 +336,7 @@ function validateRun(runArgs) {
       options.get("--cpus")?.[0] !== "2.0" ||
       !sameValues(options.get("--ulimit") ?? [], [
         "cpu=300:300",
-        "as=2147483648:2147483648",
+        "as=8589934592:8589934592",
         "fsize=1048576:1048576",
         "nofile=64:64",
       ]) ||
