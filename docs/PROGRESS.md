@@ -5800,3 +5800,54 @@ The hosted warning remains truthful until the exact runner tuple reports
 `generationFilesystemReadIsolation: "OS_ENFORCED"` and release identity is
 bound in production. Release remains **NO-GO** until qualification, deployment,
 and public journeys actually pass.
+
+## Exact proof and evidence-refresh repair — 2026-07-23T09:06:41Z
+
+### Completed
+
+- Built source `89351552a3ba32d928443eb16a5a67e1be42f686` once in fresh
+  runtime `rt-v61-0723p`. The source-bound runner manifest was
+  `sha256:386b151b614e9306d482f167d59d9d74b675536e5d24e6aae93b4bcd63fed21a`;
+  runner config was
+  `sha256:6308d2ad063295843ea38255f4923729746bb47f4d71614358ae629054877c61`;
+  adapter config was
+  `sha256:f6096a074692e3add26a70c3c91d66adfbae02d63d956f10d798f7f698e7e559`.
+- The first genuine sentinel invocation failed closed at `MEMORY_CONTROL`. It
+  released no result and recorded verified cleanup. A single controlled retry
+  against the unchanged build passed and emitted a `VERIFIED` timeout receipt.
+- The passing proof consumed the schema-v3 receipt from the new host-visible,
+  invocation-bound directory, preserved the before/after runtime attestation,
+  verified aggregate-limit evidence, observed the wall timeout, and confirmed
+  `resultReleased: false`.
+- The exact-image scientific evidence refresh then failed closed before
+  publication: its reachability command used a stale 1 GiB address-space
+  limit, while the fixed validator requires the reviewed 2 GiB bounded
+  profile.
+- Committed `3e4cba2` (`fix(release): align reachability memory limit`) with a
+  regression that requires `2147483648:2147483648` and forbids the stale
+  `1073741824:1073741824` value.
+
+### Verification actually run for `3e4cba2`
+
+- Source-bound evidence plus contained-runtime Vitest: **2 files, 56/56
+  passed**.
+- Repository TypeScript: **passed**.
+- Bash syntax: **passed**.
+- Prettier: **passed**.
+- Git whitespace check: **passed**.
+- Secret scan: **passed across 2 explicit changed files**.
+
+### Current release truth
+
+- No partial evidence refresh was committed. No registry promotion,
+  qualification, Cloudflare mutation, deployment, or public journey occurred.
+- The passing `89351552` build and proof are retained diagnostic evidence but
+  cannot qualify the newer source. The next clean commit must be built and
+  proved again in a fresh attested runtime.
+- The remaining sequence is unchanged: exact build and sentinel; complete
+  evidence refresh; evidence-only commit; image qualification and registry
+  promotion; full release check; guarded deployment; production smoke;
+  desktop/mobile CloakBrowser journeys; feature-branch push.
+- Do not merge `main` in this slice.
+
+Release remains **NO-GO** until the replacement tuple completes every gate.
