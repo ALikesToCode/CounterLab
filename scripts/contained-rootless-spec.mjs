@@ -23,6 +23,10 @@ const repositoryRoot = realpathSync(
 const namespace = "counterlab-v6.1";
 const containedProcessAddressSpaceBytes = 2 * 1024 * 1024 * 1024;
 const hostedRunnerProcessAddressSpaceBytes = 8 * 1024 * 1024 * 1024;
+const adapterImagePattern =
+  /^docker\.io\/library\/counterlab-adapter:git-[a-f0-9]{40}$/;
+const hostedRunnerImagePattern =
+  /^docker\.io\/library\/counterlab-runner:git-[a-f0-9]{40}$/;
 const containerIdPattern = /^[a-f0-9]{64}$/;
 const supportedRlimits = new Set([
   "RLIMIT_AS",
@@ -422,14 +426,24 @@ function validateReceiptResourceBindings(receipt) {
     );
   }
   assertExpectedRlimits(receipt?.enforcedRlimits);
+  const imageAuthority = object(receipt?.imageAuthority, "image authority");
+  const expectedAddressSpaceBytes = hostedRunnerImagePattern.test(
+    imageAuthority.canonicalImage ?? "",
+  )
+    ? hostedRunnerProcessAddressSpaceBytes
+    : adapterImagePattern.test(imageAuthority.canonicalImage ?? "")
+      ? containedProcessAddressSpaceBytes
+      : null;
+  if (expectedAddressSpaceBytes === null) {
+    throw new Error(
+      "contained rootless OCI receipt image role is invalid for resource binding",
+    );
+  }
   const byType = new Map(
     receipt.enforcedRlimits.map((entry) => [entry.type, entry.soft]),
   );
   if (
-    ![
-      containedProcessAddressSpaceBytes,
-      hostedRunnerProcessAddressSpaceBytes,
-    ].includes(byType.get("RLIMIT_AS")) ||
+    byType.get("RLIMIT_AS") !== expectedAddressSpaceBytes ||
     byType.get("RLIMIT_NOFILE") !== 64 ||
     (byType.get("RLIMIT_CPU") ?? 0) < 1 ||
     (byType.get("RLIMIT_CPU") ?? 0) > 300 ||

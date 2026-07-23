@@ -2915,6 +2915,70 @@ describe("contained runtime command policy", () => {
     ).toThrow(/image identity/u);
   });
 
+  it.each([
+    {
+      command: startupCommand(),
+      label: "hosted runner",
+      wrongAddressSpaceBytes: 2 * 1024 * 1024 * 1024,
+    },
+    {
+      command: boundedAdapterCommand(),
+      label: "bounded adapter",
+      wrongAddressSpaceBytes: 8 * 1024 * 1024 * 1024,
+    },
+  ])(
+    "rejects a coherent $label receipt with the other image role's address-space limit",
+    ({ command, label, wrongAddressSpaceBytes }) => {
+      const sessionRoot = mkdtempSync(
+        resolve(root, `.rt/persisted-role-${label.replaceAll(" ", "-")}-`),
+      );
+      mkdirSync(resolve(sessionRoot, "run"), { mode: 0o700 });
+      const installRoot = resolve(
+        root,
+        "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
+      );
+      const plan = containedRunPlan({
+        args: command,
+        binRoot: resolve(installRoot, "bin"),
+        clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+        containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+        installRoot,
+        invocationId,
+        sessionRoot,
+      });
+      const fixture = imageFixture(command);
+      const wrongExpected = structuredClone(plan.expected);
+      const addressSpace = wrongExpected.rlimits.find(
+        (entry) => entry.type === "RLIMIT_AS",
+      );
+      if (addressSpace === undefined) throw new Error("missing test rlimit");
+      addressSpace.soft = wrongAddressSpaceBytes;
+      addressSpace.hard = wrongAddressSpaceBytes;
+      const prepared = sanitizeContainedRootlessSpec({
+        containerId: "8".repeat(64),
+        expected: {
+          ...wrongExpected,
+          containerName: plan.containerName,
+          imageAuthority: fixture.authority,
+          invocationId,
+          sessionRoot,
+        },
+        metadataSha256: "9".repeat(64),
+        source: rootlessSpec("8".repeat(64), wrongExpected, fixture.authority),
+      });
+
+      expect(() =>
+        persistContainedRootlessSpec({
+          config: prepared.config,
+          finalContainerId: prepared.finalContainerId,
+          internalMounts: prepared.internalMounts,
+          receipt: prepared.receipt,
+          sessionRoot,
+        }),
+      ).toThrow(/image role|rlimit binding/u);
+    },
+  );
+
   it("persists and verifies both config and self-hashed receipt", () => {
     const sessionRoot = mkdtempSync(resolve(root, ".rt/persisted-spec-"));
     mkdirSync(resolve(sessionRoot, "run"), { mode: 0o700 });

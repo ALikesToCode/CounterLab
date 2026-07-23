@@ -216,6 +216,44 @@ describe("hosted runner startup probe", () => {
   });
 
   it.each([
+    {
+      app: { uid: 0, gid: 0, mode: 0o555 },
+      bundle: { uid: 10_001, gid: 10_001, mode: 0o555 },
+      label: "mixed root and runtime ownership",
+    },
+    {
+      app: { uid: 10_001, gid: 10_001, mode: 0o755 },
+      bundle: { uid: 10_001, gid: 10_001, mode: 0o555 },
+      label: "a writable application mode",
+    },
+    {
+      app: { uid: 10_001, gid: 0, mode: 0o555 },
+      bundle: { uid: 10_001, gid: 0, mode: 0o555 },
+      label: "split uid and gid ownership",
+    },
+  ])("rejects $label", async ({ app, bundle }) => {
+    await expect(
+      runHostedRunnerStartupProbe({
+        bundlePath: "/app/runner.mjs",
+        stat: (async (
+          path: Parameters<typeof import("node:fs/promises").stat>[0],
+        ) => {
+          const metadata = path === "/app" ? app : bundle;
+          return {
+            ...metadata,
+            isDirectory: () => path === "/app",
+            isFile: () => path === "/app/runner.mjs",
+          };
+        }) as unknown as typeof import("node:fs/promises").stat,
+        getUid: () => 10_001,
+        getGid: () => 10_001,
+      }),
+    ).rejects.toThrow(
+      "Hosted runner immutable application paths do not match the 0555 runtime-root policy",
+    );
+  });
+
+  it.each([
     ["missing stdout", undefined],
     ["invalid JSON", { stdout: "not-json" }],
     [
