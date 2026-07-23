@@ -5740,3 +5740,63 @@ No current-source image, timeout receipt, refreshed evidence, qualification,
 deployment, production smoke, public browser qualification, push, `main` merge,
 learner result, or submission receipt is claimed at this checkpoint. Release
 remains **NO-GO** until the remaining gates actually pass.
+
+## Host-visible qualification receipt checkpoint — 2026-07-23T08:48:40Z
+
+### Completed and committed
+
+- Hardened the aggregate CPU, process, memory, and wall-time containment proof
+  across the independent commits ending at `a96f9f6`. The genuine sentinel for
+  that source observed kernel-owned memory and process limit events, CPU
+  throttling, surviving candidate membership, and clean timeout finalization
+  without releasing a result.
+- The exact `a96f9f6` runner and adapter image build completed, but the
+  top-level verifier failed closed because RootlessKit's private
+  `rootless-specs` copy-up hid the schema-v3 qualified receipt from the caller.
+  No qualification, registry promotion, or deployment followed that failure.
+- Committed `6ef3d01` (`fix(runtime): publish qualified receipts to host`).
+  Schema v3 now writes and consumes the qualified receipt only at the
+  invocation-bound host-visible path:
+  `.rt/<session>/run/cgroup-qualification/<invocation-id>/<container-id>.qualified-receipt.json`.
+  Schema v2 replay compatibility remains at
+  `.rt/<session>/run/rootless-specs/<container-id>.receipt.json`.
+- The Python caller and timeout proof bind to that exact schema-selected path.
+  A schema-v3 receipt placed only in the legacy directory is rejected rather
+  than accepted as a fallback.
+
+### Verification actually run for `6ef3d01`
+
+- Focused receipt/caller Pytest: **42/42 passed**.
+- Focused receipt/coordinator/runtime Vitest: **4 files, 66/66 passed**.
+- Complete contained-runtime Vitest: **17 files, 131/131 passed**.
+- Complete runner Pytest: **92/92 passed**.
+- Repository TypeScript: **passed**.
+- Prettier on the changed TypeScript/JavaScript files: **passed**.
+- Git whitespace check: **passed**.
+- Secret scan: **passed across 8 explicit changed files**.
+
+### Current release truth and exact next actions
+
+- The feature branch is **17 commits ahead** of its remote. The current public
+  Worker remains an older release; no current-source deployment is claimed.
+- The existing held runtime and its built images are source-bound to
+  `a96f9f6`, so they cannot qualify `6ef3d01` or any later documentation
+  checkpoint.
+- Freeze the next clean commit, start one fresh contained runtime, rebuild the
+  runner and adapter once, and rerun the genuine timeout and aggregate
+  containment sentinel. Continue only if the host-visible receipt is consumed
+  and the immutable cleanup receipt is emitted.
+- Refresh and commit only the allowlisted exact source/image scientific
+  evidence; qualify and promote that tuple; run the complete release gate; and
+  deploy only through `scripts/deploy-qualified.sh`.
+- Run clean desktop and mobile journeys through `playwright_safe`
+  CloakBrowser, including readiness, supported live upload, immutable
+  Prediction, reconnect, verified run, Boundary, transfer fail/pass, patch,
+  Proof Capsule, replay, console, and network checks.
+- Update the release evidence, then push only
+  `feat/learner-ux-v6.1`. **Do not merge `main` in this slice.**
+
+The hosted warning remains truthful until the exact runner tuple reports
+`generationFilesystemReadIsolation: "OS_ENFORCED"` and release identity is
+bound in production. Release remains **NO-GO** until qualification, deployment,
+and public journeys actually pass.
