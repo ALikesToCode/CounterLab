@@ -109,8 +109,10 @@ function aggregateObservation(observedAt = "2026-07-20T12:00:00.000Z") {
     negativeControls: {
       memory: {
         requestedBytes: intendedAggregateLimits.memoryBytes + 1,
+        maxEventsBefore: 0,
+        maxEventsAfter: 1,
         oomKillBefore: 0,
-        oomKillAfter: 1,
+        oomKillAfter: 0,
         enforced: true,
       },
       processes: {
@@ -138,7 +140,7 @@ function aggregateEvidence(
   observedAt = "2026-07-20T12:00:20.000Z",
 ) {
   return hashed({
-    schemaVersion: "2",
+    schemaVersion: "3",
     status: "OBSERVED",
     authority: "linux-cgroup-v2",
     cgroupVersion: 2,

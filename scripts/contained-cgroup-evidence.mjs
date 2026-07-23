@@ -184,7 +184,14 @@ export function validateContainedCgroupEvidence(value, expectedValue) {
   exactKeys(controls, ["cpu", "memory", "processes"], "negative controls");
   exactKeys(
     memoryControl,
-    ["enforced", "oomKillAfter", "oomKillBefore", "requestedBytes"],
+    [
+      "enforced",
+      "maxEventsAfter",
+      "maxEventsBefore",
+      "oomKillAfter",
+      "oomKillBefore",
+      "requestedBytes",
+    ],
     "memory control",
   );
   exactKeys(
@@ -217,7 +224,7 @@ export function validateContainedCgroupEvidence(value, expectedValue) {
     : new Set();
   const { receiptPayloadSha256, ...payload } = evidence;
   if (
-    evidence.schemaVersion !== "2" ||
+    evidence.schemaVersion !== "3" ||
     evidence.status !== "OBSERVED" ||
     evidence.authority !== "linux-cgroup-v2" ||
     evidence.cgroupVersion !== 2 ||
@@ -257,9 +264,12 @@ export function validateContainedCgroupEvidence(value, expectedValue) {
     membership.descendantsObserved !== true ||
     !safeInteger(memoryControl.requestedBytes, { positive: true }) ||
     memoryControl.requestedBytes <= intended.memoryBytes ||
+    !safeInteger(memoryControl.maxEventsBefore) ||
+    !safeInteger(memoryControl.maxEventsAfter, { positive: true }) ||
+    memoryControl.maxEventsAfter <= memoryControl.maxEventsBefore ||
     !safeInteger(memoryControl.oomKillBefore) ||
-    !safeInteger(memoryControl.oomKillAfter, { positive: true }) ||
-    memoryControl.oomKillAfter !== memoryControl.oomKillBefore + 1 ||
+    !safeInteger(memoryControl.oomKillAfter) ||
+    memoryControl.oomKillAfter !== memoryControl.oomKillBefore ||
     memoryControl.enforced !== true ||
     !safeInteger(processControl.attemptedProcesses, { positive: true }) ||
     processControl.attemptedProcesses <= intended.maxProcesses ||

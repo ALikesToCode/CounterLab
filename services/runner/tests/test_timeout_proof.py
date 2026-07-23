@@ -71,7 +71,7 @@ def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str,
     sanitized_spec_sha256 = "a" * 64
     member_pids = [100, 101]
     aggregate_payload: dict[str, object] = {
-        "schemaVersion": "2",
+        "schemaVersion": "3",
         "status": "OBSERVED",
         "authority": "linux-cgroup-v2",
         "cgroupVersion": 2,
@@ -105,8 +105,10 @@ def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str,
         "negativeControls": {
             "memory": {
                 "requestedBytes": intended_limits["memoryBytes"] + 1,
+                "maxEventsBefore": 0,
+                "maxEventsAfter": 1,
                 "oomKillBefore": 0,
-                "oomKillAfter": 1,
+                "oomKillAfter": 0,
                 "enforced": True,
             },
             "processes": {
@@ -189,6 +191,35 @@ def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str,
     }
     control["receiptPayloadSha256"] = _hash(control_payload)
     return receipt
+
+
+def _rebind_aggregate_receipt(
+    rootless: dict[str, object],
+    control: dict[str, object],
+) -> None:
+    evidence = rootless["aggregateLimitEvidence"]
+    assert isinstance(evidence, dict)
+    evidence_payload = {
+        key: value
+        for key, value in evidence.items()
+        if key != "receiptPayloadSha256"
+    }
+    evidence["receiptPayloadSha256"] = _hash(evidence_payload)
+    rootless_payload = {
+        key: value
+        for key, value in rootless.items()
+        if key != "receiptPayloadSha256"
+    }
+    rootless["receiptPayloadSha256"] = _hash(rootless_payload)
+    control["rootlessReceiptPayloadSha256"] = rootless[
+        "receiptPayloadSha256"
+    ]
+    control_payload = {
+        key: value
+        for key, value in control.items()
+        if key != "receiptPayloadSha256"
+    }
+    control["receiptPayloadSha256"] = _hash(control_payload)
 
 
 def test_control_receipt_requires_every_clean_postcondition() -> None:
@@ -308,6 +339,110 @@ def test_timeout_candidate_observes_the_exact_address_space_limit() -> None:
     assert "child.wait" in source
     with pytest.raises(RuntimeError, match="address-space"):
         timeout_proof_module._timeout_public_test(0)
+
+
+def test_aggregate_memory_control_v3_proves_max_without_an_oom_kill() -> None:
+    build = {
+        "sourceCommit": "e" * 40,
+        "sourceTreeSha256": "a" * 64,
+        "adapterImageDigest": f"sha256:{'b' * 64}",
+        "adapterManifestDigest": f"sha256:{'c' * 64}",
+    }
+    control = _control("3")
+    rootless = _rootless(control, build)
+    evidence = rootless["aggregateLimitEvidence"]
+    assert isinstance(evidence, dict)
+    assert evidence["schemaVersion"] == "3"
+    controls = evidence["negativeControls"]
+    assert isinstance(controls, dict)
+    memory = controls["memory"]
+    assert isinstance(memory, dict)
+    assert set(memory) == {
+        "requestedBytes",
+        "maxEventsBefore",
+        "maxEventsAfter",
+        "oomKillBefore",
+        "oomKillAfter",
+        "enforced",
+    }
+    assert validate_rootless_receipt(rootless, control=control, build=build) == rootless
+
+    for mutate in (
+        lambda value: value.update(maxEventsAfter=value["maxEventsBefore"]),
+        lambda value: value.update(oomKillAfter=value["oomKillBefore"] + 1),
+        lambda value: value.update(requestedBytes=512 * 1024 * 1024),
+        lambda value: value.pop("maxEventsAfter"),
+        lambda value: value.update(reclaimedBytes=1),
+    ):
+        rejected_control = _control("3")
+        rejected = _rootless(rejected_control, build)
+        rejected_evidence = rejected["aggregateLimitEvidence"]
+        assert isinstance(rejected_evidence, dict)
+        rejected_controls = rejected_evidence["negativeControls"]
+        assert isinstance(rejected_controls, dict)
+        rejected_memory = rejected_controls["memory"]
+        assert isinstance(rejected_memory, dict)
+        mutate(rejected_memory)
+        _rebind_aggregate_receipt(rejected, rejected_control)
+        with pytest.raises(RuntimeError, match="aggregate limit evidence"):
+            validate_rootless_receipt(
+                rejected,
+                control=rejected_control,
+                build=build,
+            )
+
+
+def test_aggregate_memory_control_v2_remains_fail_closed_for_compatibility() -> None:
+    build = {
+        "sourceCommit": "e" * 40,
+        "sourceTreeSha256": "a" * 64,
+        "adapterImageDigest": f"sha256:{'b' * 64}",
+        "adapterManifestDigest": f"sha256:{'c' * 64}",
+    }
+    control = _control()
+    rootless = _rootless(control, build)
+    evidence = rootless["aggregateLimitEvidence"]
+    assert isinstance(evidence, dict)
+    evidence["schemaVersion"] = "2"
+    controls = evidence["negativeControls"]
+    assert isinstance(controls, dict)
+    memory = controls["memory"]
+    assert isinstance(memory, dict)
+    memory.clear()
+    memory.update(
+        {
+            "requestedBytes": 512 * 1024 * 1024 + 1,
+            "oomKillBefore": 0,
+            "oomKillAfter": 1,
+            "enforced": True,
+        }
+    )
+    _rebind_aggregate_receipt(rootless, control)
+    assert validate_rootless_receipt(rootless, control=control, build=build) == rootless
+
+    qualified_control = _control("3")
+    qualified_rootless = _rootless(qualified_control, build)
+    qualified_evidence = qualified_rootless["aggregateLimitEvidence"]
+    assert isinstance(qualified_evidence, dict)
+    qualified_evidence["schemaVersion"] = "2"
+    qualified_controls = qualified_evidence["negativeControls"]
+    assert isinstance(qualified_controls, dict)
+    qualified_memory = qualified_controls["memory"]
+    assert isinstance(qualified_memory, dict)
+    qualified_memory.clear()
+    qualified_memory.update(memory)
+    _rebind_aggregate_receipt(qualified_rootless, qualified_control)
+    with pytest.raises(RuntimeError, match="authority"):
+        validate_rootless_receipt(
+            qualified_rootless,
+            control=qualified_control,
+            build=build,
+        )
+
+    memory["oomKillAfter"] = memory["oomKillBefore"]
+    _rebind_aggregate_receipt(rootless, control)
+    with pytest.raises(RuntimeError, match="aggregate limit evidence"):
+        validate_rootless_receipt(rootless, control=control, build=build)
 
 
 def test_rootless_receipt_binds_control_and_exact_adapter_authority() -> None:

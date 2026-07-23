@@ -20,7 +20,7 @@ const intendedAggregateLimits = {
 function evidence(cgroupParentPath: "" | "containerd" = "containerd") {
   const memberPids = [100, 101];
   const payload = {
-    schemaVersion: "2",
+    schemaVersion: "3",
     status: "OBSERVED",
     authority: "linux-cgroup-v2",
     cgroupVersion: 2,
@@ -56,8 +56,10 @@ function evidence(cgroupParentPath: "" | "containerd" = "containerd") {
     negativeControls: {
       memory: {
         requestedBytes: intendedAggregateLimits.memoryBytes + 64 * 1024 * 1024,
+        maxEventsBefore: 0,
+        maxEventsAfter: 1,
         oomKillBefore: 0,
-        oomKillAfter: 1,
+        oomKillAfter: 0,
         enforced: true,
       },
       processes: {
@@ -131,7 +133,7 @@ describe("contained cgroup evidence", () => {
         value.membership.memberPids = [100, 100];
       },
       (value) => {
-        value.negativeControls.memory.oomKillAfter = 0;
+        value.negativeControls.memory.maxEventsAfter = 0;
       },
       (value) => {
         value.negativeControls.processes.maxEventsAfter = 0;
@@ -174,9 +176,9 @@ describe("contained cgroup evidence", () => {
     ).toThrow(/binding/u);
   });
 
-  it("rejects a self-consistent receipt with an ambiguous OOM delta", () => {
+  it("rejects a self-consistent receipt with an OOM kill", () => {
     const changed = evidence();
-    changed.negativeControls.memory.oomKillAfter = 2;
+    changed.negativeControls.memory.oomKillAfter = 1;
     const { receiptPayloadSha256: _ignored, ...payload } = changed;
     changed.receiptPayloadSha256 = sha256CgroupBytes(
       canonicalCgroupJson(payload),

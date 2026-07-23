@@ -28,7 +28,7 @@ function aggregateLimitEvidence() {
   const sanitizedSpecSha256 = "5".repeat(64);
   const memberPids = [100, 101];
   const payload = {
-    schemaVersion: "2" as const,
+    schemaVersion: "3" as const,
     status: "OBSERVED" as const,
     authority: "linux-cgroup-v2" as const,
     cgroupVersion: 2 as const,
@@ -59,8 +59,10 @@ function aggregateLimitEvidence() {
     negativeControls: {
       memory: {
         requestedBytes: intendedAggregateLimits.memoryBytes + 1,
+        maxEventsBefore: 0,
+        maxEventsAfter: 1,
         oomKillBefore: 0,
-        oomKillAfter: 1,
+        oomKillAfter: 0,
         enforced: true as const,
       },
       processes: {
@@ -203,7 +205,7 @@ describe("timeout cleanup aggregate resource authority", () => {
     ).toThrow();
 
     const evidence = aggregateLimitEvidence();
-    evidence.negativeControls.memory.oomKillAfter = 0;
+    evidence.negativeControls.memory.maxEventsAfter = 0;
     expect(() =>
       assertQualifiedAggregateRuntimeLimits({
         ...aggregateInput(),
@@ -226,14 +228,14 @@ describe("timeout cleanup aggregate resource authority", () => {
       }),
     ).toThrow();
 
-    const ambiguousOom = aggregateLimitEvidence();
-    ambiguousOom.negativeControls.memory.oomKillAfter = 2;
-    const { receiptPayloadSha256: _ignored, ...payload } = ambiguousOom;
-    ambiguousOom.receiptPayloadSha256 = sha256(canonicalJson(payload));
+    const unexpectedOom = aggregateLimitEvidence();
+    unexpectedOom.negativeControls.memory.oomKillAfter = 1;
+    const { receiptPayloadSha256: _ignored, ...payload } = unexpectedOom;
+    unexpectedOom.receiptPayloadSha256 = sha256(canonicalJson(payload));
     expect(() =>
       assertQualifiedAggregateRuntimeLimits({
         ...aggregateInput(),
-        aggregateLimitEvidence: ambiguousOom,
+        aggregateLimitEvidence: unexpectedOom,
         aggregateLimitIntentEnforced: true,
         limitMode: QUALIFIED_AGGREGATE_LIMIT_MODE,
       }),

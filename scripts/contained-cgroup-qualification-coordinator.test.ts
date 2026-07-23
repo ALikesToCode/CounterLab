@@ -114,7 +114,9 @@ function observation(observedAt = "2026-07-20T12:00:10.000Z") {
       },
       memory: {
         enforced: true,
-        oomKillAfter: 1,
+        maxEventsAfter: 1,
+        maxEventsBefore: 0,
+        oomKillAfter: 0,
         oomKillBefore: 0,
         requestedBytes: intendedAggregateLimits.memoryBytes + 1,
       },
@@ -134,7 +136,7 @@ function aggregateEvidence(
   finalizationPayloadSha256: string,
 ) {
   return hashed({
-    schemaVersion: "2",
+    schemaVersion: "3",
     status: "OBSERVED",
     authority: "linux-cgroup-v2",
     cgroupVersion: 2,

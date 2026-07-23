@@ -37,7 +37,7 @@ const AggregateLimitIntentSchema = z.strictObject({
 
 const AggregateLimitEvidenceSchema = z
   .strictObject({
-    schemaVersion: z.literal("2"),
+    schemaVersion: z.literal("3"),
     status: z.literal("OBSERVED"),
     authority: z.literal("linux-cgroup-v2"),
     cgroupVersion: z.literal(2),
@@ -68,8 +68,10 @@ const AggregateLimitEvidenceSchema = z
     negativeControls: z.strictObject({
       memory: z.strictObject({
         requestedBytes: PositiveSafeIntegerSchema,
+        maxEventsBefore: NonnegativeSafeIntegerSchema,
+        maxEventsAfter: PositiveSafeIntegerSchema,
         oomKillBefore: NonnegativeSafeIntegerSchema,
-        oomKillAfter: PositiveSafeIntegerSchema,
+        oomKillAfter: NonnegativeSafeIntegerSchema,
         enforced: z.literal(true),
       }),
       processes: z.strictObject({
@@ -145,8 +147,10 @@ const AggregateLimitEvidenceSchema = z
       });
     }
     if (
+      evidence.negativeControls.memory.maxEventsAfter <=
+        evidence.negativeControls.memory.maxEventsBefore ||
       evidence.negativeControls.memory.oomKillAfter !==
-        evidence.negativeControls.memory.oomKillBefore + 1 ||
+        evidence.negativeControls.memory.oomKillBefore ||
       evidence.negativeControls.processes.maxEventsAfter <=
         evidence.negativeControls.processes.maxEventsBefore ||
       evidence.negativeControls.cpu.nrThrottledAfter <=

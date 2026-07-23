@@ -1578,10 +1578,10 @@ export function sanitizeContainedRootlessSpec({
   // runc and the independent observer resolve the same cgroup regardless of
   // whether the runtime coordinator itself was evacuated to /containerd.
   linux.cgroupsPath = `/${namespace}-${expected.invocationId}`;
-  // The memory qualification helper is intentionally the OOM victim. Keep
-  // cgroup-v2 from treating the complete candidate as one indivisible OOM
-  // group; the observer still requires the candidate membership and process
-  // identities to remain unchanged after the control.
+  // Keep OOM handling process-scoped. The memory qualification helper is
+  // stopped as soon as the kernel increments memory.events:max, before an OOM
+  // kill; the observer also requires an unchanged oom_kill counter and stable
+  // candidate process identities.
   linux.resources.unified = { "memory.oom.group": "0" };
   delete linux.sysctl;
   if (

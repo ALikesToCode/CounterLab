@@ -246,7 +246,7 @@ function expectedEvidence(manifest) {
 
 function evidencePayload(manifest, observation, finalization) {
   return {
-    schemaVersion: "2",
+    schemaVersion: "3",
     status: "OBSERVED",
     authority: "linux-cgroup-v2",
     cgroupVersion: 2,
@@ -660,7 +660,11 @@ export async function observeContainedCgroup(
   const requestedBytes = observedLimits.memoryMaxBytes + 64 * 1024 * 1024;
   reportPhase("MEMORY_CONTROL");
   await adapter.runControl(
-    { mode: "memory", requestedBytes },
+    {
+      mode: "memory",
+      requestedBytes,
+      maxEventsBefore: memoryBefore.max,
+    },
     initial.memberPids,
   );
   reportPhase("MEMORY_COUNTERS_AFTER");
@@ -685,9 +689,13 @@ export async function observeContainedCgroup(
     negativeControls: {
       memory: {
         requestedBytes,
+        maxEventsBefore: memoryBefore.max,
+        maxEventsAfter: memoryAfter.max,
         oomKillBefore: memoryBefore.oom_kill,
         oomKillAfter: memoryAfter.oom_kill,
-        enforced: memoryAfter.oom_kill === memoryBefore.oom_kill + 1,
+        enforced:
+          memoryAfter.max > memoryBefore.max &&
+          memoryAfter.oom_kill === memoryBefore.oom_kill,
       },
       processes: {
         attemptedProcesses,
@@ -1074,6 +1082,36 @@ function actualCgroupAdapter(manifest, paths, reportPhase) {
       }
       reportPhase(`${phasePrefix}_CONTROL`);
       child.stdin.end("GO\n");
+      if (control.mode === "memory") {
+        if (!Number.isSafeInteger(control.maxEventsBefore)) {
+          throw new Error(
+            "contained cgroup observer memory counter is invalid",
+          );
+        }
+        await bounded(
+          waitUntil(
+            () => {
+              const counters = parseContainedCgroupKeyValues(
+                readFileSync(cgroupFile("memory.events"), "utf8"),
+              );
+              return counters.max > control.maxEventsBefore;
+            },
+            "memory limit event",
+            10_000,
+          ),
+          11_000,
+          "memory limit event",
+        );
+        if (
+          child.exitCode === null &&
+          child.signalCode === null &&
+          !child.kill("SIGTERM")
+        ) {
+          throw new Error(
+            "contained cgroup observer memory helper could not be stopped",
+          );
+        }
+      }
       const result = await bounded(completion, 15_000, "helper completion");
       if (
         !containedCgroupHelperResultAccepted(

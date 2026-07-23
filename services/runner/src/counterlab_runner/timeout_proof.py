@@ -424,6 +424,10 @@ def validate_rootless_receipt(
         or value.get("status") != "VALIDATED"
         or value.get("limitMode") != _QUALIFIED_AGGREGATE_LIMIT_MODE
         or value.get("aggregateLimitIntentEnforced") is not True
+        or (
+            control.get("schemaVersion") == "3"
+            and aggregate_evidence.get("schemaVersion") != "3"
+        )
         or value.get("invocationId") != control["invocationId"]
         or value.get("finalContainerId") != control["finalContainerId"]
         or value.get("commandSha256") != control["commandSha256"]
@@ -602,8 +606,60 @@ def _validate_aggregate_limit_evidence(
     process_control = controls.get("processes")
     cpu_control = controls.get("cpu")
     member_pids = membership.get("memberPids")
+    evidence_schema_version = value.get("schemaVersion")
+    memory_control_keys = (
+        {"requestedBytes", "oomKillBefore", "oomKillAfter", "enforced"}
+        if evidence_schema_version == "2"
+        else {
+            "requestedBytes",
+            "maxEventsBefore",
+            "maxEventsAfter",
+            "oomKillBefore",
+            "oomKillAfter",
+            "enforced",
+        }
+    )
+    memory_counter_fields = (
+        ("requestedBytes", "oomKillBefore", "oomKillAfter")
+        if evidence_schema_version == "2"
+        else (
+            "requestedBytes",
+            "maxEventsBefore",
+            "maxEventsAfter",
+            "oomKillBefore",
+            "oomKillAfter",
+        )
+    )
+    valid_memory_control = (
+        evidence_schema_version in {"2", "3"}
+        and isinstance(memory_control, dict)
+        and set(memory_control) == memory_control_keys
+        and all(
+            _safe_integer(
+                memory_control.get(field),
+                positive=field == "requestedBytes",
+            )
+            for field in memory_counter_fields
+        )
+        and memory_control.get("requestedBytes") > intended.get("memoryBytes", 0)
+        and memory_control.get("enforced") is True
+        and (
+            (
+                evidence_schema_version == "2"
+                and memory_control.get("oomKillAfter")
+                == memory_control.get("oomKillBefore") + 1
+            )
+            or (
+                evidence_schema_version == "3"
+                and memory_control.get("maxEventsAfter")
+                > memory_control.get("maxEventsBefore")
+                and memory_control.get("oomKillAfter")
+                == memory_control.get("oomKillBefore")
+            )
+        )
+    )
     if (
-        value.get("schemaVersion") != "2"
+        evidence_schema_version not in {"2", "3"}
         or value.get("status") != "OBSERVED"
         or value.get("authority") != "linux-cgroup-v2"
         or value.get("cgroupVersion") != 2
@@ -657,9 +713,7 @@ def _validate_aggregate_limit_evidence(
             _canonical_json(sorted(member_pids)).encode()
         )
         or membership.get("descendantsObserved") is not True
-        or not isinstance(memory_control, dict)
-        or set(memory_control)
-        != {"requestedBytes", "oomKillBefore", "oomKillAfter", "enforced"}
+        or not valid_memory_control
         or not isinstance(process_control, dict)
         or set(process_control)
         != {"attemptedProcesses", "maxEventsBefore", "maxEventsAfter", "enforced"}
@@ -673,14 +727,6 @@ def _validate_aggregate_limit_evidence(
             "throttledUsecAfter",
             "enforced",
         }
-        or not all(
-            _safe_integer(memory_control.get(field), positive=field == "requestedBytes")
-            for field in ("requestedBytes", "oomKillBefore", "oomKillAfter")
-        )
-        or memory_control.get("requestedBytes") <= intended["memoryBytes"]
-        or memory_control.get("oomKillAfter")
-        != memory_control.get("oomKillBefore") + 1
-        or memory_control.get("enforced") is not True
         or not all(
             _safe_integer(
                 process_control.get(field), positive=field == "attemptedProcesses"

@@ -93,7 +93,7 @@ function adapter(overrides: Record<string, unknown> = {}) {
   const counters = {
     cpu: { nr_throttled: 0, throttled_usec: 0 },
     processes: { max: 0 },
-    memory: { oom_kill: 0 },
+    memory: { max: 0, oom_kill: 0 },
   };
   const controls: Array<Record<string, unknown>> = [];
   const drafts: Array<Record<string, unknown>> = [];
@@ -116,7 +116,7 @@ function adapter(overrides: Record<string, unknown> = {}) {
         "cgroup.procs": "100\n101\n",
         "cpu.stat": `usage_usec 10\nnr_throttled ${counters.cpu.nr_throttled}\nthrottled_usec ${counters.cpu.throttled_usec}\n`,
         "pids.events": `max ${counters.processes.max}\n`,
-        "memory.events": `low 0\noom_kill ${counters.memory.oom_kill}\n`,
+        "memory.events": `low 0\nmax ${counters.memory.max}\noom_kill ${counters.memory.oom_kill}\n`,
       };
       const value = values[name];
       if (value === undefined)
@@ -137,7 +137,7 @@ function adapter(overrides: Record<string, unknown> = {}) {
       } else if (control.mode === "processes") {
         counters.processes.max += 1;
       } else if (control.mode === "memory") {
-        counters.memory.oom_kill += 1;
+        counters.memory.max += 1;
       }
     },
     async publishDraft(draft: Record<string, unknown>) {
@@ -173,7 +173,7 @@ describe("contained cgroup observer", () => {
     ).toBe(resolve(root, "scripts/contained-cgroup-control-helper.py"));
   });
 
-  it("uses kernel memory events instead of platform-specific OOM exit encoding", () => {
+  it("accepts bounded helper termination after the kernel reports memory.max", () => {
     expect(
       containedCgroupHelperResultAccepted(
         "memory",
@@ -247,7 +247,11 @@ describe("contained cgroup observer", () => {
     expect(fake.controls).toEqual([
       { mode: "cpu", busyWindowMs: 500, workers: 1 },
       { mode: "processes", attemptedProcesses: 17 },
-      { mode: "memory", requestedBytes: 576 * 1024 * 1024 },
+      {
+        mode: "memory",
+        requestedBytes: 576 * 1024 * 1024,
+        maxEventsBefore: 0,
+      },
     ]);
     expect(phases).toEqual([
       "WAIT_CGROUP",
@@ -320,7 +324,7 @@ describe("contained cgroup observer", () => {
     );
   });
 
-  it("rejects aborts, unstable membership and limits, and ambiguous OOM kills", async () => {
+  it("rejects aborts, unstable membership and limits, and ambiguous memory events", async () => {
     const aborted = adapter({
       waitForFinalization: async () =>
         createContainedCgroupObserverFinalization(manifest(), {
@@ -446,18 +450,25 @@ describe("contained cgroup observer", () => {
       observeContainedCgroup(manifest(), groupedOom),
     ).rejects.toThrow(/OOM grouping/u);
 
-    const ambiguousOomBase = adapter();
-    const ambiguousOom = {
-      ...ambiguousOomBase,
+    const unexpectedOomBase = adapter();
+    let memoryControlCompleted = false;
+    const unexpectedOom = {
+      ...unexpectedOomBase,
+      readCgroupFile(name: string) {
+        const source = unexpectedOomBase.readCgroupFile(name);
+        return name === "memory.events" && memoryControlCompleted
+          ? source.replace("oom_kill 0", "oom_kill 1")
+          : source;
+      },
       async runControl(control: Record<string, unknown>) {
-        await ambiguousOomBase.runControl(control);
+        await unexpectedOomBase.runControl(control);
         if (control.mode === "memory") {
-          await ambiguousOomBase.runControl(control);
+          memoryControlCompleted = true;
         }
       },
     };
     await expect(
-      observeContainedCgroup(manifest(), ambiguousOom),
+      observeContainedCgroup(manifest(), unexpectedOom),
     ).rejects.toThrow(/evidence binding/u);
   });
 
@@ -514,8 +525,10 @@ describe("contained cgroup observer", () => {
       negativeControls: {
         memory: {
           requestedBytes: 576 * 1024 * 1024,
+          maxEventsBefore: 0,
+          maxEventsAfter: 1,
           oomKillBefore: 0,
-          oomKillAfter: 1,
+          oomKillAfter: 0,
           enforced: true,
         },
         processes: {

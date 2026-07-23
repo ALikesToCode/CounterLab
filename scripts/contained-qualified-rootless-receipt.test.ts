@@ -67,7 +67,7 @@ function baseReceipt() {
 function aggregateEvidence(cgroupParentPath: "" | "containerd" = "containerd") {
   const memberPids = [100, 101];
   return hashed({
-    schemaVersion: "2",
+    schemaVersion: "3",
     status: "OBSERVED",
     authority: "linux-cgroup-v2",
     cgroupVersion: 2,
@@ -103,8 +103,10 @@ function aggregateEvidence(cgroupParentPath: "" | "containerd" = "containerd") {
     negativeControls: {
       memory: {
         requestedBytes: intendedAggregateLimits.memoryBytes + 1,
+        maxEventsBefore: 0,
+        maxEventsAfter: 1,
         oomKillBefore: 0,
-        oomKillAfter: 1,
+        oomKillAfter: 0,
         enforced: true,
       },
       processes: {
