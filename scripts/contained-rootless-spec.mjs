@@ -22,7 +22,7 @@ const repositoryRoot = realpathSync(
 );
 const namespace = "counterlab-v6.1";
 const containedProcessAddressSpaceBytes = 2 * 1024 * 1024 * 1024;
-const hostedRunnerProcessAddressSpaceBytes = 8 * 1024 * 1024 * 1024;
+const hostedRunnerProcessAddressSpaceBytes = 16 * 1024 * 1024 * 1024;
 const adapterImagePattern =
   /^docker\.io\/library\/counterlab-adapter:git-[a-f0-9]{40}$/;
 const hostedRunnerImagePattern =

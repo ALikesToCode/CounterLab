@@ -725,7 +725,7 @@ describe("Cloudflare static asset routing", () => {
     expect(probe).not.toContain("--entrypoint");
     expect(probe).toContain("--memory=4096m");
     expect(probe).toContain("--memory-swap=4096m");
-    expect(probe).toContain("--ulimit=as=8589934592:8589934592");
+    expect(probe).toContain("--ulimit=as=17179869184:17179869184");
     expect(probe).toContain('"${IMAGE}"');
     expect(verifier.match(/"\$\{IMAGE\}"/gu)?.length).toBeGreaterThanOrEqual(2);
     expect(verifier).toContain("--generation-isolation-report");

@@ -78,12 +78,13 @@ if (
 const shortCommandTimeoutMs = runtimePolicy.shortCommandTimeoutMs;
 const executionControlOverheadMs = runtimePolicy.executionControlOverheadMs;
 const cleanupReserveMs = runtimePolicy.cleanupReserveMs;
-// runc 1.4.x is a Go program and cannot reliably initialize its seccomp
-// filter under a 1 GiB virtual-address ceiling. Keep resident memory bounded
-// independently by the stricter container cgroup while retaining a finite
-// per-process address-space ceiling.
+// runc and the hosted Node process reserve substantially more virtual address
+// space than resident memory. Keep physical memory bounded independently by
+// the stricter container cgroup while retaining finite, role-specific virtual
+// address-space ceilings.
 export const CONTAINED_PROCESS_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024;
-export const HOSTED_RUNNER_PROCESS_ADDRESS_SPACE_BYTES = 8 * 1024 * 1024 * 1024;
+export const HOSTED_RUNNER_PROCESS_ADDRESS_SPACE_BYTES =
+  16 * 1024 * 1024 * 1024;
 export const CONTAINED_RUNTIME_CONTROL_BUDGET_SECONDS =
   (executionControlOverheadMs + cleanupReserveMs) / 1_000;
 export const CONTAINED_RUNTIME_CALLER_GRACE_SECONDS =
