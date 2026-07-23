@@ -126,6 +126,7 @@ function adapter(overrides: Record<string, unknown> = {}) {
         ? processStat(100, 1, 12345)
         : processStat(101, 100, 12346);
     },
+    waitForMembershipSample: async () => undefined,
     async runControl(control: Record<string, unknown>) {
       controls.push(control);
       if (control.mode === "cpu") {
@@ -313,12 +314,39 @@ describe("contained cgroup observer", () => {
       observeContainedCgroup(manifest(), wrongDraft),
     ).rejects.toThrow(/draft changed/u);
 
-    let membershipReads = 0;
-    const unstableMembership = adapter({
+    let growingMembershipReads = 0;
+    const growingMembership = adapter({
       readCgroupFile(name: string) {
         if (name === "cgroup.procs") {
-          membershipReads += 1;
-          return membershipReads === 1 ? "100\n101\n" : "100\n101\n102\n";
+          growingMembershipReads += 1;
+          return growingMembershipReads <= 2 ? "100\n101\n" : "100\n101\n102\n";
+        }
+        return adapter().readCgroupFile(name);
+      },
+      readProcessStat(pid: number) {
+        if (pid === 100) return processStat(100, 1, 12345);
+        if (pid === 101) return processStat(101, 100, 12346);
+        return processStat(102, 100, 12347);
+      },
+      runControl(
+        _control: Record<string, unknown>,
+        baselineMemberPids: number[],
+      ) {
+        expect(baselineMemberPids).toEqual([100, 101, 102]);
+        throw new Error("membership stabilized after candidate growth");
+      },
+    });
+    await expect(
+      observeContainedCgroup(manifest(), growingMembership),
+    ).rejects.toThrow(/stabilized after candidate growth/u);
+
+    let churningMembershipReads = 0;
+    const churningMembership = adapter({
+      readCgroupFile(name: string) {
+        if (name === "cgroup.procs") {
+          churningMembershipReads += 1;
+          const attempt = Math.floor((churningMembershipReads - 1) / 2);
+          return attempt % 2 === 0 ? "100\n101\n" : "100\n101\n102\n";
         }
         return adapter().readCgroupFile(name);
       },
@@ -329,8 +357,24 @@ describe("contained cgroup observer", () => {
       },
     });
     await expect(
-      observeContainedCgroup(manifest(), unstableMembership),
+      observeContainedCgroup(manifest(), churningMembership),
     ).rejects.toThrow(/stabilize/u);
+
+    let identityReads = 0;
+    const changedIdentity = adapter({
+      readProcessStat(pid: number) {
+        identityReads += 1;
+        const sample = Math.floor((identityReads - 1) / 2);
+        return processStat(
+          pid,
+          pid === 100 ? 1 : 100,
+          (pid === 100 ? 12345 : 12346) + (sample >= 1 ? 1 : 0),
+        );
+      },
+    });
+    await expect(
+      observeContainedCgroup(manifest(), changedIdentity),
+    ).rejects.toThrow(/identity changed/u);
 
     const stable = adapter();
     let memoryLimitReads = 0;

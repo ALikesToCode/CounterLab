@@ -30,6 +30,9 @@ const cgroupFilesystemRoot = "/sys/fs/cgroup";
 const cgroup2Magic = 0x63677270;
 const maximumArtifactBytes = 1_048_576;
 export const cgroupStartupTimeoutMs = 30_000;
+const membershipQuiescenceSamples = 3;
+const membershipQuiescenceMaximumAttempts = 40;
+const membershipQuiescenceIntervalMs = 50;
 const allowedCgroupFiles = new Set([
   "cgroup.procs",
   "cpu.max",
@@ -503,26 +506,67 @@ async function observedAggregateLimits(adapter) {
 }
 
 async function stableMembership(adapter) {
-  const memberPids = parseContainedCgroupMembers(
-    await adapter.readCgroupFile("cgroup.procs"),
-  );
-  const processStats = new Map();
-  for (const pid of memberPids) {
-    processStats.set(
-      pid,
-      parseContainedProcessStat(await adapter.readProcessStat(pid), pid),
-    );
-  }
-  const confirmedMemberPids = parseContainedCgroupMembers(
-    await adapter.readCgroupFile("cgroup.procs"),
-  );
-  if (
-    canonicalCgroupJson(confirmedMemberPids) !== canonicalCgroupJson(memberPids)
+  let stableSamples = 0;
+  let previousFingerprint;
+  let previousPids;
+  for (
+    let attempt = 0;
+    attempt < membershipQuiescenceMaximumAttempts;
+    attempt += 1
   ) {
-    throw new Error("contained cgroup observer membership did not stabilize");
+    const memberPids = parseContainedCgroupMembers(
+      await adapter.readCgroupFile("cgroup.procs"),
+    );
+    const processStats = new Map();
+    for (const pid of memberPids) {
+      processStats.set(
+        pid,
+        parseContainedProcessStat(await adapter.readProcessStat(pid), pid),
+      );
+    }
+    const confirmedMemberPids = parseContainedCgroupMembers(
+      await adapter.readCgroupFile("cgroup.procs"),
+    );
+    if (
+      canonicalCgroupJson(confirmedMemberPids) !==
+      canonicalCgroupJson(memberPids)
+    ) {
+      stableSamples = 0;
+      previousFingerprint = undefined;
+      previousPids = undefined;
+      await adapter.waitForMembershipSample();
+      continue;
+    }
+    const fingerprint = canonicalCgroupJson(
+      memberPids.map((pid) => processStats.get(pid)),
+    );
+    const pidFingerprint = canonicalCgroupJson(memberPids);
+    if (
+      previousPids === pidFingerprint &&
+      previousFingerprint !== undefined &&
+      previousFingerprint !== fingerprint
+    ) {
+      throw new Error(
+        "contained cgroup observer process identity changed or PID was reused during stabilization",
+      );
+    }
+    if (previousFingerprint === fingerprint) {
+      stableSamples += 1;
+    } else {
+      stableSamples = 1;
+      previousFingerprint = fingerprint;
+      previousPids = pidFingerprint;
+    }
+    if (stableSamples >= membershipQuiescenceSamples) {
+      const membership = selectContainedCgroupMembership(
+        memberPids,
+        processStats,
+      );
+      return { memberPids, membership, processStats };
+    }
+    await adapter.waitForMembershipSample();
   }
-  const membership = selectContainedCgroupMembership(memberPids, processStats);
-  return { memberPids, membership, processStats };
+  throw new Error("contained cgroup observer membership did not stabilize");
 }
 
 async function assertCandidateSurvived(adapter, initial) {
@@ -1110,6 +1154,12 @@ function actualCgroupAdapter(manifest, paths, reportPhase) {
     readProcessStat(pid) {
       assertNotTerminated();
       return readFileSync(`/proc/${pid}/stat`, "utf8");
+    },
+    waitForMembershipSample() {
+      assertNotTerminated();
+      return new Promise((accept) =>
+        setTimeout(accept, membershipQuiescenceIntervalMs),
+      );
     },
     runControl,
     publishDraft(draft) {
