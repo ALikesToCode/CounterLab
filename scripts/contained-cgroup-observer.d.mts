@@ -2,6 +2,7 @@ import type { ContainedCgroupObserverManifest } from "./contained-cgroup-observe
 import type { ContainedCgroupObserverFinalization } from "./contained-cgroup-observer-protocol.mjs";
 
 export const cgroupStartupTimeoutMs: 30_000;
+export const cgroupFinalizationTimeoutMs: 60_000;
 export const containedCgroupObserverFailurePhases: readonly string[];
 
 export function createContainedCgroupObserverReady(

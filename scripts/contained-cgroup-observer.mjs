@@ -30,6 +30,7 @@ const cgroupFilesystemRoot = "/sys/fs/cgroup";
 const cgroup2Magic = 0x63677270;
 const maximumArtifactBytes = 1_048_576;
 export const cgroupStartupTimeoutMs = 30_000;
+export const cgroupFinalizationTimeoutMs = 60_000;
 const membershipQuiescenceSamples = 3;
 const membershipQuiescenceMaximumAttempts = 40;
 const membershipQuiescenceIntervalMs = 50;
@@ -1245,7 +1246,7 @@ function actualCgroupAdapter(manifest, paths, reportPhase) {
           return artifactExists(paths.finalizationPath);
         },
         "runtime finalization",
-        30_000,
+        cgroupFinalizationTimeoutMs,
       );
       privateFile(paths.finalizationPath, "finalization");
       return validateContainedCgroupObserverFinalization(
