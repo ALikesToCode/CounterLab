@@ -223,7 +223,7 @@ STARTUP_PROBE_OUTPUT="$("${DOCKER_COMMAND[@]}" run --rm --name "${STARTUP_CONTAI
   -e COUNTERLAB_RUNNER_STARTUP_PROBE=1 \
   -e COUNTERLAB_RUNNER_WORK_ROOT=/counterlab-runtime/jobs \
   -e COUNTERLAB_CODEX_HOME_ROOT=/counterlab-runtime/codex \
-  "${IMAGE_DIGEST}")"
+  "${IMAGE}")"
 node -e '
   const value = JSON.parse(process.argv[1]);
   if (
@@ -277,7 +277,7 @@ RUNTIME_VERIFICATION_OUTPUT="$("${DOCKER_COMMAND[@]}" run --rm --name "${RUNTIME
   --mount "type=bind,src=${ROOT_DIR}/scientific-engines,dst=/repo/scientific-engines,readonly" \
   --workdir=/repo \
   --entrypoint python \
-  "${IMAGE_DIGEST}" \
+  "${IMAGE}" \
   /repo/scripts/verify_scientific_runtime.py \
   --root /repo \
   --image-digest "${IMAGE_DIGEST}" \
