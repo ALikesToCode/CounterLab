@@ -158,7 +158,12 @@ node scripts/assert-contained-path.mjs \
   exit 2
 }
 
-"${PNPM}" exec prettier --check .
+mapfile -d '' -t TRACKED_FILES < <(git ls-files -z)
+[[ "${#TRACKED_FILES[@]}" -gt 0 ]] || {
+  echo "Release checks found no tracked files to format-check." >&2
+  exit 2
+}
+"${PNPM}" exec prettier --check --ignore-unknown "${TRACKED_FILES[@]}"
 node --import tsx scripts/generate-sample-boundary-fixture.ts --check
 node --import tsx scripts/generate-sample-proof-capsule.ts --check
 bash scripts/test-all.sh

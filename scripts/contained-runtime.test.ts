@@ -3834,6 +3834,21 @@ describe("contained runtime command policy", () => {
     expect(secretScan).toContain("path traverses a repository symlink");
   });
 
+  it("format-checks tracked source without traversing repository runtime state", () => {
+    const releaseCheck = readFileSync(
+      resolve(root, "scripts/release-check.sh"),
+      "utf8",
+    );
+
+    expect(releaseCheck).toContain(
+      "mapfile -d '' -t TRACKED_FILES < <(git ls-files -z)",
+    );
+    expect(releaseCheck).toContain(
+      '"${PNPM}" exec prettier --check --ignore-unknown "${TRACKED_FILES[@]}"',
+    );
+    expect(releaseCheck).not.toContain('"${PNPM}" exec prettier --check .');
+  });
+
   it("allows bounded image inspection and repository OCI input", () => {
     expect(
       validate("image", "inspect", image, "--format", "{{.Config.User}}")
