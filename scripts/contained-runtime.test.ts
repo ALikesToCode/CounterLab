@@ -1940,6 +1940,9 @@ describe("contained runtime command policy", () => {
       `/counterlab-v6.1-${invocationId}`,
     );
     expect(sanitized.linux.cgroupsPath).not.toContain("/containerd/");
+    expect(sanitized.linux.resources.unified).toEqual({
+      "memory.oom.group": "0",
+    });
     expect(sanitized.linux.namespaces).toContainEqual({ type: "user" });
     expect(sanitized.linux.uidMappings).toEqual([
       { containerID: 0, hostID: 1, size: 1 },
@@ -1950,7 +1953,10 @@ describe("contained runtime command policy", () => {
       { containerID: 5, hostID: 2, size: 1 },
       { containerID: fixture.authority.process.gid, hostID: 0, size: 1 },
     ]);
-    expect(sanitized.linux.resources).toEqual(original.linux.resources);
+    expect(sanitized.linux.resources).toEqual({
+      ...original.linux.resources,
+      unified: { "memory.oom.group": "0" },
+    });
     const canonicalBase = structuredClone(sanitized);
     delete canonicalBase.annotations;
     expect(prepared.receipt.baseSpecSha256).toBe(
@@ -2044,6 +2050,9 @@ describe("contained runtime command policy", () => {
       removedMounts: ["/etc/hostname", "/etc/hosts", "/etc/resolv.conf"],
     });
     expect(prepared.receipt.normalizedFields).toContain("linux.cgroupsPath");
+    expect(prepared.receipt.normalizedFields).toContain(
+      "linux.resources.unified.memory.oom.group",
+    );
     expect(prepared.receipt.normalizedFields).toContain("linux.uidMappings");
     expect(prepared.receipt.normalizedFields).toContain("linux.gidMappings");
     expect(prepared.receipt.normalizedFields).toContain(

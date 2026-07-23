@@ -109,6 +109,7 @@ function adapter(overrides: Record<string, unknown> = {}) {
     readCgroupFile(name: string) {
       const values: Record<string, string> = {
         "memory.max": String(512 * 1024 * 1024),
+        "memory.oom.group": "0",
         "memory.swap.max": "0",
         "pids.max": "16",
         "cpu.max": "100000 100000",
@@ -432,6 +433,18 @@ describe("contained cgroup observer", () => {
     await expect(
       observeContainedCgroup(manifest(), changedLimits),
     ).rejects.toThrow(/limits changed/u);
+
+    const groupedOomBase = adapter();
+    const groupedOom = {
+      ...groupedOomBase,
+      readCgroupFile(name: string) {
+        if (name === "memory.oom.group") return "1";
+        return groupedOomBase.readCgroupFile(name);
+      },
+    };
+    await expect(
+      observeContainedCgroup(manifest(), groupedOom),
+    ).rejects.toThrow(/OOM grouping/u);
 
     const ambiguousOomBase = adapter();
     const ambiguousOom = {

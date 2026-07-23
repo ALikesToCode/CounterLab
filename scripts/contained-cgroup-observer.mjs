@@ -39,6 +39,7 @@ const allowedCgroupFiles = new Set([
   "cpu.stat",
   "memory.events",
   "memory.max",
+  "memory.oom.group",
   "memory.swap.max",
   "pids.events",
   "pids.max",
@@ -505,6 +506,14 @@ async function observedAggregateLimits(adapter) {
   };
 }
 
+async function assertProcessScopedMemoryOom(adapter) {
+  if (String(await adapter.readCgroupFile("memory.oom.group")).trim() !== "0") {
+    throw new Error(
+      "contained cgroup observer memory OOM grouping is not process-scoped",
+    );
+  }
+}
+
 async function stableMembership(adapter) {
   let stableSamples = 0;
   let previousFingerprint;
@@ -610,6 +619,7 @@ export async function observeContainedCgroup(
   reportPhase("WAIT_CGROUP");
   await adapter.waitForCgroup();
   reportPhase("READ_LIMITS");
+  await assertProcessScopedMemoryOom(adapter);
   const observedLimits = await observedAggregateLimits(adapter);
   reportPhase("READ_MEMBERSHIP");
   const initial = await stableMembership(adapter);
@@ -661,6 +671,7 @@ export async function observeContainedCgroup(
   reportPhase("CANDIDATE_RECHECK");
   await assertCandidateSurvived(adapter, initial);
   reportPhase("LIMITS_RECHECK");
+  await assertProcessScopedMemoryOom(adapter);
   const confirmedLimits = await observedAggregateLimits(adapter);
   if (
     canonicalCgroupJson(confirmedLimits) !== canonicalCgroupJson(observedLimits)
