@@ -160,19 +160,26 @@ export async function runHostedRunnerStartupProbe(
     readMetadata(appRoot),
     readMetadata(bundlePath),
   ]);
+  const rootOwned =
+    appMetadata.uid === 0 &&
+    appMetadata.gid === 0 &&
+    bundleMetadata.uid === 0 &&
+    bundleMetadata.gid === 0;
+  const runtimeRootOwned =
+    appMetadata.uid === uid &&
+    appMetadata.gid === gid &&
+    bundleMetadata.uid === uid &&
+    bundleMetadata.gid === gid;
   if (
     !appMetadata.isDirectory() ||
-    appMetadata.uid !== 0 ||
-    appMetadata.gid !== 0 ||
     (appMetadata.mode & 0o777) !== 0o555 ||
     !bundleMetadata.isFile() ||
-    bundleMetadata.uid !== 0 ||
-    bundleMetadata.gid !== 0 ||
-    (bundleMetadata.mode & 0o777) !== 0o555
+    (bundleMetadata.mode & 0o777) !== 0o555 ||
+    (!rootOwned && !runtimeRootOwned)
   ) {
     throw new Error(
       [
-        "Hosted runner immutable application paths do not match root:root 0555 policy",
+        "Hosted runner immutable application paths do not match the 0555 runtime-root policy",
         `app=${appMetadata.isDirectory() ? "directory" : "other"} ${appMetadata.uid}:${appMetadata.gid} ${(appMetadata.mode & 0o777).toString(8).padStart(3, "0")}`,
         `bundle=${bundleMetadata.isFile() ? "file" : "other"} ${bundleMetadata.uid}:${bundleMetadata.gid} ${(bundleMetadata.mode & 0o777).toString(8).padStart(3, "0")}`,
       ].join("; "),

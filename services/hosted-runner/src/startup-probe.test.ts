@@ -34,8 +34,8 @@ describe("hosted runner startup probe", () => {
     );
     const writeFile = vi.fn(async () => undefined);
     const stat = vi.fn(async (path: string) => ({
-      uid: 0,
-      gid: 0,
+      uid: 10_001,
+      gid: 10_001,
       mode: 0o555,
       isDirectory: () => path === "/runtime/app",
       isFile: () => path === "/runtime/runner.mjs",
@@ -203,7 +203,7 @@ describe("hosted runner startup probe", () => {
         ) => ({
           uid: 65_534,
           gid: 65_534,
-          mode: path === "/app" ? 0o755 : 0o555,
+          mode: 0o555,
           isDirectory: () => path === "/app",
           isFile: () => path === "/app/runner.mjs",
         })) as unknown as typeof import("node:fs/promises").stat,
@@ -211,7 +211,7 @@ describe("hosted runner startup probe", () => {
         getGid: () => 10_001,
       }),
     ).rejects.toThrow(
-      "root:root 0555 policy; app=directory 65534:65534 755; bundle=file 65534:65534 555",
+      "0555 runtime-root policy; app=directory 65534:65534 555; bundle=file 65534:65534 555",
     );
   });
 
