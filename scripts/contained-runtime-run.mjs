@@ -1257,7 +1257,10 @@ export async function executeContainedRun(
   const shortOptions = commandOptions(context, shortCommandTimeoutMs);
   const controlOptions = commandOptions(context, executionControlOverheadMs);
   const cleanupOptions = commandOptions(context, cleanupReserveMs);
-  const runtimeOptions = commandOptions(context, runtimeTimeout);
+  const runtimeOptions = {
+    ...commandOptions(context, runtimeTimeout),
+    killSignal: "SIGKILL",
+  };
 
   let imageAuthority;
   let aliasCreated = false;

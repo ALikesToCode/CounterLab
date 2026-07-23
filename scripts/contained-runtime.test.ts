@@ -805,7 +805,11 @@ function qualifiedRuntimeHarness() {
     `run/rootless-specs/${invocationId}.image-rootfs`,
   );
   const events: string[] = [];
-  const commandTimeouts: { create?: number; run?: number } = {};
+  const commandTimeouts: {
+    create?: number;
+    run?: number;
+    runKillSignal?: string;
+  } = {};
   let aliasPresent = false;
   let imageRootfsMounted = false;
   let stagingPresent = true;
@@ -819,7 +823,7 @@ function qualifiedRuntimeHarness() {
   const fakeSpawn = (
     _program: string,
     args: string[],
-    _options: { timeout: number },
+    _options: { killSignal?: string; timeout: number },
   ) => {
     const joined = args.join(" ");
     if (joined.includes("image inspect docker.io/library/counterlab-adapter")) {
@@ -908,6 +912,9 @@ function qualifiedRuntimeHarness() {
     }
     if (joined.includes(" run ")) {
       commandTimeouts.run = _options.timeout;
+      if (_options.killSignal !== undefined) {
+        commandTimeouts.runKillSignal = _options.killSignal;
+      }
       events.push("candidate-started");
       taskPresent = true;
       containerPresent = true;
@@ -1214,6 +1221,7 @@ describe("contained runtime command policy", () => {
 
     expect(harness.commandTimeouts.create).toBeGreaterThan(20_000);
     expect(harness.commandTimeouts.run).toBe(20_000);
+    expect(harness.commandTimeouts.runKillSignal).toBe("SIGKILL");
     expect(rootfsModes).toEqual([0o755, 0o755, 0o700]);
   });
 
