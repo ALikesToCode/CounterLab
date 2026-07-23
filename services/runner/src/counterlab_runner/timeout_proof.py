@@ -170,14 +170,18 @@ child = subprocess.Popen(
     [
         sys.executable,
         "-c",
-        "import time; time.sleep({_TIMEOUT_SENTINEL_SLEEP_SECONDS})",
+        "import time; "
+        "deadline = time.monotonic() + {_TIMEOUT_SENTINEL_SLEEP_SECONDS}; "
+        "exec('while time.monotonic() < deadline:\\\\n    pass')",
     ],
     stdin=subprocess.DEVNULL,
     stdout=subprocess.DEVNULL,
     stderr=subprocess.DEVNULL,
 )
 try:
-    time.sleep({_TIMEOUT_SENTINEL_SLEEP_SECONDS})
+    deadline = time.monotonic() + {_TIMEOUT_SENTINEL_SLEEP_SECONDS}
+    while time.monotonic() < deadline:
+        pass
 finally:
     child.terminate()
     try:

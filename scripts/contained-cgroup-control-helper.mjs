@@ -60,7 +60,7 @@ export function parseContainedCgroupControl(args) {
     if (
       busyWindowMs < 100 ||
       busyWindowMs > 5_000 ||
-      workers < 2 ||
+      workers < 1 ||
       workers > 8
     ) {
       throw new Error("contained cgroup control CPU bound is invalid");

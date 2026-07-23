@@ -65,7 +65,7 @@ def parse_control(arguments: Sequence[str]) -> Control:
     ):
         busy_window_ms = _positive_integer(arguments[3])
         workers = _positive_integer(arguments[5])
-        if not 100 <= busy_window_ms <= 5_000 or not 2 <= workers <= 8:
+        if not 100 <= busy_window_ms <= 5_000 or not 1 <= workers <= 8:
             raise ValueError("contained cgroup control CPU bound is invalid")
         return {
             "mode": "cpu",

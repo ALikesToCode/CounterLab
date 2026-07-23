@@ -30,9 +30,9 @@ describe("contained cgroup negative-control helper", () => {
         "--busy-window-ms",
         "500",
         "--workers",
-        "4",
+        "1",
       ]),
-    ).toEqual({ mode: "cpu", busyWindowMs: 500, workers: 4 });
+    ).toEqual({ mode: "cpu", busyWindowMs: 500, workers: 1 });
   });
 
   it("rejects unknown fields, unsafe bounds, and non-integers", () => {
@@ -41,7 +41,7 @@ describe("contained cgroup negative-control helper", () => {
       ["--mode", "memory", "--requested-bytes", "1"],
       ["--mode", "processes", "--attempted-processes", "65"],
       ["--mode", "cpu", "--busy-window-ms", "99", "--workers", "4"],
-      ["--mode", "cpu", "--busy-window-ms", "500", "--workers", "1"],
+      ["--mode", "cpu", "--busy-window-ms", "500", "--workers", "0"],
       ["--mode", "memory", "--requested-bytes", "100.5"],
       ["--mode", "memory", "--requested-bytes", "67108864", "extra"],
     ]) {

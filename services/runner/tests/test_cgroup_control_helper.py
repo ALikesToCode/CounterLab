@@ -38,15 +38,15 @@ def test_control_parser_accepts_only_exact_bounded_modes() -> None:
         ["--mode", "processes", "--attempted-processes", "17"]
     ) == {"mode": "processes", "attempted_processes": 17}
     assert HELPER.parse_control(
-        ["--mode", "cpu", "--busy-window-ms", "500", "--workers", "2"]
-    ) == {"mode": "cpu", "busy_window_ms": 500, "workers": 2}
+        ["--mode", "cpu", "--busy-window-ms", "500", "--workers", "1"]
+    ) == {"mode": "cpu", "busy_window_ms": 500, "workers": 1}
 
     for arguments in (
         ["--mode", "unknown"],
         ["--mode", "memory", "--requested-bytes", "1"],
         ["--mode", "processes", "--attempted-processes", "65"],
         ["--mode", "cpu", "--busy-window-ms", "99", "--workers", "2"],
-        ["--mode", "cpu", "--busy-window-ms", "500", "--workers", "1"],
+        ["--mode", "cpu", "--busy-window-ms", "500", "--workers", "0"],
         ["--mode", "memory", "--requested-bytes", "67108864", "extra"],
     ):
         with pytest.raises(ValueError, match="cgroup control"):

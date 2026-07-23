@@ -303,7 +303,7 @@ def test_timeout_candidate_observes_the_exact_address_space_limit() -> None:
     assert "resource.getrlimit(resource.RLIMIT_AS)" in source
     assert "expected = (536870912, 536870912)" in source
     assert "subprocess.Popen" in source
-    assert "time.sleep(90)" in source
+    assert source.count("while time.monotonic() < deadline") == 2
     assert "child.wait" in source
     with pytest.raises(RuntimeError, match="address-space"):
         timeout_proof_module._timeout_public_test(0)
