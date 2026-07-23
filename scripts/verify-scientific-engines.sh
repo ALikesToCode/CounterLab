@@ -211,8 +211,8 @@ STARTUP_PROBE_OUTPUT="$("${DOCKER_COMMAND[@]}" run --rm --name "${STARTUP_CONTAI
   --security-opt=no-new-privileges=true \
   --ipc=private \
   --pids-limit=32 \
-  --memory=1024m \
-  --memory-swap=1024m \
+  --memory=4096m \
+  --memory-swap=4096m \
   --cpus=2.0 \
   --ulimit=cpu=300:300 \
   --ulimit=as=8589934592:8589934592 \

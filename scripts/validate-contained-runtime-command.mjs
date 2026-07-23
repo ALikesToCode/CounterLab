@@ -331,8 +331,8 @@ function validateRun(runArgs) {
         "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700" ||
       options.get("--security-opt")?.[0] !== "no-new-privileges=true" ||
       options.get("--pids-limit")?.[0] !== "32" ||
-      options.get("--memory")?.[0] !== "1024m" ||
-      options.get("--memory-swap")?.[0] !== "1024m" ||
+      options.get("--memory")?.[0] !== "4096m" ||
+      options.get("--memory-swap")?.[0] !== "4096m" ||
       options.get("--cpus")?.[0] !== "2.0" ||
       !sameValues(options.get("--ulimit") ?? [], [
         "cpu=300:300",

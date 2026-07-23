@@ -419,7 +419,7 @@ function validateReceiptResourceBindings(receipt) {
     aggregate.maxProcesses > 32 ||
     !Number.isSafeInteger(aggregate.memoryBytes) ||
     aggregate.memoryBytes < 64 * 1024 * 1024 ||
-    aggregate.memoryBytes > 1024 * 1024 * 1024
+    aggregate.memoryBytes > 4 * 1024 * 1024 * 1024
   ) {
     throw new Error(
       "contained rootless OCI receipt resource intent is invalid",
@@ -437,6 +437,16 @@ function validateReceiptResourceBindings(receipt) {
   if (expectedAddressSpaceBytes === null) {
     throw new Error(
       "contained rootless OCI receipt image role is invalid for resource binding",
+    );
+  }
+  const maximumMemoryBytes = hostedRunnerImagePattern.test(
+    imageAuthority.canonicalImage,
+  )
+    ? 4 * 1024 * 1024 * 1024
+    : 1024 * 1024 * 1024;
+  if (aggregate.memoryBytes > maximumMemoryBytes) {
+    throw new Error(
+      "contained rootless OCI receipt resource intent is invalid for image role",
     );
   }
   const byType = new Map(
@@ -468,7 +478,7 @@ function assertResourceIntent(linux, expected) {
     resourceIntent.maxProcesses > 32 ||
     !Number.isSafeInteger(resourceIntent.memoryBytes) ||
     resourceIntent.memoryBytes < 64 * 1024 * 1024 ||
-    resourceIntent.memoryBytes > 1024 * 1024 * 1024
+    resourceIntent.memoryBytes > 4 * 1024 * 1024 * 1024
   ) {
     throw new Error(
       "contained rootless OCI aggregate resource intent is invalid",

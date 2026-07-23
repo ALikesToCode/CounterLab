@@ -285,12 +285,16 @@ function resourceIntent(args, image) {
   }
   const memoryBytes = Number.parseInt(memory[1], 10) * 1024 * 1024;
   const byType = new Map(rlimits.map((entry) => [entry.type, entry.soft]));
-  const addressSpaceBytes = image.startsWith("counterlab-runner:git-")
+  const hostedRunner = image.startsWith("counterlab-runner:git-");
+  const addressSpaceBytes = hostedRunner
     ? HOSTED_RUNNER_PROCESS_ADDRESS_SPACE_BYTES
     : CONTAINED_PROCESS_ADDRESS_SPACE_BYTES;
+  const maximumMemoryBytes = hostedRunner
+    ? 4 * 1024 * 1024 * 1024
+    : 1024 * 1024 * 1024;
   if (
     memoryBytes < 64 * 1024 * 1024 ||
-    memoryBytes > 1024 * 1024 * 1024 ||
+    memoryBytes > maximumMemoryBytes ||
     byType.get("RLIMIT_CPU") < 1 ||
     byType.get("RLIMIT_CPU") > 300 ||
     byType.get("RLIMIT_AS") !== addressSpaceBytes ||

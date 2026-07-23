@@ -102,8 +102,8 @@ function startupCommand(): string[] {
     "--security-opt=no-new-privileges=true",
     "--ipc=private",
     "--pids-limit=32",
-    "--memory=1024m",
-    "--memory-swap=1024m",
+    "--memory=4096m",
+    "--memory-swap=4096m",
     "--cpus=2.0",
     "--ulimit=cpu=300:300",
     "--ulimit=as=8589934592:8589934592",
@@ -3070,7 +3070,7 @@ describe("contained runtime command policy", () => {
         addressSpace.hard -= 1;
       },
       (receipt) => {
-        receipt.intendedAggregateLimits.memoryBytes = 2 * 1024 * 1024 * 1024;
+        receipt.intendedAggregateLimits.memoryBytes = 5 * 1024 * 1024 * 1024;
       },
       (receipt) => {
         receipt.normalizedFields = receipt.normalizedFields.filter(
@@ -3276,7 +3276,7 @@ describe("contained runtime command policy", () => {
               containerName: "counterlab-startup-validator",
               cpuCount: 2,
               maxProcesses: 32,
-              memoryBytes: 1024 * 1024 * 1024,
+              memoryBytes: 4 * 1024 * 1024 * 1024,
               rlimits: [
                 { type: "RLIMIT_CPU", soft: 300, hard: 300 },
                 { type: "RLIMIT_AS", soft: 8589934592, hard: 8589934592 },

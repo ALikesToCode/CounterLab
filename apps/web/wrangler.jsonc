@@ -40,7 +40,7 @@
       "class_name": "CounterLabRunner",
       "image": "../../Dockerfile.runner",
       "max_instances": 10,
-      "instance_type": "basic",
+      "instance_type": "standard-1",
       "ssh": {
         "enabled": false
       }

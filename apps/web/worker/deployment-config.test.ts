@@ -58,7 +58,7 @@ function productionDeployConfig() {
         image: "/unqualified/Dockerfile.runner",
         image_build_context: "/unqualified",
         max_instances: 10,
-        instance_type: "basic",
+        instance_type: "standard-1",
         name: "counterlab-counterlabrunner",
         wrangler_ssh: { enabled: false },
       },
@@ -119,7 +119,7 @@ function viteGeneratedDeployConfig() {
         image: `${repositoryRoot}/Dockerfile.runner`,
         image_build_context: repositoryRoot,
         max_instances: 10,
-        instance_type: "basic",
+        instance_type: "standard-1",
         name: "counterlab-counterlabrunner",
         wrangler_ssh: { enabled: false },
       },
@@ -723,6 +723,8 @@ describe("Cloudflare static asset routing", () => {
     expect(probe).toContain("COUNTERLAB_RUNNER_STARTUP_PROBE=1");
     expect(probe).not.toContain("--user");
     expect(probe).not.toContain("--entrypoint");
+    expect(probe).toContain("--memory=4096m");
+    expect(probe).toContain("--memory-swap=4096m");
     expect(probe).toContain("--ulimit=as=8589934592:8589934592");
     expect(probe).toContain('"${IMAGE}"');
     expect(verifier.match(/"\$\{IMAGE\}"/gu)?.length).toBeGreaterThanOrEqual(2);
@@ -841,6 +843,7 @@ describe("Cloudflare static asset routing", () => {
       expect.objectContaining({
         class_name: "CounterLabRunner",
         image: `registry.cloudflare.com/account-1/counterlab-runner@${receipt.registryDigest}`,
+        instance_type: "standard-1",
         ssh: { enabled: false },
       }),
     ]);

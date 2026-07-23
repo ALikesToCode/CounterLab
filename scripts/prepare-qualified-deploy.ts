@@ -1402,7 +1402,7 @@ export function qualifiedDeployConfig(input: {
   if (
     container.name !== "counterlab-counterlabrunner" ||
     container.max_instances !== 10 ||
-    container.instance_type !== "basic" ||
+    container.instance_type !== "standard-1" ||
     ssh.enabled !== false
   ) {
     throw new Error("qualified Container capacity or SSH policy changed");
@@ -1414,7 +1414,7 @@ export function qualifiedDeployConfig(input: {
         /:git-[a-f0-9]{40}$/,
         `@${receipt.registryDigest}`,
       ),
-      instance_type: "basic",
+      instance_type: "standard-1",
       max_instances: 10,
       name: "counterlab-counterlabrunner",
       ssh: { enabled: false },
