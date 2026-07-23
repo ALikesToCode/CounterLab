@@ -179,9 +179,7 @@ child = subprocess.Popen(
     stderr=subprocess.DEVNULL,
 )
 try:
-    deadline = time.monotonic() + {_TIMEOUT_SENTINEL_SLEEP_SECONDS}
-    while time.monotonic() < deadline:
-        pass
+    time.sleep({_TIMEOUT_SENTINEL_SLEEP_SECONDS})
 finally:
     child.terminate()
     try:
