@@ -194,6 +194,27 @@ describe("hosted runner startup probe", () => {
     ).rejects.toThrow("not executable");
   });
 
+  it("reports exact immutable-path evidence when namespace mapping changes it", async () => {
+    await expect(
+      runHostedRunnerStartupProbe({
+        bundlePath: "/app/runner.mjs",
+        stat: (async (
+          path: Parameters<typeof import("node:fs/promises").stat>[0],
+        ) => ({
+          uid: 65_534,
+          gid: 65_534,
+          mode: path === "/app" ? 0o755 : 0o555,
+          isDirectory: () => path === "/app",
+          isFile: () => path === "/app/runner.mjs",
+        })) as unknown as typeof import("node:fs/promises").stat,
+        getUid: () => 10_001,
+        getGid: () => 10_001,
+      }),
+    ).rejects.toThrow(
+      "root:root 0555 policy; app=directory 65534:65534 755; bundle=file 65534:65534 555",
+    );
+  });
+
   it.each([
     ["missing stdout", undefined],
     ["invalid JSON", { stdout: "not-json" }],

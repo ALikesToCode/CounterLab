@@ -171,7 +171,11 @@ export async function runHostedRunnerStartupProbe(
     (bundleMetadata.mode & 0o777) !== 0o555
   ) {
     throw new Error(
-      "Hosted runner immutable application paths do not match root:root 0555 policy",
+      [
+        "Hosted runner immutable application paths do not match root:root 0555 policy",
+        `app=${appMetadata.isDirectory() ? "directory" : "other"} ${appMetadata.uid}:${appMetadata.gid} ${(appMetadata.mode & 0o777).toString(8).padStart(3, "0")}`,
+        `bundle=${bundleMetadata.isFile() ? "file" : "other"} ${bundleMetadata.uid}:${bundleMetadata.gid} ${(bundleMetadata.mode & 0o777).toString(8).padStart(3, "0")}`,
+      ].join("; "),
     );
   }
 
