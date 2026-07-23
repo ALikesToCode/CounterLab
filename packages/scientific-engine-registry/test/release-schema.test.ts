@@ -13,6 +13,7 @@ import {
   QualifiedRunnerReleaseV3Schema,
   QualifiedRunnerReleaseV4Schema,
   QualifiedRunnerReleaseV5Schema,
+  TimeoutCleanupReceiptSchema,
 } from "../src/index";
 import { createGenerationIsolationEvidence } from "../../../scripts/generation-isolation-evidence";
 import * as releaseTools from "../../../scripts/prepare-qualified-deploy";
@@ -94,6 +95,17 @@ function generationIsolationQualification(input: {
 }
 
 describe("qualified runner release schema", () => {
+  it("binds timeout qualification to the fixed 30-second probe budget", () => {
+    expect(
+      TimeoutCleanupReceiptSchema.shape.candidateWallSeconds.safeParse(30)
+        .success,
+    ).toBe(true);
+    expect(
+      TimeoutCleanupReceiptSchema.shape.candidateWallSeconds.safeParse(1)
+        .success,
+    ).toBe(false);
+  });
+
   it("requires an exact registry promotion digest", () => {
     expect(() => QualifiedRunnerReleaseSchema.parse(legacyReceipt())).toThrow();
   });

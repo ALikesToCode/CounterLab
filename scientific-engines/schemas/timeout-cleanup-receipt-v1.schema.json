@@ -125,7 +125,7 @@
     },
     "candidateWallSeconds": {
       "type": "number",
-      "const": 1
+      "const": 30
     },
     "elapsedMs": {
       "type": "integer",

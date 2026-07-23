@@ -47,7 +47,7 @@ const verifiedCleanup = {
 
 it("allows cold candidates to create and populate an observed cgroup", () => {
   expect(cgroupStartupTimeoutMs).toBe(30_000);
-  expect(cgroupFinalizationTimeoutMs).toBe(60_000);
+  expect(cgroupFinalizationTimeoutMs).toBe(120_000);
 });
 
 function manifest() {

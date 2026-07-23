@@ -576,7 +576,7 @@ export const TimeoutCleanupReceiptSchema = z
     invocationId: Sha256Schema,
     finalContainerId: Sha256Schema,
     commandSha256: Sha256Schema,
-    candidateWallSeconds: z.literal(1),
+    candidateWallSeconds: z.literal(30),
     elapsedMs: z.number().int().positive().max(600_000),
     resultReleased: z.literal(false),
     cleanup: z.strictObject({
