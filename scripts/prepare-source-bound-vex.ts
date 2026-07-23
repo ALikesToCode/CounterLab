@@ -253,7 +253,7 @@ if (kev.vulnerabilities.some((entry) => entry.cveID === "CVE-2026-15308")) {
 const currentVex = OpenVexDocumentSchema.parse(
   JSON.parse(currentVexBytes.toString("utf8")),
 );
-const product = `pkg:oci/counterlab-runner@${receipt.localImageDigest}`;
+const product = receipt.localImageTag;
 const subcomponent = "pkg:generic/python@3.13.14";
 const statement = {
   vulnerability: { name: "CVE-2026-15308" },

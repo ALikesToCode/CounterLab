@@ -243,6 +243,11 @@ RUNTIME_COMMAND=(
   "${RUNTIME_SESSION_ID}"
   --
 )
+CONTAINERD_SOCKET="$(repo_path ".rt/${RUNTIME_SESSION_ID}/run/containerd.sock")"
+[[ -S "${CONTAINERD_SOCKET}" ]] || {
+  echo "Contained runtime image socket is unavailable." >&2
+  exit 2
+}
 RUNTIME_ATTESTATION="$(
   "${RUNTIME_COMMAND[@]}" counterlab-attest
 )"
@@ -453,12 +458,18 @@ node --import tsx scripts/summarize-grype-scan.ts \
   --vex-evidence-id cpython-html-parser-vex-v1 \
   --reachability-evidence-id cpython-html-parser-reachability-v2
 
-"${GRYPE}" --config "${GRYPE_CONFIG}" "oci-archive:${OCI_ARCHIVE}" \
+env \
+  CONTAINERD_ADDRESS="${CONTAINERD_SOCKET}" \
+  CONTAINERD_NAMESPACE=counterlab-v6.1 \
+  "${GRYPE}" --config "${GRYPE_CONFIG}" "${IMAGE}" \
   --name "${IMAGE}" \
   --vex "${WORK}/vex.json" \
   --output json \
   --file "${WORK}/grype-vex-applied.json"
-"${GRYPE}" --config "${GRYPE_CONFIG}" "oci-archive:${OCI_ARCHIVE}" \
+env \
+  CONTAINERD_ADDRESS="${CONTAINERD_SOCKET}" \
+  CONTAINERD_NAMESPACE=counterlab-v6.1 \
+  "${GRYPE}" --config "${GRYPE_CONFIG}" "${IMAGE}" \
   --name "${IMAGE}" \
   --vex "${WORK}/negative-vex.json" \
   --output json \
@@ -476,6 +487,9 @@ node --import tsx scripts/summarize-vex-application.ts \
   --output "${WORK}/vex-application-report.json" \
   --image-digest "${IMAGE_DIGEST}" \
   --manifest-digest "${MANIFEST_DIGEST}" \
+  --loaded-image-tag "${IMAGE}" \
+  --source-commit "${SOURCE_COMMIT}" \
+  --source-tree-sha256 "${SOURCE_TREE_SHA256}" \
   --scanner-binary-sha256 d515f53bd5ee4930e144c6ea14a2659084763c336a1833b723db0b05080fcaf5 \
   --baseline-evidence-id grype-raw-scan-v2 \
   --applied-evidence-id grype-vex-applied-v1 \

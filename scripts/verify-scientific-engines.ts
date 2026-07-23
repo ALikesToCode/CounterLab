@@ -1264,6 +1264,7 @@ export async function verifyVulnerabilityReport(
 
     const application = parsedVexApplication.data;
     const applicationManifestDigest = application.manifestDigest;
+    const applicationLoadedImage = application.loadedImage;
     const applicationInputRecords = [
       application.inputs.baseline,
       application.inputs.applied,
@@ -1276,6 +1277,11 @@ export async function verifyVulnerabilityReport(
     }));
     if (
       application.imageDigest !== manifest.container.imageDigest ||
+      applicationLoadedImage === undefined ||
+      applicationLoadedImage.imageDigest !== manifest.container.imageDigest ||
+      applicationLoadedImage.sourceCommit !== manifest.sourceCommit ||
+      applicationLoadedImage.imageTag !==
+        `counterlab-runner:git-${manifest.sourceCommit}` ||
       application.vexSha256 !== manifest.vexEvidenceHash ||
       applicationInputRecords.some(
         ({ input, record: inputRecord }) =>
@@ -1311,7 +1317,7 @@ export async function verifyVulnerabilityReport(
         json(resolve(root, inputRecord!.path)),
       ),
     );
-    if (exactManifestBinding) {
+    if (exactManifestBinding && applicationLoadedImage !== undefined) {
       const recomputedApplication = summarizeVexApplication(
         baselineInput,
         appliedInput,
@@ -1319,6 +1325,7 @@ export async function verifyVulnerabilityReport(
         {
           imageDigest: application.imageDigest,
           manifestDigest: applicationManifestDigest,
+          loadedImage: applicationLoadedImage,
           scannerBinarySha256: application.scanner.binarySha256,
           vexSha256: application.vexSha256,
           inputs: application.inputs,

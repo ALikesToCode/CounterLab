@@ -117,6 +117,18 @@ export const GrypeOciArchiveBindingSchema = z.strictObject({
   }),
 });
 
+export const GrypeLoadedImageBindingSchema = z.strictObject({
+  imageTag: z.string().regex(/^counterlab-runner:git-[a-f0-9]{40}$/),
+  imageDigest: ImageDigestSchema,
+  sourceCommit: z.string().regex(/^[a-f0-9]{40}$/),
+  sourceTreeSha256: Sha256Schema,
+  sourceUrl: z.literal("https://github.com/ALikesToCode/CounterLab"),
+  platform: z.strictObject({
+    architecture: z.literal("amd64"),
+    os: z.literal("linux"),
+  }),
+});
+
 const ReviewedHighInputSchema = ReviewedVulnerabilityExceptionSchema.omit({
   severity: true,
   fingerprint: true,
@@ -141,6 +153,9 @@ export type GrypeImageBinding = z.infer<typeof GrypeImageBindingSchema>;
 export type GrypeOciArchiveBinding = z.infer<
   typeof GrypeOciArchiveBindingSchema
 >;
+export type GrypeLoadedImageBinding = z.infer<
+  typeof GrypeLoadedImageBindingSchema
+>;
 export type GrypeSummaryOptions = z.infer<typeof GrypeSummaryOptionsSchema>;
 
 const ScanEvidenceSchema = z.strictObject({
@@ -151,6 +166,7 @@ const ScanEvidenceSchema = z.strictObject({
 export const VexApplicationOptionsSchema = z.strictObject({
   imageDigest: ImageDigestSchema,
   manifestDigest: ImageDigestSchema,
+  loadedImage: GrypeLoadedImageBindingSchema,
   scannerBinarySha256: Sha256Schema,
   vexSha256: Sha256Schema,
   inputs: z.strictObject({
@@ -178,6 +194,7 @@ export const VexApplicationReportV1Schema = z.strictObject({
   // Historical v1 evidence remains parseable, while current release
   // verification requires and recomputes this exact OCI manifest identity.
   manifestDigest: ImageDigestSchema.optional(),
+  loadedImage: GrypeLoadedImageBindingSchema.optional(),
   scanner: z.strictObject({
     id: z.literal("grype"),
     exactVersion: z.string().trim().min(1),
@@ -435,6 +452,48 @@ export function assertGrypeOciArchiveBinding(
   }
 }
 
+export function assertGrypeLoadedImageBinding(
+  rawInput: unknown,
+  bindingInput: GrypeLoadedImageBinding,
+): void {
+  const raw = GrypeJsonReportSchema.parse(rawInput);
+  const binding = GrypeLoadedImageBindingSchema.parse(bindingInput);
+  assertGrypeImageBinding(raw, {
+    imageDigest: binding.imageDigest,
+  });
+  const { manifest, config } = assertEmbeddedImageIdentity(raw);
+  const { target } = raw.source;
+  const expectedLabels = {
+    "io.counterlab.source-tree-sha256": binding.sourceTreeSha256,
+    "org.opencontainers.image.licenses": "MIT",
+    "org.opencontainers.image.revision": binding.sourceCommit,
+    "org.opencontainers.image.source": binding.sourceUrl,
+  };
+  const expectedTags = [
+    binding.imageTag,
+    `docker.io/library/${binding.imageTag}`,
+  ].sort(compareCodeUnits);
+  if (
+    target.userInput !== binding.imageTag ||
+    target.mediaType !==
+      "application/vnd.docker.distribution.manifest.v2+json" ||
+    manifest.config.mediaType !==
+      "application/vnd.docker.container.image.v1+json" ||
+    JSON.stringify([...target.tags].sort(compareCodeUnits)) !==
+      JSON.stringify(expectedTags) ||
+    target.repoDigests.length !== 0 ||
+    target.architecture !== "" ||
+    target.os !== "" ||
+    config.architecture !== binding.platform.architecture ||
+    config.os !== binding.platform.os ||
+    !equalStringRecords(target.labels, expectedLabels)
+  ) {
+    throw new Error(
+      "Raw Grype source does not bind the exact loaded source-bound image tag.",
+    );
+  }
+}
+
 function matchIdentity(match: GrypeJsonReport["matches"][number]): string {
   const value = {
     artifact: {
@@ -648,20 +707,17 @@ export function summarizeVexApplication(
     GrypeJsonReportSchema.parse(negativeInput),
   ];
   const options = VexApplicationOptionsSchema.parse(optionsInput);
-  for (const scan of [baseline, applied, negative]) {
-    assertGrypeImageBinding(scan, {
-      imageDigest: options.imageDigest,
-      manifestDigest: options.manifestDigest,
-    });
-  }
+  assertGrypeImageBinding(baseline, {
+    imageDigest: options.imageDigest,
+    manifestDigest: options.manifestDigest,
+  });
+  assertGrypeLoadedImageBinding(applied, options.loadedImage);
+  assertGrypeLoadedImageBinding(negative, options.loadedImage);
   const sourceIdentity = (scan: GrypeJsonReport): string =>
     JSON.stringify(scan.source.target);
-  if (
-    sourceIdentity(baseline) !== sourceIdentity(applied) ||
-    sourceIdentity(baseline) !== sourceIdentity(negative)
-  ) {
+  if (sourceIdentity(applied) !== sourceIdentity(negative)) {
     throw new Error(
-      "VEX application scans must bind one exact image source identity.",
+      "Applied and negative-control VEX scans must bind one exact loaded image source identity.",
     );
   }
   const scannerIdentity = (scan: GrypeJsonReport): string =>
@@ -740,6 +796,7 @@ export function summarizeVexApplication(
     evidenceKind: "vex-application-report",
     imageDigest: options.imageDigest,
     manifestDigest: options.manifestDigest,
+    loadedImage: options.loadedImage,
     scanner: {
       id: "grype",
       exactVersion: baseline.descriptor.version,

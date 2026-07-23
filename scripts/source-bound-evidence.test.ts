@@ -377,7 +377,7 @@ describe("source-bound release evidence helpers", () => {
       kevCatalogSha256: sha256(readFileSync(fixture.kev)),
     });
     expect(vex.statements[0]?.products[0]).toEqual({
-      "@id": `pkg:oci/counterlab-runner@${imageDigest}`,
+      "@id": `counterlab-runner:git-${sourceCommit}`,
       subcomponents: [{ "@id": "pkg:generic/python@3.13.14" }],
     });
     expect(negative.statements[0]?.products[0]?.subcomponents).toEqual([
@@ -624,5 +624,23 @@ describe("source-bound release evidence helpers", () => {
         /scientific-engines\/fixtures\/validation\/signed-result-binding-v2\.json/gu,
       ),
     ).toHaveLength(2);
+  });
+
+  it("uses the exact OCI archive for baseline and the loaded tag for VEX application", () => {
+    const refresh = readFileSync(refreshScript, "utf8");
+
+    expect(refresh).toContain(
+      '"${GRYPE}" --config "${GRYPE_CONFIG}" "oci-archive:${OCI_ARCHIVE}"',
+    );
+    expect(refresh).toContain('CONTAINERD_ADDRESS="${CONTAINERD_SOCKET}"');
+    expect(refresh).toContain("CONTAINERD_NAMESPACE=counterlab-v6.1");
+    expect(
+      refresh.match(
+        /"\$\{GRYPE\}" --config "\$\{GRYPE_CONFIG\}" "\$\{IMAGE\}"/gu,
+      ),
+    ).toHaveLength(2);
+    expect(refresh).toContain('--loaded-image-tag "${IMAGE}"');
+    expect(refresh).toContain('--source-commit "${SOURCE_COMMIT}"');
+    expect(refresh).toContain('--source-tree-sha256 "${SOURCE_TREE_SHA256}"');
   });
 });

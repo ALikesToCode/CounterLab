@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   assertGrypeImageBinding,
+  assertGrypeLoadedImageBinding,
   assertGrypeOciArchiveBinding,
   assertCurrentGrypeReleaseEvidenceBinding,
   fingerprintFixableVulnerability,
@@ -12,7 +13,16 @@ import {
 } from "../src/index.js";
 
 const sha = (value: string): string => value.repeat(64).slice(0, 64);
-const imageLabels: Record<string, string> = {};
+const fixtureSourceCommit = "3".repeat(40);
+const fixtureSourceTreeSha256 = sha("2");
+const fixtureImageTag = `counterlab-runner:git-${fixtureSourceCommit}`;
+const imageLabels: Record<string, string> = {
+  "io.counterlab.source-tree-sha256": fixtureSourceTreeSha256,
+  "org.opencontainers.image.licenses": "MIT",
+  "org.opencontainers.image.revision": fixtureSourceCommit,
+  "org.opencontainers.image.source":
+    "https://github.com/ALikesToCode/CounterLab",
+};
 const embeddedConfig = Buffer.from(
   JSON.stringify({
     architecture: "amd64",
@@ -102,14 +112,14 @@ const raw = {
   source: {
     type: "image",
     target: {
-      userInput: "counterlab-runner:fixture",
+      userInput: fixtureImageTag,
       imageID: fixtureImageDigest,
       manifestDigest: fixtureManifestDigest,
       mediaType: "application/vnd.docker.distribution.manifest.v2+json",
-      tags: ["counterlab-runner:fixture"],
-      repoDigests: [`counterlab-runner@${fixtureImageDigest}`],
-      architecture: "amd64",
-      os: "linux",
+      tags: [fixtureImageTag, `docker.io/library/${fixtureImageTag}`],
+      repoDigests: [],
+      architecture: "",
+      os: "",
       labels: imageLabels,
       manifest: embeddedManifest.toString("base64"),
       config: embeddedConfig.toString("base64"),
@@ -460,7 +470,64 @@ describe("Grype vulnerability report summarization", () => {
     ).toThrow(/exact untagged source-bound OCI archive/i);
   });
 
+  it("validates the digest and source labels of the loaded image tag", () => {
+    const binding = {
+      imageTag: fixtureImageTag,
+      imageDigest: fixtureImageDigest,
+      sourceCommit: fixtureSourceCommit,
+      sourceTreeSha256: fixtureSourceTreeSha256,
+      sourceUrl: "https://github.com/ALikesToCode/CounterLab" as const,
+      platform: { architecture: "amd64" as const, os: "linux" as const },
+    };
+
+    expect(() => assertGrypeLoadedImageBinding(raw, binding)).not.toThrow();
+    expect(() =>
+      assertGrypeLoadedImageBinding(
+        {
+          ...raw,
+          source: {
+            ...raw.source,
+            target: {
+              ...raw.source.target,
+              userInput: "counterlab-runner:latest",
+            },
+          },
+        },
+        binding,
+      ),
+    ).toThrow(/exact loaded source-bound image tag/i);
+    expect(() =>
+      assertGrypeLoadedImageBinding(raw, {
+        ...binding,
+        sourceTreeSha256: sha("9"),
+      }),
+    ).toThrow(/exact loaded source-bound image tag/i);
+  });
+
   it("proves one exact VEX suppression and a wrong-subcomponent negative control", () => {
+    const baseline = structuredClone(raw);
+    const baselineManifest = Buffer.from(
+      JSON.stringify({
+        ...JSON.parse(embeddedManifest.toString("utf8")),
+        mediaType: "application/vnd.oci.image.manifest.v1+json",
+        config: {
+          ...JSON.parse(embeddedManifest.toString("utf8")).config,
+          mediaType: "application/vnd.oci.image.config.v1+json",
+        },
+      }),
+    );
+    baseline.source.target = {
+      ...baseline.source.target,
+      userInput: "<COUNTERLAB_REPO_ROOT>/runner.oci.tar",
+      manifestDigest: `sha256:${createHash("sha256")
+        .update(baselineManifest)
+        .digest("hex")}`,
+      mediaType: "application/vnd.oci.image.manifest.v1+json",
+      tags: [],
+      architecture: "",
+      os: "",
+      manifest: baselineManifest.toString("base64"),
+    };
     const applied = structuredClone(raw);
     const [ignoredMatch, ...activeMatches] = applied.matches;
     const appliedWithIgnored = {
@@ -477,7 +544,15 @@ describe("Grype vulnerability report summarization", () => {
     };
     const vexOptions = {
       imageDigest: baseOptions.imageDigest,
-      manifestDigest: baseOptions.manifestDigest,
+      manifestDigest: baseline.source.target.manifestDigest,
+      loadedImage: {
+        imageTag: fixtureImageTag,
+        imageDigest: fixtureImageDigest,
+        sourceCommit: fixtureSourceCommit,
+        sourceTreeSha256: fixtureSourceTreeSha256,
+        sourceUrl: "https://github.com/ALikesToCode/CounterLab" as const,
+        platform: { architecture: "amd64" as const, os: "linux" as const },
+      },
       scannerBinarySha256: sha("3"),
       vexSha256: sha("4"),
       inputs: {
@@ -509,7 +584,7 @@ describe("Grype vulnerability report summarization", () => {
       limitations: ["The exception remains bounded to the reviewed runtime."],
     };
     const report = summarizeVexApplication(
-      raw,
+      baseline,
       appliedWithIgnored,
       raw,
       vexOptions,
@@ -523,16 +598,18 @@ describe("Grype vulnerability report summarization", () => {
       negativeActive: 3,
       negativeIgnored: 0,
     });
-    expect(report.manifestDigest).toBe(fixtureManifestDigest);
+    expect(report.manifestDigest).toBe(baseline.source.target.manifestDigest);
+    expect(report.loadedImage).toEqual(vexOptions.loadedImage);
 
-    const vulnerabilityReport = summarizeGrypeScan(raw, {
+    const vulnerabilityReport = summarizeGrypeScan(baseline, {
       ...baseOptions,
+      manifestDigest: baseline.source.target.manifestDigest,
       reviewedHighExceptions: [],
     });
     expect(() =>
       assertCurrentGrypeReleaseEvidenceBinding(vulnerabilityReport, report, {
         imageDigest: fixtureImageDigest,
-        manifestDigest: fixtureManifestDigest,
+        manifestDigest: baseline.source.target.manifestDigest,
       }),
     ).not.toThrow();
     expect(() =>
@@ -547,7 +624,7 @@ describe("Grype vulnerability report summarization", () => {
         { ...report, manifestDigest: `sha256:${sha("9")}` },
         {
           imageDigest: fixtureImageDigest,
-          manifestDigest: fixtureManifestDigest,
+          manifestDigest: baseline.source.target.manifestDigest,
         },
       ),
     ).toThrow(/exact built OCI config and manifest digests/i);
@@ -566,11 +643,11 @@ describe("Grype vulnerability report summarization", () => {
     driftedNegative.source.target.userInput = "counterlab-runner:other";
     expect(() =>
       summarizeVexApplication(
-        raw,
+        baseline,
         appliedWithIgnored,
         driftedNegative,
         vexOptions,
       ),
-    ).toThrow(/one exact image source identity/i);
+    ).toThrow(/exact loaded source-bound image tag/i);
   });
 });

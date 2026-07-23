@@ -21,6 +21,9 @@ type Args = {
   output: string;
   imageDigest: string;
   manifestDigest: string;
+  loadedImageTag: string;
+  sourceCommit: string;
+  sourceTreeSha256: string;
   scannerBinarySha256: string;
   baselineEvidenceId: string;
   appliedEvidenceId: string;
@@ -30,7 +33,7 @@ type Args = {
 
 function usage(): never {
   throw new Error(
-    "Usage: tsx scripts/summarize-vex-application.ts --baseline <raw.json> --applied <scan.json> --negative <scan.json> --vex <openvex.json> --vulnerability-report <report.json> --output <report.json> --image-digest sha256:<digest> --manifest-digest sha256:<digest> --scanner-binary-sha256 <sha256> --baseline-evidence-id <id> --applied-evidence-id <id> --negative-evidence-id <id> --negative-subcomponent <purl>",
+    "Usage: tsx scripts/summarize-vex-application.ts --baseline <raw.json> --applied <scan.json> --negative <scan.json> --vex <openvex.json> --vulnerability-report <report.json> --output <report.json> --image-digest sha256:<digest> --manifest-digest sha256:<digest> --loaded-image-tag <tag> --source-commit <commit> --source-tree-sha256 <sha256> --scanner-binary-sha256 <sha256> --baseline-evidence-id <id> --applied-evidence-id <id> --negative-evidence-id <id> --negative-subcomponent <purl>",
   );
 }
 
@@ -44,6 +47,9 @@ function parseArgs(argv: string[]): Args {
     "--output",
     "--image-digest",
     "--manifest-digest",
+    "--loaded-image-tag",
+    "--source-commit",
+    "--source-tree-sha256",
     "--scanner-binary-sha256",
     "--baseline-evidence-id",
     "--applied-evidence-id",
@@ -66,6 +72,9 @@ function parseArgs(argv: string[]): Args {
     output: required("output"),
     imageDigest: required("image-digest"),
     manifestDigest: required("manifest-digest"),
+    loadedImageTag: required("loaded-image-tag"),
+    sourceCommit: required("source-commit"),
+    sourceTreeSha256: required("source-tree-sha256"),
     scannerBinarySha256: required("scanner-binary-sha256"),
     baselineEvidenceId: required("baseline-evidence-id"),
     appliedEvidenceId: required("applied-evidence-id"),
@@ -134,6 +143,14 @@ async function main(): Promise<void> {
     {
       imageDigest: args.imageDigest,
       manifestDigest: args.manifestDigest,
+      loadedImage: {
+        imageTag: args.loadedImageTag,
+        imageDigest: args.imageDigest,
+        sourceCommit: args.sourceCommit,
+        sourceTreeSha256: args.sourceTreeSha256,
+        sourceUrl: "https://github.com/ALikesToCode/CounterLab",
+        platform: { architecture: "amd64", os: "linux" },
+      },
       scannerBinarySha256: args.scannerBinarySha256,
       vexSha256: sha256(vex),
       inputs: {

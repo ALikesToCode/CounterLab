@@ -13,6 +13,7 @@ import {
   SubjectPackEngineBindingsSchema,
   VexApplicationReportV1Schema,
   VulnerabilityReportV2Schema,
+  assertGrypeLoadedImageBinding,
   assertGrypeOciArchiveBinding,
   canonicalizeScientificEngineSnapshot,
   hashScientificEngineRegistry,
@@ -267,15 +268,25 @@ const expectedScanInput = `<COUNTERLAB_REPO_ROOT>/${receipt.localOciArchive}`;
 const dbIdentity = (scan: (typeof scans)[number]): string =>
   JSON.stringify(scan.descriptor.db.status);
 for (const [index, scan] of scans.entries()) {
-  assertGrypeOciArchiveBinding(scan, {
-    normalizedUserInput: expectedScanInput,
+  const binding = {
     imageDigest: receipt.localImageDigest,
-    manifestDigest: receipt.localManifestDigest,
     sourceCommit: receipt.sourceCommit,
     sourceTreeSha256: receipt.sourceTreeSha256,
-    sourceUrl: "https://github.com/ALikesToCode/CounterLab",
-    platform: { architecture: "amd64", os: "linux" },
-  });
+    sourceUrl: "https://github.com/ALikesToCode/CounterLab" as const,
+    platform: { architecture: "amd64" as const, os: "linux" as const },
+  };
+  if (index === 0) {
+    assertGrypeOciArchiveBinding(scan, {
+      ...binding,
+      normalizedUserInput: expectedScanInput,
+      manifestDigest: receipt.localManifestDigest,
+    });
+  } else {
+    assertGrypeLoadedImageBinding(scan, {
+      ...binding,
+      imageTag: receipt.localImageTag,
+    });
+  }
   const scanPath = scanPaths[index]!;
   const scanInput = object(scanInputs[index], scanPath);
   const scanDescriptor = object(scanInput.descriptor, `${scanPath}.descriptor`);
@@ -333,7 +344,7 @@ for (const [index, scan] of scans.entries()) {
     dbIdentity(scan) !== dbIdentity(scans[0]!)
   ) {
     throw new Error(
-      "All Grype scans must bind one source, image, pinned scanner, and database",
+      "Grype baseline and VEX scans must bind the exact archive, loaded image, pinned scanner, and database",
     );
   }
 }
@@ -369,11 +380,19 @@ for (const [label, digest] of [
   }
 }
 if (
+  vexApplication.loadedImage?.imageTag !== receipt.localImageTag ||
+  vexApplication.loadedImage.imageDigest !== receipt.localImageDigest ||
+  vexApplication.loadedImage.sourceCommit !== receipt.sourceCommit ||
+  vexApplication.loadedImage.sourceTreeSha256 !== receipt.sourceTreeSha256
+) {
+  throw new Error(
+    "VEX application does not bind the loaded source-bound image",
+  );
+}
+if (
   reachability.sourceCommit !== receipt.sourceCommit ||
   !vex.statements[0]?.products.some(
-    (product) =>
-      product["@id"] ===
-      `pkg:oci/counterlab-runner@${receipt.localImageDigest}`,
+    (product) => product["@id"] === receipt.localImageTag,
   )
 ) {
   throw new Error("Reachability or VEX does not bind the source-bound image");
