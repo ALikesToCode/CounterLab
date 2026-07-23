@@ -402,6 +402,17 @@ def _rootless_receipt_name(control: dict[str, Any]) -> str:
     return f"{control['finalContainerId']}.{suffix}"
 
 
+def _rootless_receipt_relative_path(control: dict[str, Any]) -> Path:
+    receipt_name = _rootless_receipt_name(control)
+    if control.get("schemaVersion") == "2":
+        return Path("run/rootless-specs") / receipt_name
+    return (
+        Path("run/cgroup-qualification")
+        / control["invocationId"]
+        / receipt_name
+    )
+
+
 def validate_rootless_receipt(
     value: object,
     *,
@@ -1010,10 +1021,18 @@ def run_timeout_cleanup_proof(
             exc.details.get("rootlessReceipt"),
             "timeout rootless receipt",
         )
-        expected_rootless_parent = (
-            root / ".rt" / session_id / "run/rootless-specs"
+        control_for_path = validate_control_receipt(
+            _read_json(control_path),
+            expected_wall_seconds=TIMEOUT_PROOF_WALL_SECONDS,
+            expected_runtime_policy_sha256=build["runtimePolicySha256"],
+        )
+        expected_rootless_path = (
+            root
+            / ".rt"
+            / session_id
+            / _rootless_receipt_relative_path(control_for_path)
         ).resolve(strict=True)
-        if rootless_path.parent != expected_rootless_parent:
+        if rootless_path != expected_rootless_path:
             raise RuntimeError(
                 "timeout probe rootless receipt belongs to another session"
             ) from exc

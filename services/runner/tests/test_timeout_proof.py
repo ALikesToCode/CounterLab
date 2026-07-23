@@ -293,6 +293,17 @@ def test_control_schema_selects_the_exact_rootless_receipt_name() -> None:
         )
 
 
+def test_control_schema_selects_the_exact_rootless_receipt_path() -> None:
+    assert timeout_proof_module._rootless_receipt_relative_path(_control("2")) == (
+        Path("run/rootless-specs") / f"{'2' * 64}.receipt.json"
+    )
+    assert timeout_proof_module._rootless_receipt_relative_path(_control("3")) == (
+        Path("run/cgroup-qualification")
+        / ("1" * 64)
+        / f"{'2' * 64}.qualified-receipt.json"
+    )
+
+
 def test_rootless_rlimit_validator_matches_the_runtime_contract() -> None:
     intended = {
         "cpuCount": 1,

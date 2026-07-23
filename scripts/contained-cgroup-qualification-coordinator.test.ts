@@ -255,7 +255,7 @@ function harness({
     qualifiedReceiptFileSha256: "f".repeat(64),
     qualifiedReceiptPath: resolve(
       value.input.sessionRoot,
-      `run/rootless-specs/${finalContainerId}.qualified-receipt.json`,
+      `run/cgroup-qualification/${invocationId}/${finalContainerId}.qualified-receipt.json`,
     ),
     qualifiedReceiptPayloadSha256: "0".repeat(64),
   };

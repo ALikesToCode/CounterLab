@@ -216,20 +216,30 @@ def test_trusted_repository_root_rejects_relative_and_nested_callers(
 
 
 @pytest.mark.parametrize(
-    ("schema_version", "rootless_suffix"),
-    [("2", ".receipt.json"), ("3", ".qualified-receipt.json")],
+    ("schema_version", "rootless_relative_path"),
+    [
+        (
+            "2",
+            Path("run/rootless-specs") / f"{'2' * 64}.receipt.json",
+        ),
+        (
+            "3",
+            Path("run/cgroup-qualification")
+            / ("1" * 64)
+            / f"{'2' * 64}.qualified-receipt.json",
+        ),
+    ],
 )
 def test_runtime_control_receipt_binds_schema_to_exact_rootless_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     schema_version: str,
-    rootless_suffix: str,
+    rootless_relative_path: Path,
 ) -> None:
     session_id = "rt-entry123"
     receipt = _runtime_control_receipt(schema_version)
-    rootless_root = tmp_path / ".rt" / session_id / "run/rootless-specs"
-    rootless_root.mkdir(parents=True)
-    rootless_path = rootless_root / f"{'2' * 64}{rootless_suffix}"
+    rootless_path = tmp_path / ".rt" / session_id / rootless_relative_path
+    rootless_path.parent.mkdir(parents=True)
     rootless_path.write_text("{}\n", encoding="utf-8")
     control_path = tmp_path / f"control-v{schema_version}.json"
     control_path.write_text(json.dumps(receipt), encoding="utf-8")
@@ -250,6 +260,37 @@ def test_runtime_control_receipt_binds_schema_to_exact_rootless_path(
     assert value == receipt
     assert observed_rootless_path == rootless_path
     assert observed_rootless_sha256 == receipt["rootlessReceiptFileSha256"]
+
+
+def test_runtime_control_receipt_v3_rejects_the_legacy_rootless_location(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = "rt-entry123"
+    receipt = _runtime_control_receipt("3")
+    legacy_path = (
+        tmp_path
+        / ".rt"
+        / session_id
+        / "run/rootless-specs"
+        / f"{'2' * 64}.qualified-receipt.json"
+    )
+    legacy_path.parent.mkdir(parents=True)
+    legacy_path.write_text("{}\n", encoding="utf-8")
+    control_path = tmp_path / "control-v3.json"
+    control_path.write_text(json.dumps(receipt), encoding="utf-8")
+    monkeypatch.setattr(
+        docker_module,
+        "_trusted_repository_root",
+        lambda: tmp_path.resolve(strict=True),
+    )
+
+    with pytest.raises(DockerExecutionError, match="rootless_receipt_missing"):
+        docker_module._validate_contained_runtime_control_receipt(
+            control_path,
+            session_id=session_id,
+            expected_wall_seconds=1,
+        )
 
 
 @pytest.mark.parametrize(

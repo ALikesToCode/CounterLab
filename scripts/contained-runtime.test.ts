@@ -1200,7 +1200,7 @@ describe("contained runtime command policy", () => {
           qualifiedReceiptFileSha256: "7".repeat(64),
           qualifiedReceiptPath: resolve(
             harness.context.sessionRoot,
-            `run/rootless-specs/${harness.finalContainerId}.qualified-receipt.json`,
+            `run/cgroup-qualification/${invocationId}/${harness.finalContainerId}.qualified-receipt.json`,
           ),
           qualifiedReceiptPayloadSha256: "8".repeat(64),
         };
@@ -1255,7 +1255,7 @@ describe("contained runtime command policy", () => {
           qualifiedReceiptFileSha256,
           qualifiedReceiptPath: resolve(
             harness.context.sessionRoot,
-            `run/rootless-specs/${harness.finalContainerId}.qualified-receipt.json`,
+            `run/cgroup-qualification/${invocationId}/${harness.finalContainerId}.qualified-receipt.json`,
           ),
           qualifiedReceiptPayloadSha256,
         };

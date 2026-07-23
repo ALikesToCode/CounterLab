@@ -329,16 +329,16 @@ def _validate_contained_runtime_control_receipt(
         or (value["status"] == "TIMED_OUT_CLEAN") is not clean
     ):
         raise DockerExecutionError("runtime_control_invalid")
+    receipt_relative_path = (
+        Path("run/cgroup-qualification")
+        / value["invocationId"]
+        / f"{value['finalContainerId']}.qualified-receipt.json"
+        if schema_version == "3"
+        else Path("run/rootless-specs")
+        / f"{value['finalContainerId']}.receipt.json"
+    )
     rootless_path = _repository_path(
-        _trusted_repository_root()
-        / ".rt"
-        / session_id
-        / "run/rootless-specs"
-        / (
-            f"{value['finalContainerId']}.qualified-receipt.json"
-            if schema_version == "3"
-            else f"{value['finalContainerId']}.receipt.json"
-        ),
+        _trusted_repository_root() / ".rt" / session_id / receipt_relative_path,
         label="rootless_receipt",
         must_exist=True,
     )

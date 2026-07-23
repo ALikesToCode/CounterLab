@@ -277,7 +277,7 @@ describe("qualified rootless receipt store", () => {
     expect(persisted.qualifiedReceiptPath).toBe(
       resolve(
         input.sessionRoot,
-        `run/rootless-specs/${finalContainerId}.qualified-receipt.json`,
+        `run/cgroup-qualification/${invocationId}/${finalContainerId}.qualified-receipt.json`,
       ),
     );
     expect(persisted.qualificationArtifacts.evidencePath).toBe(

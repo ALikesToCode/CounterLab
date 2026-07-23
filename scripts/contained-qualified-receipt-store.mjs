@@ -112,11 +112,32 @@ function receiptPaths({ sessionRoot, finalContainerId, runtimeSessionId }) {
   privateDirectory(specRoot, "spec root");
   return {
     baseReceiptPath: resolve(specRoot, `${finalContainerId}.receipt.json`),
-    qualifiedReceiptPath: resolve(
-      specRoot,
-      `${finalContainerId}.qualified-receipt.json`,
-    ),
   };
+}
+
+function qualifiedReceiptPath({
+  finalContainerId,
+  invocationId,
+  runtimeSessionId,
+  sessionRoot,
+}) {
+  if (!sha256Pattern.test(invocationId ?? "")) {
+    throw new Error("qualified rootless receipt invocation is invalid");
+  }
+  const paths = containedCgroupQualificationPaths({
+    repositoryRoot,
+    runtimeSessionId,
+    invocationId,
+  });
+  if (paths.sessionRoot !== sessionRoot) {
+    throw new Error("qualified rootless receipt session path changed");
+  }
+  privateDirectory(paths.qualificationRoot, "qualification root");
+  privateDirectory(paths.invocationRoot, "qualification invocation root");
+  return resolve(
+    paths.invocationRoot,
+    `${finalContainerId}.qualified-receipt.json`,
+  );
 }
 
 function readBaseReceipt({
@@ -333,11 +354,7 @@ export function persistQualifiedContainedRootlessReceipt(
     sessionRoot: input.sessionRoot,
   });
   const currentTime = now();
-  const {
-    expected,
-    receipt: baseReceipt,
-    source: baseReceiptSource,
-  } = readBaseReceipt({
+  const { receipt: baseReceipt, source: baseReceiptSource } = readBaseReceipt({
     ...input,
     observerBindings,
   });
@@ -369,8 +386,14 @@ export function persistQualifiedContainedRootlessReceipt(
     observerBindings,
   });
   const source = `${JSON.stringify(qualifiedReceipt, null, 2)}\n`;
+  const qualifiedPath = qualifiedReceiptPath({
+    finalContainerId: baseReceipt.finalContainerId,
+    invocationId: baseReceipt.invocationId,
+    runtimeSessionId: observerBindings.runtimeSessionId,
+    sessionRoot: input.sessionRoot,
+  });
   try {
-    writeFileSync(expected.qualifiedReceiptPath, source, {
+    writeFileSync(qualifiedPath, source, {
       encoding: "utf8",
       flag: "wx",
       mode: 0o600,
@@ -383,11 +406,11 @@ export function persistQualifiedContainedRootlessReceipt(
     }
     throw error;
   }
-  privateFile(expected.qualifiedReceiptPath, "qualified receipt");
+  privateFile(qualifiedPath, "qualified receipt");
   return {
     qualifiedReceipt,
     qualifiedReceiptFileSha256: sha256CgroupBytes(source),
-    qualifiedReceiptPath: expected.qualifiedReceiptPath,
+    qualifiedReceiptPath: qualifiedPath,
     qualifiedReceiptPayloadSha256: qualifiedReceipt.receiptPayloadSha256,
     qualificationArtifacts: observation,
   };
@@ -400,16 +423,18 @@ export function verifyQualifiedContainedRootlessReceipt(
   const observerBindings = resolveObserverBindings({
     sessionRoot: input.sessionRoot,
   });
-  const {
-    expected,
-    receipt: baseReceipt,
-    source: baseReceiptSource,
-  } = readBaseReceipt({
+  const { receipt: baseReceipt, source: baseReceiptSource } = readBaseReceipt({
     ...input,
     observerBindings,
   });
+  const qualifiedPath = qualifiedReceiptPath({
+    finalContainerId: baseReceipt.finalContainerId,
+    invocationId: baseReceipt.invocationId,
+    runtimeSessionId: observerBindings.runtimeSessionId,
+    sessionRoot: input.sessionRoot,
+  });
   if (
-    input.qualifiedReceiptPath !== expected.qualifiedReceiptPath ||
+    input.qualifiedReceiptPath !== qualifiedPath ||
     !sha256Pattern.test(input.qualifiedReceiptFileSha256 ?? "")
   ) {
     throw new Error("qualified rootless receipt path or hash changed");
