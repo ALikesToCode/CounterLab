@@ -3859,6 +3859,20 @@ describe("contained runtime command policy", () => {
     ).not.toBe(0);
   });
 
+  it("requests both registry scopes before immutable promotion preflight", () => {
+    const qualification = readFileSync(
+      resolve(root, "scripts/qualify-runner-release.ts"),
+      "utf8",
+    );
+    const credentialCommand = qualification.slice(
+      qualification.indexOf('"credentials"'),
+      qualification.indexOf('"--expiration-minutes"'),
+    );
+
+    expect(credentialCommand).toContain('"--push"');
+    expect(credentialCommand).toContain('"--pull"');
+  });
+
   it("rejects a shell command appended to the bounded adapter profile", () => {
     const result = validate(...boundedAdapterCommand(), "sh", "-c", "id");
     expect(result.status).not.toBe(0);

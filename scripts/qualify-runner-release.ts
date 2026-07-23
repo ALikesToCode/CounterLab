@@ -353,6 +353,7 @@ async function promoteImage(input: {
         "credentials",
         "registry.cloudflare.com",
         "--push",
+        "--pull",
         "--expiration-minutes",
         "5",
         "--json",
