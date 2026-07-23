@@ -7,19 +7,31 @@
   "codePaths": [
     "apps/web/src/App.tsx",
     "apps/web/src/components/generative-ui/BoundaryMapBlock.tsx",
-    "apps/web/src/features/boundary/BoundaryStage.tsx",
-    "apps/web/src/components/studio/GeneratedProofView.tsx",
+    "apps/web/src/components/generative-ui/TrustedLabSceneRenderer.tsx",
+    "apps/web/src/components/generative-ui/VerifiedLabScenePanel.tsx",
+    "apps/web/src/components/learner/ExperimentTheater.tsx",
+    "apps/web/src/components/learner/VerifiedBeliefBreakTheater.tsx",
     "apps/web/src/components/lesson/InteractiveImbalanceLab.tsx",
     "apps/web/src/components/proof/ProofCapsuleView.tsx",
-    "apps/web/src/components/proof/ReasoningDiffView.tsx"
+    "apps/web/src/components/proof/ReasoningDiffView.tsx",
+    "apps/web/src/components/studio/GeneratedProofView.tsx",
+    "apps/web/src/features/boundary/BoundaryStage.tsx"
   ],
   "tests": [
     "apps/web/src/App.test.tsx",
+    "apps/web/src/api.test.ts",
     "apps/web/src/components/generative-ui/BoundaryMapBlock.test.tsx",
-    "apps/web/src/features/boundary/BoundaryStage.test.tsx",
-    "apps/web/src/components/studio/GeneratedProofView.test.tsx",
+    "apps/web/src/components/generative-ui/TrustedLabSceneRenderer.test.tsx",
+    "apps/web/src/components/generative-ui/VerifiedLabScenePanel.test.tsx",
+    "apps/web/src/components/learner/ExperimentTheater.test.tsx",
+    "apps/web/src/components/learner/VerifiedBeliefBreakTheater.test.tsx",
     "apps/web/src/components/lesson/InteractiveImbalanceLab.test.tsx",
     "apps/web/src/components/proof/ReasoningDiffView.test.tsx",
+    "apps/web/src/components/studio/GeneratedProofView.test.tsx",
+    "apps/web/src/features/boundary/BoundaryStage.test.tsx",
+    "apps/web/src/features/boundary/sampleBoundaryFixture.test.ts",
+    "apps/web/src/sample.test.ts",
+    "apps/web/worker/api.test.ts",
     "packages/generative-ui-contracts/test/lab-scene.test.ts"
   ],
   "limitations": [

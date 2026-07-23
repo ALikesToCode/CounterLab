@@ -3,20 +3,25 @@
   "evidenceId": "internal-oracle-integrity-v2",
   "kind": "integrity",
   "files": {
+    "apps/web/shared/sample-boundary-authority.ts": "74ec577ec7df846923aab9421c972397bc77c91310e8fcf4f7074c7e759f0a7e",
     "packages/boundary-map/src/index.ts": "c11967a0d97da2e56fc2eb7d4fd87dcdfc7051968450d18b1af601ddb80ca5e1",
-    "packages/concept-registry/src/index.ts": "a085f37c0d004044ba1f514d85c22107d879247e2b95c89e19a090de1a214e6d",
+    "packages/concept-registry/src/index.ts": "9f0edf4c8e7bc62f73ed851442f59efe5b1d60b31542b7fb2d2cf41411c202f1",
     "packages/experiment-ir/src/canonicalize.ts": "3c3564d19b7c4853c1a8f6ec33737723e340450e0e947c994a8acf6b13dc703e",
     "packages/experiment-ir/src/hash.ts": "fae332ab6a45a345f5be177808f6f64fd0d8ee686e2d733d9919ced38a25152b",
     "packages/experiment-ir/src/policy.ts": "effb319261753660ab497624819a9a6d005d4c45253dee9be29e7663bbdf00b8",
-    "packages/experiment-ir/src/runner-bundle.ts": "2d5557a735803f914653863c2da462acb4cb9587f32b482e09030b18f6a85df1",
+    "packages/experiment-ir/src/runner-bundle.ts": "58c28cf63d24c7c12c55872be8f1502aaa6f1eb09dc2d529bf3e2bbeddab7e68",
     "packages/experiment-ir/src/schema.ts": "943043fd6067aaa3f1a0dd654e4dd36475beb65c62e77ca9b654ce2963b40230",
     "packages/experiment-scorer/src/scorer.ts": "843905a767a5c63b04f906e6ec3e9adc80573f5ab22d09cb512a1df886800e7c",
     "packages/plan-verifier/src/epistemic.ts": "cc7efcdc8e8bbae3576348343eb39a2364b2df1878b7418487d14a9e97352617",
-    "packages/plan-verifier/src/scientific-candidate.ts": "09e451f7f9f03d85bcbdc048bbf69c19608108b6557dfcb83fb992722d922f87",
+    "packages/plan-verifier/src/scientific-candidate.ts": "c8300f305085e7a0dc7d7e160d0d76f456abdb2a6919f9763189bd89394047c8",
+    "packages/proof-capsule/src/sample-boundary-authority.ts": "4773e229967d06f8597eebfee212ada9eab212543652e0f924ea45d720a16f7b",
+    "scripts/bind-source-bound-scientific-evidence.ts": "2dff556404194f4ee9f8295223f84765e7be432f2aa14ca05aa0d8221102d224",
+    "scripts/internal-scientific-integrity-scope.ts": "2d205e8f06feee1999b55d95cb76e6b8b241694543433fe6d5ca616c8b6a8e96",
+    "scripts/refresh-scientific-engine-bindings.ts": "416b8795166034f95ef8807b965df7f877e9c1e2bee5bd3ccdbd49560800c6ca",
     "services/kernel/src/counterlab_kernel/boundary_map.py": "599578e7a082e529d04c14a17196b038a52a6ad486ecfda3610a252a333125e6",
     "services/kernel/src/counterlab_kernel/imbalance_transfer.py": "ae3330c0d8bb89e5979cd6a19b835c624ca4cc69db355ffedc706d34bb2b0e32",
     "services/kernel/src/counterlab_kernel/imbalance_verifier.py": "49d713b71db6b08f7561ae2128fbcb23872ffea640cccd71eedd97805bcc0280",
     "services/kernel/src/counterlab_kernel/transfer.py": "eaee77c5c4fa4995f7e9b147ea16aeddc7055b65e96478b3a0b2122b2363edc1",
-    "services/kernel/src/counterlab_kernel/verifier.py": "5fbfbe94d7f31e8adb6af8403b4ffb2df7a4cecbbabcfd8de5c78a0e4c4e883d"
+    "services/kernel/src/counterlab_kernel/verifier.py": "6a11438bb560a3e6621a312fbb347f8b33080de5cd41655ecc6d9b3b14ce8c58"
   }
 }

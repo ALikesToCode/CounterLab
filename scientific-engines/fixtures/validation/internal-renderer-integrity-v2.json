@@ -3,13 +3,17 @@
   "evidenceId": "internal-renderer-integrity-v2",
   "kind": "integrity",
   "files": {
-    "apps/web/src/App.tsx": "3dc6af74615ec9030490c7a404543d64863eb3a8f3adb9e4d785c9eb3e25c9c0",
-    "apps/web/src/components/generative-ui/BoundaryMapBlock.tsx": "306323b1b868f6f05975fd13b1576946c860da2ac1db21bea8abb59386ec900a",
-    "apps/web/src/components/lesson/InteractiveImbalanceLab.tsx": "805c9135673f0c4e99f1dc3f43323ef483784634773afccd6145a0a35cf333a2",
+    "apps/web/src/App.tsx": "b769d18ae859d586d31772c641f3c3a863996efb6367ebd57190e97db1edd926",
+    "apps/web/src/components/generative-ui/BoundaryMapBlock.tsx": "efba2409f64c4600f10c0faf7630e2c495a1699168af795f9aedae457822a0ef",
+    "apps/web/src/components/generative-ui/TrustedLabSceneRenderer.tsx": "e27041666c64342790f81e33665fa61164134c374c11aa57a5378ebb6b42a180",
+    "apps/web/src/components/generative-ui/VerifiedLabScenePanel.tsx": "e8ce00f1da04e4ba327b577915d77379ba103d69556689653ff619cf44e631bb",
+    "apps/web/src/components/learner/ExperimentTheater.tsx": "8e5222aab8991aa5b76dc63561d6a7abe9e57b85bc27210245f98f54fd703fd8",
+    "apps/web/src/components/learner/VerifiedBeliefBreakTheater.tsx": "625e4f11edee417aad2f395336f390b018b760812b4502c3b2ac5cce11f0a9fd",
+    "apps/web/src/components/lesson/InteractiveImbalanceLab.tsx": "ef55b2755191861090bb6c86f1a7fd2080d5f626ada1e0cd2f79359801f3abfd",
     "apps/web/src/components/proof/ProofCapsuleView.tsx": "6a3d9554199f39f3772f7e20aad6cb0cb76202ab6352f10d38f2ff26e2ccacd9",
-    "apps/web/src/components/proof/ReasoningDiffView.tsx": "1d75fdf8c50a480bd213392375e12c297a7e6bb8f2f374236eebd08d2773102b",
+    "apps/web/src/components/proof/ReasoningDiffView.tsx": "3787f00836ace4c79c56c7ac4a06f1b33b3a2be7aca1f59294b6f4564d88ffaf",
     "apps/web/src/components/studio/GeneratedProofView.tsx": "91728ffe869c1241c7589703585fcfd394ed579bc2e27f8678fbc11a3a82c05e",
-    "apps/web/src/features/boundary/BoundaryStage.tsx": "6e0d476a13eb40b3f4890e33ad1ddd3bee2d5d980492cf172896c8ef86adb7b0",
-    "packages/generative-ui-contracts/src/index.ts": "4354d29ce569e3b165b7126059cc3d82fd51741395dea6831a6e479c49f274e0"
+    "apps/web/src/features/boundary/BoundaryStage.tsx": "d96f108ab49e594cb985bd7f69a808a0f36d401fb3a9a8346ab6870b369cf90d",
+    "packages/generative-ui-contracts/src/index.ts": "3c8c7768fdb46f43940c4f26ef5ad196fabdc140fbf9450ea32797a36d6f00ba"
   }
 }

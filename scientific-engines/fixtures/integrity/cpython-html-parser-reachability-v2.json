@@ -1,0 +1,58 @@
+{
+  "coverage": {
+    "forbiddenModuleLoaded": false,
+    "hostedPatchConcepts": [
+      "class_imbalance",
+      "entity_leakage"
+    ],
+    "hostedRunConcepts": [
+      "class_imbalance",
+      "entity_leakage"
+    ],
+    "importGuard": "PASSED",
+    "negativeControl": "PASSED",
+    "outputHashes": [
+      "09b94ef00dc8f41d261383ae81610ca65489712c180a037538ce5b8fb7856259",
+      "2c0fa2475b996ac9095a7ea6e232172b7bdeac78dcd7cae6ee94a15cda502fe2",
+      "4d1d3541782bdcf739fa1096bc4e0ff46b5809e4e326275e8dd70228e26afc00",
+      "d0419d65b79b17aab19f201935e7d8fdd80d01d1f8fb6bcf0896369b7a5a3fc9"
+    ],
+    "staticAstScan": "PASSED"
+  },
+  "evidenceKind": "reachability-report",
+  "imageDigest": "sha256:86899abd2852345333a65bea5a8d88ab459a657756e1a1bf96af98a711387f81",
+  "limitations": [
+    "This proves bounded non-reachability for the fixed hosted paths, not whole-program safety.",
+    "The review expires and must be rerun when any recorded binding changes."
+  ],
+  "module": {
+    "path": "/usr/local/lib/python3.13/html/parser.py",
+    "sha256": "9e905368ac7fdc15d335aa7678655ee397c955107fb3b8424f66d02824632c10"
+  },
+  "pythonVersion": "3.13.14",
+  "review": {
+    "expiresAt": "2026-08-06T11:13:13.395Z",
+    "kevCatalogCount": 1653,
+    "kevCatalogSha256": "c61f8532deb6c833d80f1e2edf6abdce584aaf1cb480a160dffa7ce9e524011f",
+    "kevCatalogVersion": "2026.07.22",
+    "kevCheckedAt": "2026-07-23T11:13:13.395Z",
+    "kevDateReleased": "2026-07-22T19:00:21.852Z",
+    "kevSource": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "kevStatus": "NOT_LISTED",
+    "owner": "counterlab-release-owner",
+    "revalidationTriggers": [
+      "image digest changes",
+      "source commit changes",
+      "SBOM changes",
+      "entrypoint or operation coverage changes",
+      "Python or vulnerable module bytes change",
+      "scanner database or vulnerability status changes"
+    ],
+    "reviewedAt": "2026-07-23T11:13:13.395Z"
+  },
+  "sbomSha256": "f54ff672bcf5ce19e213fe7f6fc93460bf5e09b6c941455f57a9a08c500d367c",
+  "schemaVersion": "2",
+  "sourceCommit": "363172d2d90712ae154691bf699a6826fd38cac7",
+  "status": "VERIFIED",
+  "vulnerabilityId": "CVE-2026-15308"
+}
