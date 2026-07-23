@@ -418,11 +418,7 @@ async function promoteImage(input: {
   );
   execFileSync(
     input.runtimeAdapter,
-    runtimeAdapterArguments([
-      "tag",
-      input.expectedConfigDigest,
-      input.registryImage,
-    ]),
+    runtimeAdapterArguments(["tag", input.localImage, input.registryImage]),
     { cwd: input.root, stdio: "inherit", timeout: 30_000 },
   );
   execFileSync(

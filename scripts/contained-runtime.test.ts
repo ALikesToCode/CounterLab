@@ -3871,6 +3871,16 @@ describe("contained runtime command policy", () => {
 
     expect(credentialCommand).toContain('"--push"');
     expect(credentialCommand).toContain('"--pull"');
+
+    const promotionCommand = qualification.slice(
+      qualification.indexOf('"tag",'),
+      qualification.indexOf(
+        "input.registryImage",
+        qualification.indexOf('"tag",'),
+      ),
+    );
+    expect(promotionCommand).toContain("input.localImage");
+    expect(promotionCommand).not.toContain("input.expectedConfigDigest");
   });
 
   it("rejects a shell command appended to the bounded adapter profile", () => {
