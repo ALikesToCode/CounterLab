@@ -1,4 +1,6 @@
+import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { parseContainedCgroupControl } from "./contained-cgroup-control-helper.mjs";
@@ -58,5 +60,50 @@ describe("contained cgroup negative-control helper", () => {
     expect(source).toContain('from "node:worker_threads"');
     expect(source).toContain("{ length: workers - 1 }");
     expect(source).not.toContain('[scriptPath, "--internal-busy"');
+  });
+
+  it("runs the source-bound low-task helper with two CPU streams", async () => {
+    const helper = resolve(
+      process.cwd(),
+      "scripts/contained-cgroup-control-helper.py",
+    );
+    const child = spawn(
+      "/usr/bin/python3.14",
+      [
+        "-I",
+        "-u",
+        helper,
+        "--mode",
+        "cpu",
+        "--busy-window-ms",
+        "100",
+        "--workers",
+        "2",
+      ],
+      {
+        cwd: process.cwd(),
+        env: { LANG: "C", LC_ALL: "C", TZ: "UTC" },
+        stdio: ["pipe", "pipe", "pipe"],
+      },
+    );
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.stdin.end("GO\n");
+    const status = await new Promise<number | null>((accept, reject) => {
+      child.once("error", reject);
+      child.once("close", accept);
+    });
+
+    expect(status).toBe(0);
+    expect(stderr).toBe("");
+    expect(stdout).toBe('READY\n{"busyWindowMs":100,"workers":2}\n');
   });
 });

@@ -765,8 +765,10 @@ function actualCgroupAdapter(manifest, paths, reportPhase) {
   }
   const helperPath = resolve(
     repositoryRoot,
-    "scripts/contained-cgroup-control-helper.mjs",
+    "scripts/contained-cgroup-control-helper.py",
   );
+  repositoryFile(helperPath, "control helper");
+  const helperInterpreter = "/usr/bin/python3.14";
   let expectedCgroupIdentity;
   let expectedParentIdentity;
   let terminationSignal;
@@ -887,7 +889,7 @@ function actualCgroupAdapter(manifest, paths, reportPhase) {
               "--workers",
               String(control.workers),
             ];
-    const child = spawn(process.execPath, [helperPath, ...args], {
+    const child = spawn(helperInterpreter, ["-I", "-u", helperPath, ...args], {
       cwd: repositoryRoot,
       env: { LANG: "C", LC_ALL: "C", TZ: "UTC" },
       stdio: ["pipe", "pipe", "pipe"],
