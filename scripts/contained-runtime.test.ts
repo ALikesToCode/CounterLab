@@ -143,7 +143,7 @@ function scientificRuntimeCommand(): string[] {
     "--memory-swap=1024m",
     "--cpus=2.0",
     "--ulimit=cpu=300:300",
-    "--ulimit=as=2147483648:2147483648",
+    "--ulimit=as=8589934592:8589934592",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
     "--tmpfs",
@@ -188,7 +188,7 @@ function reachabilityCommand(): string[] {
     "--memory-swap=1024m",
     "--cpus=2.0",
     "--ulimit=cpu=300:300",
-    "--ulimit=as=2147483648:2147483648",
+    "--ulimit=as=8589934592:8589934592",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
     "--tmpfs=/counterlab-runtime:rw,noexec,nosuid,nodev,size=256m,uid=1000,gid=1000,mode=0700",
@@ -1563,6 +1563,39 @@ describe("contained runtime command policy", () => {
     expect(validate(...scientificRuntimeCommand()).status).toBe(0);
     expect(validate(...reachabilityCommand()).status).toBe(0);
     expect(validate(...boundedAdapterCommand()).status).toBe(0);
+  });
+
+  it("binds every runner profile to the hosted image address-space limit", () => {
+    const sessionRoot = resolve(root, ".rt/rt-validator-image-role-limits");
+    const installRoot = resolve(
+      root,
+      "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
+    );
+    for (const command of [
+      startupCommand(),
+      scientificRuntimeCommand(),
+      reachabilityCommand(),
+      boundedAdapterCommand(),
+    ]) {
+      const plan = containedRunPlan({
+        args: command,
+        binRoot: resolve(installRoot, "bin"),
+        clientFifoRoot: resolve(sessionRoot, "run/client-fifo"),
+        containerdSocket: resolve(sessionRoot, "run/containerd.sock"),
+        installRoot,
+        invocationId,
+        sessionRoot,
+      });
+      const addressSpace = plan.expected.rlimits.find(
+        (entry) => entry.type === "RLIMIT_AS",
+      );
+      expect(addressSpace?.soft).toBe(
+        command.includes(adapterImage)
+          ? 2 * 1024 * 1024 * 1024
+          : 8 * 1024 * 1024 * 1024,
+      );
+      expect(addressSpace?.hard).toBe(addressSpace?.soft);
+    }
   });
 
   it("mounts only bounded release inputs instead of the repository root", () => {

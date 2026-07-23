@@ -267,7 +267,7 @@ RUNTIME_VERIFICATION_OUTPUT="$("${DOCKER_COMMAND[@]}" run --rm --name "${RUNTIME
   --memory-swap=1024m \
   --cpus=2.0 \
   --ulimit=cpu=300:300 \
-  --ulimit=as=1073741824:1073741824 \
+  --ulimit=as=8589934592:8589934592 \
   --ulimit=fsize=1048576:1048576 \
   --ulimit=nofile=64:64 \
   --tmpfs "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=${HOST_UID},gid=${HOST_GID},mode=0700" \

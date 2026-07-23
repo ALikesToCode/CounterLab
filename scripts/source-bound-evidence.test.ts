@@ -592,7 +592,8 @@ describe("source-bound release evidence helpers", () => {
       '--runtime-report "${WORK}/runtime-verification.json"',
     );
     expect(refresh).toContain('--expected-image-digest "${IMAGE_DIGEST}"');
-    expect(refresh).toContain("--ulimit=as=2147483648:2147483648");
+    expect(refresh).toContain("--ulimit=as=8589934592:8589934592");
+    expect(refresh).not.toContain("--ulimit=as=2147483648:2147483648");
     expect(refresh).not.toContain("--ulimit=as=1073741824:1073741824");
     expect(
       refresh.match(/--manifest-digest "\$\{MANIFEST_DIGEST\}"/gu),
