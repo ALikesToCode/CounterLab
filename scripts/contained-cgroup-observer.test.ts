@@ -8,6 +8,7 @@ import {
 } from "./contained-cgroup-evidence.mjs";
 import {
   cgroupStartupTimeoutMs,
+  containedCgroupHelperResultAccepted,
   createContainedCgroupObserverDraft,
   createContainedCgroupObserverFailure,
   createContainedCgroupObserverReady,
@@ -169,6 +170,44 @@ describe("contained cgroup observer", () => {
         resolve(root, "scripts/contained-cgroup-control-helper.py"),
       ),
     ).toBe(resolve(root, "scripts/contained-cgroup-control-helper.py"));
+  });
+
+  it("uses kernel memory events instead of platform-specific OOM exit encoding", () => {
+    expect(
+      containedCgroupHelperResultAccepted(
+        "memory",
+        { code: null, signal: "SIGKILL" },
+        false,
+      ),
+    ).toBe(true);
+    expect(
+      containedCgroupHelperResultAccepted(
+        "memory",
+        { code: 70, signal: null },
+        false,
+      ),
+    ).toBe(true);
+    expect(
+      containedCgroupHelperResultAccepted(
+        "memory",
+        { code: 0, signal: null },
+        false,
+      ),
+    ).toBe(false);
+    expect(
+      containedCgroupHelperResultAccepted(
+        "cpu",
+        { code: 70, signal: null },
+        false,
+      ),
+    ).toBe(false);
+    expect(
+      containedCgroupHelperResultAccepted(
+        "processes",
+        { code: 0, signal: null },
+        true,
+      ),
+    ).toBe(false);
   });
 
   it("parses counters, candidate-only ancestry, and process identity", () => {

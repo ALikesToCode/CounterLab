@@ -800,6 +800,30 @@ export function validateContainedCgroupControlHelper(path) {
   return path;
 }
 
+export function containedCgroupHelperResultAccepted(
+  mode,
+  result,
+  outputInvalid,
+) {
+  if (
+    !["cpu", "memory", "processes"].includes(mode) ||
+    result === null ||
+    typeof result !== "object" ||
+    Array.isArray(result) ||
+    typeof outputInvalid !== "boolean"
+  ) {
+    throw new Error("contained cgroup observer helper result input is invalid");
+  }
+  if (result.error !== undefined || outputInvalid) return false;
+  if (mode === "memory") {
+    // memory.events is the authority for the canary. Depending on the kernel,
+    // Python may report the failed charge as a non-zero exit or as SIGKILL.
+    // A clean exit means the helper escaped the limit and is never accepted.
+    return result.code !== 0 || result.signal !== null;
+  }
+  return result.code === 0 && result.signal === null;
+}
+
 async function waitUntil(predicate, label, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() <= deadline) {
@@ -1041,11 +1065,11 @@ function actualCgroupAdapter(manifest, paths, reportPhase) {
       child.stdin.end("GO\n");
       const result = await bounded(completion, 15_000, "helper completion");
       if (
-        result.error !== undefined ||
-        outputInvalid ||
-        (control.mode !== "memory" && result.code !== 0) ||
-        (control.mode === "memory" &&
-          (result.code !== null || result.signal !== "SIGKILL"))
+        !containedCgroupHelperResultAccepted(
+          control.mode,
+          result,
+          outputInvalid,
+        )
       ) {
         throw new Error("contained cgroup observer helper result is invalid");
       }

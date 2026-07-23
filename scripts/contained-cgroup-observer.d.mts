@@ -50,6 +50,15 @@ export function selectContainedCgroupMembership(
   >,
 ): Record<string, unknown>;
 export function validateContainedCgroupControlHelper(path: string): string;
+export function containedCgroupHelperResultAccepted(
+  mode: "cpu" | "memory" | "processes",
+  result: {
+    code: number | null;
+    signal: string | null;
+    error?: unknown;
+  },
+  outputInvalid: boolean,
+): boolean;
 
 export function observeContainedCgroup(
   manifest: ContainedCgroupObserverManifest,
