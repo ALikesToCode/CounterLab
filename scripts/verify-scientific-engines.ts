@@ -63,10 +63,22 @@ async function filesNamed(
 ): Promise<string[]> {
   const output: string[] = [];
   const ignored = new Set([
+    ".agents",
+    ".cache",
+    ".code-review-graph",
+    ".codex",
+    ".counterlab",
     ".git",
+    ".home",
+    ".local",
     ".mypy_cache",
+    ".playwright-cli",
+    ".pnpm-store",
     ".pytest_cache",
+    ".rt",
+    ".tmp",
     ".venv",
+    ".wrangler",
     "data",
     "dist",
     "node_modules",

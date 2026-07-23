@@ -139,6 +139,33 @@ describe("scientific engine release verifier edge cases", () => {
     );
   });
 
+  it("ignores repository-local runtime state when checking pinned sources", async () => {
+    const root = await createTemporaryRoot();
+    for (const runtimeDirectory of [
+      ".cache",
+      ".counterlab",
+      ".playwright-cli",
+      ".pnpm-store",
+      ".rt",
+      ".wrangler",
+    ]) {
+      const directory = join(root, runtimeDirectory, "session");
+      await mkdir(directory, { recursive: true });
+      await writeFile(
+        join(directory, "Dockerfile"),
+        "FROM python:latest\n",
+        "utf8",
+      );
+      await writeFile(
+        join(directory, "package.json"),
+        JSON.stringify({ dependencies: { example: "latest" } }),
+        "utf8",
+      );
+    }
+
+    await expect(verifyPinnedSources(root)).resolves.toEqual([]);
+  });
+
   it("rejects an SBOM component whose package version differs from the registry", async () => {
     const snapshot = await loadScientificEngineSnapshot(repositoryRoot);
     const tampered = structuredClone(snapshot);
