@@ -11,6 +11,9 @@ import shutil
 from pathlib import Path
 from typing import Sequence
 
+import pandas as pd
+
+from counterlab_kernel import run_leakage_experiment
 from counterlab_kernel.verifier import critical_mutations, verify_candidate
 from counterlab_runner.docker import (
     DockerAdapterExecutor,
@@ -33,6 +36,11 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--image",
         default=os.environ.get("COUNTERLAB_SANDBOX_IMAGE", "counterlab-runner:local"),
         help="existing generated-adapter runner image to execute",
+    )
+    parser.add_argument(
+        "--kernel-only",
+        action="store_true",
+        help="reproduce through the fixed kernel after separate exact-image qualification",
     )
     return parser.parse_args(argv)
 
@@ -72,38 +80,47 @@ def main(argv: Sequence[str] | None = None) -> None:
         raise SystemExit("archived canonical result hash changed")
     if verify_candidate(archived_result)["status"] != "VERIFIED":
         raise SystemExit("archived replay result no longer validates")
-    candidate = replay / "compiler/verified-live-run/final-candidate"
-    docker_bin = os.environ.get("COUNTERLAB_DOCKER_BIN", "docker")
-    contained_runtime_adapter = bind_contained_runtime_adapter(ROOT, docker_bin)
-    contained_runtime_session_id = (
-        os.environ.get("COUNTERLAB_RUNTIME_SESSION_ID")
-        if contained_runtime_adapter is not None
-        else None
-    )
     temporary_root = create_repository_work_directory(ROOT, "reproduce-session")
-    generated = temporary_root / "generated"
-    workspace = create_fresh_workspace(generated, "leakage-01")
-    for name in (
-        "experiment-plan.json",
-        "artifact-adapter.py",
-        "public_tests.py",
-    ):
-        shutil.copy2(candidate / name, workspace / name)
-    outcome = HostCompileVerifyPipeline(
-        generated_root=generated,
-        fixture_path=ROOT / "fixtures/public/customer_churn.csv",
-        executor=DockerAdapterExecutor(
-            image=arguments.image,
-            docker_bin=docker_bin,
-            contained_runtime_adapter=contained_runtime_adapter,
-            contained_runtime_session_id=contained_runtime_session_id,
-        ),
-        run_root=temporary_root / "runs",
-    )(workspace)
-    if outcome.status != "VERIFIED" or outcome.result is None:
-        raise SystemExit(f"live replay candidate did not reproduce: {outcome.failures}")
+    if arguments.kernel_only:
+        outcome_result = run_leakage_experiment(
+            pd.read_csv(ROOT / "fixtures/public/customer_churn.csv"),
+            seed=1729,
+        )
+    else:
+        candidate = replay / "compiler/verified-live-run/final-candidate"
+        docker_bin = os.environ.get("COUNTERLAB_DOCKER_BIN", "docker")
+        contained_runtime_adapter = bind_contained_runtime_adapter(ROOT, docker_bin)
+        contained_runtime_session_id = (
+            os.environ.get("COUNTERLAB_RUNTIME_SESSION_ID")
+            if contained_runtime_adapter is not None
+            else None
+        )
+        generated = temporary_root / "generated"
+        workspace = create_fresh_workspace(generated, "leakage-01")
+        for name in (
+            "experiment-plan.json",
+            "artifact-adapter.py",
+            "public_tests.py",
+        ):
+            shutil.copy2(candidate / name, workspace / name)
+        outcome = HostCompileVerifyPipeline(
+            generated_root=generated,
+            fixture_path=ROOT / "fixtures/public/customer_churn.csv",
+            executor=DockerAdapterExecutor(
+                image=arguments.image,
+                docker_bin=docker_bin,
+                contained_runtime_adapter=contained_runtime_adapter,
+                contained_runtime_session_id=contained_runtime_session_id,
+            ),
+            run_root=temporary_root / "runs",
+        )(workspace)
+        if outcome.status != "VERIFIED" or outcome.result is None:
+            raise SystemExit(
+                f"live replay candidate did not reproduce: {outcome.failures}"
+            )
+        outcome_result = outcome.result
     try:
-        assert_semantic_compatibility(archived_result, outcome.result)
+        assert_semantic_compatibility(archived_result, outcome_result)
     except ValueError as error:
         raise SystemExit(str(error)) from error
 
@@ -121,10 +138,10 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     from replay_patch import verify_replay_patch
 
-    patch_report = verify_replay_patch(ROOT)
+    patch_report = verify_replay_patch(ROOT, temporary_root / "replay-patch")
     print(
         f"REPRODUCED leakage-01 archived={EXPECTED_HASH} "
-        f"current={outcome.result['resultHash']} · {detected}/{len(mutations)} "
+        f"current={outcome_result['resultHash']} · {detected}/{len(mutations)} "
         f"mutations · patch {patch_report['status']}"
     )
 

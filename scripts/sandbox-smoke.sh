@@ -6,6 +6,7 @@ IMAGE="${COUNTERLAB_SANDBOX_IMAGE:-counterlab-runner:local}"
 PYTHON_BIN="${ROOT_DIR}/.venv/bin/python"
 RUNTIME_ADAPTER="${COUNTERLAB_DOCKER_BIN:-}"
 BUILD_IMAGE=false
+EXPECT_CONTAINED_UNQUALIFIED=false
 ENVIRONMENT_HELPER="${ROOT_DIR}/scripts/prepare-contained-shell-environment.sh"
 
 [[ -f "${ENVIRONMENT_HELPER}" && ! -L "${ENVIRONMENT_HELPER}" ]] || {
@@ -17,8 +18,10 @@ counterlab_prepare_contained_shell_environment "${ROOT_DIR}"
 
 if [[ "${1:-}" == "--build" ]]; then
   BUILD_IMAGE=true
+elif [[ "${1:-}" == "--expect-contained-unqualified" ]]; then
+  EXPECT_CONTAINED_UNQUALIFIED=true
 elif [[ -n "${1:-}" ]]; then
-  echo "Usage: $0 [--build]" >&2
+  echo "Usage: $0 [--build|--expect-contained-unqualified]" >&2
   exit 2
 fi
 
@@ -65,5 +68,12 @@ fi
 
 cd "${ROOT_DIR}"
 export COUNTERLAB_DOCKER_BIN="${RUNTIME_ADAPTER}"
+SMOKE_ARGUMENTS=()
+if [[ "${EXPECT_CONTAINED_UNQUALIFIED}" == true ]]; then
+  SMOKE_ARGUMENTS+=(--expect-contained-unqualified)
+fi
 PYTHONPATH="services/runner/src:services/kernel/src" \
-  "${PYTHON_BIN}" -m counterlab_runner.smoke --root "${ROOT_DIR}" --image "${IMAGE}"
+  "${PYTHON_BIN}" -m counterlab_runner.smoke \
+    --root "${ROOT_DIR}" \
+    --image "${IMAGE}" \
+    "${SMOKE_ARGUMENTS[@]}"

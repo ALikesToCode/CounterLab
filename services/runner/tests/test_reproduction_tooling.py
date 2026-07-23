@@ -39,6 +39,46 @@ def test_reproduction_selects_an_explicit_qualified_image() -> None:
     )
 
     assert arguments.image == "counterlab-runner:engine-registry-v5"
+    assert arguments.kernel_only is False
+
+
+def test_reproduction_can_use_the_fixed_kernel_after_image_qualification() -> None:
+    module = _script_module("reproduce-session")
+
+    arguments = module.parse_arguments(
+        ["--image", "counterlab-runner:engine-registry-v5", "--kernel-only"]
+    )
+
+    assert arguments.kernel_only is True
+
+
+def test_smoke_accepts_only_the_exact_contained_unqualified_result() -> None:
+    from counterlab_runner.smoke import is_expected_contained_unqualified
+
+    report = {
+        "status": "REJECTED",
+        "resultHash": None,
+        "failures": [
+            {
+                "invariant": "runner_enforcement",
+                "observed": {
+                    "publicMountsOnly": True,
+                    "limitsEnforced": False,
+                    "aggregateLimitsEnforced": False,
+                },
+                "expected": {
+                    "publicMountsOnly": True,
+                    "limitsEnforced": True,
+                    "aggregateLimitsEnforced": True,
+                },
+                "counterexample": "Expected fail-closed containment result.",
+            }
+        ],
+    }
+
+    assert is_expected_contained_unqualified(report) is True
+    report["failures"][0]["observed"]["aggregateLimitsEnforced"] = True
+    assert is_expected_contained_unqualified(report) is False
 
 
 def test_reproduction_allows_provenance_only_kernel_upgrades() -> None:
@@ -78,6 +118,8 @@ def test_reproduction_wrapper_never_builds_implicitly() -> None:
     assert "COUNTERLAB_SANDBOX_IMAGE" in wrapper
     assert "sandbox-smoke.sh --build" not in wrapper
     assert '--image "${IMAGE}"' in wrapper
+    assert "--expect-contained-unqualified" in wrapper
+    assert "--kernel-only" in wrapper
 
 
 def test_release_check_keeps_engine_and_adapter_images_separate() -> None:
@@ -86,7 +128,8 @@ def test_release_check_keeps_engine_and_adapter_images_separate() -> None:
     assert "sandbox-smoke.sh --build" not in release_check
     assert (
         'COUNTERLAB_SANDBOX_IMAGE="${ADAPTER_IMAGE}" '
-        "bash scripts/sandbox-smoke.sh" in release_check
+        "\\\n  bash scripts/sandbox-smoke.sh --expect-contained-unqualified"
+        in release_check
     )
     assert (
         'COUNTERLAB_SANDBOX_IMAGE="${ADAPTER_IMAGE}" '

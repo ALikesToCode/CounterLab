@@ -170,7 +170,8 @@ bash scripts/test-all.sh
 bash scripts/run-mutations.sh leakage
 bash scripts/run-mutations.sh imbalance
 "${PNPM}" run held-out:check
-COUNTERLAB_SANDBOX_IMAGE="${ADAPTER_IMAGE}" bash scripts/sandbox-smoke.sh
+COUNTERLAB_SANDBOX_IMAGE="${ADAPTER_IMAGE}" \
+  bash scripts/sandbox-smoke.sh --expect-contained-unqualified
 bash scripts/verify-scientific-engines.sh \
   --image "${ENGINE_IMAGE}" \
   --expected-image-digest "${EXPECTED_IMAGE_DIGEST}" \

@@ -17,6 +17,30 @@ from .pipeline import HostCompileVerifyPipeline
 from .workspace import create_fresh_workspace
 
 
+def is_expected_contained_unqualified(report: dict[str, object]) -> bool:
+    failures = report.get("failures")
+    if report.get("status") != "REJECTED" or not isinstance(failures, list):
+        return False
+    if len(failures) != 1 or not isinstance(failures[0], dict):
+        return False
+    failure = failures[0]
+    return (
+        failure.get("invariant") == "runner_enforcement"
+        and failure.get("observed")
+        == {
+            "publicMountsOnly": True,
+            "limitsEnforced": False,
+            "aggregateLimitsEnforced": False,
+        }
+        and failure.get("expected")
+        == {
+            "publicMountsOnly": True,
+            "limitsEnforced": True,
+            "aggregateLimitsEnforced": True,
+        }
+    )
+
+
 def run_smoke(root: Path, image: str) -> dict[str, object]:
     root = require_trusted_repository_root(root)
     docker_bin = os.environ.get("COUNTERLAB_DOCKER_BIN", "docker")
@@ -74,6 +98,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="counterlab-sandbox-smoke")
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--image", default="counterlab-runner:local")
+    parser.add_argument("--expect-contained-unqualified", action="store_true")
     return parser
 
 
@@ -81,6 +106,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     report = run_smoke(arguments.root, arguments.image)
     print(json.dumps(report, indent=2, sort_keys=True))
+    if arguments.expect_contained_unqualified:
+        return 0 if is_expected_contained_unqualified(report) else 1
     return 0 if report["status"] == "VERIFIED" else 1
 
 

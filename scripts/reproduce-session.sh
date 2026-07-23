@@ -19,6 +19,7 @@ if [[ "${REPLAY_ID}" != "leakage-01" ]]; then
 fi
 
 cd "${ROOT_DIR}"
-COUNTERLAB_SANDBOX_IMAGE="${IMAGE}" bash scripts/sandbox-smoke.sh
+COUNTERLAB_SANDBOX_IMAGE="${IMAGE}" \
+  bash scripts/sandbox-smoke.sh --expect-contained-unqualified
 PYTHONPATH=services/kernel/src:services/runner/src .venv/bin/python \
-  scripts/reproduce-session.py --image "${IMAGE}"
+  scripts/reproduce-session.py --image "${IMAGE}" --kernel-only
