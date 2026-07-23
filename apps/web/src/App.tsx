@@ -3596,14 +3596,18 @@ function LeakageRealityScreen({
                       Download verified notebook copy <Mark name="arrow" />
                     </button>
                   )}
-                <button
-                  className="button button-quiet"
-                  type="button"
-                  disabled={proofBundle === null}
-                  onClick={exportProof}
-                >
-                  {proofBundle === null ? "Preparing proof" : "Download proof"}
-                </button>
+                {session?.mode.kind === "live_notebook" && (
+                  <button
+                    className="button button-quiet"
+                    type="button"
+                    disabled={proofBundle === null}
+                    onClick={exportProof}
+                  >
+                    {proofBundle === null
+                      ? "Preparing proof"
+                      : "Download proof"}
+                  </button>
+                )}
               </div>
             </div>
             <div className="diff-table" role="table" aria-label="Lesson recap">

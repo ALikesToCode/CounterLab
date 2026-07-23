@@ -1854,6 +1854,9 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
       .getByRole("status", { name: /Transfer status/i })
       .getByText(/Fixed transfer task passed/i),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Preparing proof/i }),
+  ).toHaveCount(0);
 
   await page
     .getByRole("button", { name: /Inspect fixed sample evidence/i })
