@@ -113,7 +113,7 @@ def _resource_evidence(*, network_denied: bool = True) -> dict[str, object]:
             },
             "maxProcesses": {
                 "enforced": True,
-                "scope": "container-cgroup-and-process-count-rlimit",
+                "scope": "container-cgroup-pids-max",
             },
             "maxFiles": {
                 "enforced": True,

@@ -1199,7 +1199,7 @@ async function main() {
       baseReceiptPayloadSha256 !== manifest.baseReceiptPayloadSha256 ||
       sha256CgroupBytes(canonicalCgroupJson(baseReceiptPayload)) !==
         baseReceiptPayloadSha256 ||
-      baseReceipt?.schemaVersion !== "4" ||
+      baseReceipt?.schemaVersion !== "5" ||
       baseReceipt?.status !== "VALIDATED" ||
       baseReceipt?.limitMode !==
         "process-address-space-rlimit-with-unenforced-cgroup-intent" ||

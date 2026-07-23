@@ -58,7 +58,7 @@ function hashed<T extends Record<string, unknown>>(payload: T) {
 
 function baseReceipt() {
   return hashed({
-    schemaVersion: "4",
+    schemaVersion: "5",
     status: "VALIDATED",
     limitMode: UNQUALIFIED_AGGREGATE_LIMIT_MODE,
     aggregateLimitIntentEnforced: false,

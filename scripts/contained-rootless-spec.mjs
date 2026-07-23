@@ -28,13 +28,11 @@ const supportedRlimits = new Set([
   "RLIMIT_CPU",
   "RLIMIT_FSIZE",
   "RLIMIT_NOFILE",
-  "RLIMIT_NPROC",
 ]);
 const nerdctlCreateRlimits = new Set([
   "RLIMIT_CPU",
   "RLIMIT_FSIZE",
   "RLIMIT_NOFILE",
-  "RLIMIT_NPROC",
 ]);
 const invocationIdPattern = /^[a-f0-9]{64}$/;
 const maskedPaths = new Set([
@@ -376,7 +374,7 @@ function assertEmptyCapabilities(processSpec) {
 }
 
 function assertExpectedRlimits(expectedRlimits) {
-  if (!Array.isArray(expectedRlimits) || expectedRlimits.length !== 5) {
+  if (!Array.isArray(expectedRlimits) || expectedRlimits.length !== 4) {
     throw new Error("contained rootless OCI resource intent is incomplete");
   }
   const observed = new Set();
@@ -428,7 +426,6 @@ function validateReceiptResourceBindings(receipt) {
   );
   if (
     byType.get("RLIMIT_AS") !== containedProcessAddressSpaceBytes ||
-    byType.get("RLIMIT_NPROC") !== aggregate.maxProcesses ||
     byType.get("RLIMIT_NOFILE") !== 64 ||
     (byType.get("RLIMIT_CPU") ?? 0) < 1 ||
     (byType.get("RLIMIT_CPU") ?? 0) > 300 ||
@@ -1618,11 +1615,11 @@ export function sanitizeContainedRootlessSpec({
     );
   }
   const finalContainerId = sha256(
-    `counterlab-rootless-v4\0${expected.invocationId}\0${containerId}\0${sanitizedSpecSha256}\0${expected.imageAuthority.commandSha256}\0${internalMountManifestSha256}\0${readOnlyMountManifestSha256}`,
+    `counterlab-rootless-v5\0${expected.invocationId}\0${containerId}\0${sanitizedSpecSha256}\0${expected.imageAuthority.commandSha256}\0${internalMountManifestSha256}\0${readOnlyMountManifestSha256}`,
   );
   const config = `${JSON.stringify(parsed, null, 2)}\n`;
   const receiptPayload = {
-    schemaVersion: "4",
+    schemaVersion: "5",
     status: "VALIDATED",
     limitMode: "process-address-space-rlimit-with-unenforced-cgroup-intent",
     aggregateLimitIntentEnforced: false,
@@ -1986,7 +1983,7 @@ function validateReadOnlyMountManifest(receipt) {
 
 function assertReceiptFinalIdentity(receipt) {
   if (
-    receipt?.schemaVersion !== "4" ||
+    receipt?.schemaVersion !== "5" ||
     !containerIdPattern.test(receipt?.stagingContainerId ?? "") ||
     !containerIdPattern.test(receipt?.finalContainerId ?? "") ||
     !/^[a-f0-9]{64}$/.test(receipt?.sanitizedSpecSha256 ?? "") ||
@@ -1995,7 +1992,7 @@ function assertReceiptFinalIdentity(receipt) {
     !/^[a-f0-9]{64}$/.test(receipt?.readOnlyMountManifestSha256 ?? "") ||
     receipt.finalContainerId !==
       sha256(
-        `counterlab-rootless-v4\0${receipt.invocationId}\0${receipt.stagingContainerId}\0${receipt.sanitizedSpecSha256}\0${receipt.commandSha256}\0${receipt.internalMountManifestSha256}\0${receipt.readOnlyMountManifestSha256}`,
+        `counterlab-rootless-v5\0${receipt.invocationId}\0${receipt.stagingContainerId}\0${receipt.sanitizedSpecSha256}\0${receipt.commandSha256}\0${receipt.internalMountManifestSha256}\0${receipt.readOnlyMountManifestSha256}`,
       )
   ) {
     throw new Error("contained rootless OCI final identity changed");
@@ -2298,7 +2295,7 @@ export function verifyPersistedContainedRootlessSpec({
   }
   const { receiptPayloadSha256, ...payload } = receipt;
   if (
-    receipt.schemaVersion !== "4" ||
+    receipt.schemaVersion !== "5" ||
     receipt.finalContainerId !== finalContainerId ||
     receipt.configFileSha256 !== configFileSha256 ||
     !/^[a-f0-9]{64}$/.test(receiptPayloadSha256 ?? "") ||

@@ -424,7 +424,6 @@ HOST_GID="$(id -g)"
   --ulimit=as=1073741824:1073741824 \
   --ulimit=fsize=1048576:1048576 \
   --ulimit=nofile=64:64 \
-  --ulimit=nproc=32:32 \
   --tmpfs="/counterlab-runtime:rw,noexec,nosuid,nodev,size=256m,uid=${HOST_UID},gid=${HOST_GID},mode=0700" \
   --env=TMPDIR=/counterlab-runtime \
   --mount "type=bind,src=${ROOT_DIR}/scripts/probe_cpython_htmlparser_reachability.py,dst=/repo/scripts/probe_cpython_htmlparser_reachability.py,readonly" \

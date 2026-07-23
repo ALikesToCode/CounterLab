@@ -252,10 +252,9 @@ function resourceIntent(args) {
     cpu: "RLIMIT_CPU",
     fsize: "RLIMIT_FSIZE",
     nofile: "RLIMIT_NOFILE",
-    nproc: "RLIMIT_NPROC",
   };
   const rlimits = rawRlimits.map((value) => {
-    const match = value.match(/^(as|cpu|fsize|nofile|nproc)=(\d+):(\d+)$/);
+    const match = value.match(/^(as|cpu|fsize|nofile)=(\d+):(\d+)$/);
     if (
       match === null ||
       match[2] !== match[3] ||
@@ -278,8 +277,8 @@ function resourceIntent(args) {
     !Number.isFinite(cpuCount) ||
     cpuCount < 0.25 ||
     cpuCount > 2 ||
-    rlimits.length !== 5 ||
-    new Set(rlimits.map((entry) => entry.type)).size !== 5
+    rlimits.length !== 4 ||
+    new Set(rlimits.map((entry) => entry.type)).size !== 4
   ) {
     throw new Error("contained runtime resource intent is invalid");
   }
@@ -292,8 +291,7 @@ function resourceIntent(args) {
     byType.get("RLIMIT_CPU") > 300 ||
     byType.get("RLIMIT_AS") !== CONTAINED_PROCESS_ADDRESS_SPACE_BYTES ||
     byType.get("RLIMIT_FSIZE") > 1_048_576 ||
-    byType.get("RLIMIT_NOFILE") !== 64 ||
-    byType.get("RLIMIT_NPROC") !== maxProcesses
+    byType.get("RLIMIT_NOFILE") !== 64
   ) {
     throw new Error("contained runtime rlimit intent is inconsistent");
   }

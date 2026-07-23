@@ -229,7 +229,7 @@ function validateBaseReceipt(input, observerBindings) {
     sha256CgroupBytes(source) !== input.baseReceiptFileSha256 ||
     receiptPayloadSha256 !== input.baseReceiptPayloadSha256 ||
     sha256CgroupBytes(canonicalCgroupJson(payload)) !== receiptPayloadSha256 ||
-    receipt.schemaVersion !== "4" ||
+    receipt.schemaVersion !== "5" ||
     receipt.status !== "VALIDATED" ||
     receipt.limitMode !== UNQUALIFIED_AGGREGATE_LIMIT_MODE ||
     receipt.aggregateLimitIntentEnforced !== false ||

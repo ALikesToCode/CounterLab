@@ -418,7 +418,7 @@ def validate_rootless_receipt(
         intended=value.get("intendedAggregateLimits"),
     )
     if (
-        value.get("schemaVersion") != "4"
+        value.get("schemaVersion") != "5"
         or value.get("status") != "VALIDATED"
         or value.get("limitMode") != _QUALIFIED_AGGREGATE_LIMIT_MODE
         or value.get("aggregateLimitIntentEnforced") is not True
@@ -480,7 +480,6 @@ def _validate_enforced_rlimits(value: object, intended: object) -> bool:
         "RLIMIT_CPU",
         "RLIMIT_FSIZE",
         "RLIMIT_NOFILE",
-        "RLIMIT_NPROC",
     }
     if (
         not isinstance(intended, dict)
@@ -516,7 +515,6 @@ def _validate_enforced_rlimits(value: object, intended: object) -> bool:
     return (
         observed == required
         and by_type["RLIMIT_AS"] == CONTAINED_PROCESS_ADDRESS_SPACE_BYTES
-        and by_type["RLIMIT_NPROC"] == intended["maxProcesses"]
         and by_type["RLIMIT_NOFILE"] == 64
         and 1 <= by_type["RLIMIT_CPU"] <= 300
         and 1 <= by_type["RLIMIT_FSIZE"] <= 1_048_576

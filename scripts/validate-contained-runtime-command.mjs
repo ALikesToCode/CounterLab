@@ -154,10 +154,10 @@ function sameValues(actual, expected) {
 }
 
 function rlimitMap(values) {
-  if (values.length !== 5) fail("exactly five process rlimits are required");
+  if (values.length !== 4) fail("exactly four process rlimits are required");
   const parsed = new Map();
   for (const value of values) {
-    const match = value.match(/^(as|cpu|fsize|nofile|nproc)=(\d+):(\d+)$/);
+    const match = value.match(/^(as|cpu|fsize|nofile)=(\d+):(\d+)$/);
     if (
       match === null ||
       match[2] !== match[3] ||
@@ -168,7 +168,7 @@ function rlimitMap(values) {
     }
     parsed.set(match[1], Number(match[2]));
   }
-  if (parsed.size !== 5) fail("process rlimit set is incomplete");
+  if (parsed.size !== 4) fail("process rlimit set is incomplete");
   return parsed;
 }
 
@@ -315,7 +315,7 @@ function validateRun(runArgs) {
       "--memory": 1,
       "--memory-swap": 1,
       "--cpus": 1,
-      "--ulimit": 5,
+      "--ulimit": 4,
       "--tmpfs": 1,
       "--env": 4,
     });
@@ -339,7 +339,6 @@ function validateRun(runArgs) {
         "as=2147483648:2147483648",
         "fsize=1048576:1048576",
         "nofile=64:64",
-        "nproc=32:32",
       ]) ||
       !sameValues(flags, [
         "--rm",
@@ -362,7 +361,7 @@ function validateRun(runArgs) {
       "--memory": 1,
       "--memory-swap": 1,
       "--cpus": 1,
-      "--ulimit": 5,
+      "--ulimit": 4,
       "--tmpfs": 1,
       "--env": 1,
       "--mount": 3,
@@ -398,7 +397,6 @@ function validateRun(runArgs) {
         "as=2147483648:2147483648",
         "fsize=1048576:1048576",
         "nofile=64:64",
-        "nproc=32:32",
       ]) ||
       options.get("--tmpfs")?.[0] !==
         `/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=${uid},gid=${gid},mode=0700` ||
@@ -450,7 +448,7 @@ function validateRun(runArgs) {
       "--memory": 1,
       "--memory-swap": 1,
       "--cpus": 1,
-      "--ulimit": 5,
+      "--ulimit": 4,
       "--tmpfs": 1,
       "--env": 1,
       "--mount": 4,
@@ -492,7 +490,6 @@ function validateRun(runArgs) {
         "as=2147483648:2147483648",
         "fsize=1048576:1048576",
         "nofile=64:64",
-        "nproc=32:32",
       ]) ||
       options.get("--tmpfs")?.[0] !==
         `/counterlab-runtime:rw,noexec,nosuid,nodev,size=256m,uid=${uid},gid=${gid},mode=0700` ||
@@ -547,7 +544,7 @@ function validateRun(runArgs) {
       "--memory": 1,
       "--memory-swap": 1,
       "--cpus": 1,
-      "--ulimit": 5,
+      "--ulimit": 4,
       "--tmpfs": 1,
       "--mount": 3,
       "--env": 1,
@@ -555,7 +552,7 @@ function validateRun(runArgs) {
     });
     const memory = options.get("--memory")?.[0];
     const memorySwap = options.get("--memory-swap")?.[0];
-    const processLimit = boundedNumber(
+    boundedNumber(
       options.get("--pids-limit")?.[0],
       /^\d{1,2}$/,
       1,
@@ -596,7 +593,6 @@ function validateRun(runArgs) {
       (ulimits.get("fsize") ?? 0) < 1 ||
       (ulimits.get("fsize") ?? 0) > 1_048_576 ||
       ulimits.get("nofile") !== 64 ||
-      ulimits.get("nproc") !== processLimit ||
       options.get("--tmpfs")?.[0] !==
         "/tmp:rw,noexec,nosuid,nodev,size=16m,uid=65532,gid=65532,mode=0700" ||
       !sameValues(environment, ["PYTHONHASHSEED=0"]) ||

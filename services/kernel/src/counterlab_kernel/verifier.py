@@ -30,7 +30,7 @@ _LIMIT_SCOPES = {
         "scopes": {
             "wallSeconds": "request-deadline-and-process-cpu-rlimit",
             "memoryMb": "container-cgroup-and-process-address-space-rlimit",
-            "maxProcesses": "container-cgroup-and-process-count-rlimit",
+            "maxProcesses": "container-cgroup-pids-max",
             "maxFiles": "host-output-postcondition",
             "maxOutputBytes": "process-file-rlimit-and-host-output-postcondition",
         },
@@ -40,7 +40,7 @@ _LIMIT_SCOPES = {
         "scopes": {
             "wallSeconds": "request-deadline-and-process-cpu-rlimit",
             "memoryMb": "per-process-data-segment-rlimit",
-            "maxProcesses": "real-user-process-count-rlimit",
+            "maxProcesses": "container-cgroup-pids-intent-unverified",
             "maxFiles": "host-output-postcondition",
             "maxOutputBytes": "process-file-rlimit-and-host-output-postcondition",
         },
@@ -50,7 +50,7 @@ _LIMIT_SCOPES = {
         "scopes": {
             "wallSeconds": "request-deadline-and-process-cpu-rlimit",
             "memoryMb": "per-process-address-space-rlimit",
-            "maxProcesses": "real-user-process-count-rlimit",
+            "maxProcesses": "container-cgroup-pids-intent-unverified",
             "maxFiles": "host-output-postcondition",
             "maxOutputBytes": "process-file-rlimit-and-host-output-postcondition",
         },
@@ -391,7 +391,10 @@ def _verify_optional_evidence(
                     name
                     for name, scope in expected_scopes.items()
                     if _mapping(authority.get(name))
-                    != {"enforced": True, "scope": scope}
+                    != {
+                        "enforced": policy["aggregate"] or name != "maxProcesses",
+                        "scope": scope,
+                    }
                 )
                 intended_values = [
                     intended.get("cpuCount"),
@@ -445,7 +448,7 @@ def _verify_optional_evidence(
                 "process-address-space-rlimit-with-unenforced-cgroup-intent",
             }:
                 limitations.append(
-                    "Aggregate cgroup intent was not enforced; memory and process controls are explicitly scoped to process or real-user rlimits."
+                    "Aggregate cgroup intent was not verified; the process-count limit remains unverified until cgroup evidence passes."
                 )
 
     isolation = _mapping(candidate.get("isolation"))

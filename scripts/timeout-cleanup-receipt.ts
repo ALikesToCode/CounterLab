@@ -175,7 +175,6 @@ export const TIMEOUT_ROOTLESS_RLIMIT_TYPES = [
   "RLIMIT_CPU",
   "RLIMIT_FSIZE",
   "RLIMIT_NOFILE",
-  "RLIMIT_NPROC",
 ] as const;
 
 export const TIMEOUT_PROCESS_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024;
@@ -199,16 +198,15 @@ export function assertRootlessRlimitBindings(input: {
   );
   const limits = z
     .array(RlimitSchema)
-    .length(5)
+    .length(4)
     .refine(
-      (entries) => new Set(entries.map((entry) => entry.type)).size === 5,
+      (entries) => new Set(entries.map((entry) => entry.type)).size === 4,
       { message: "all qualified process rlimits must be present once" },
     )
     .parse(input.enforcedRlimits);
   const byType = new Map(limits.map((limit) => [limit.type, limit.soft]));
   if (
     byType.get("RLIMIT_AS") !== TIMEOUT_PROCESS_ADDRESS_SPACE_BYTES ||
-    byType.get("RLIMIT_NPROC") !== intent.maxProcesses ||
     byType.get("RLIMIT_NOFILE") !== 64 ||
     (byType.get("RLIMIT_CPU") ?? 0) < 1 ||
     (byType.get("RLIMIT_CPU") ?? 0) > 300 ||
@@ -221,7 +219,7 @@ export function assertRootlessRlimitBindings(input: {
 
 const TimeoutRootlessReceiptSchema = z
   .strictObject({
-    schemaVersion: z.literal("4"),
+    schemaVersion: z.literal("5"),
     status: z.literal("VALIDATED"),
     limitMode: z.string().min(1),
     aggregateLimitIntentEnforced: z.boolean(),
@@ -256,9 +254,9 @@ const TimeoutRootlessReceiptSchema = z
     intendedAggregateLimits: AggregateLimitIntentSchema,
     enforcedRlimits: z
       .array(RlimitSchema)
-      .length(5)
+      .length(4)
       .refine(
-        (limits) => new Set(limits.map((limit) => limit.type)).size === 5,
+        (limits) => new Set(limits.map((limit) => limit.type)).size === 4,
         { message: "all qualified process rlimits must be present once" },
       ),
     aggregateLimitEvidence: AggregateLimitEvidenceSchema.nullable(),

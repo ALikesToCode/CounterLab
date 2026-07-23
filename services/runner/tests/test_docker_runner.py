@@ -120,10 +120,7 @@ def test_docker_command_applies_fixed_isolation_and_only_public_mounts(
         in command
     )
     assert "--ulimit=nofile=64:64" in command
-    assert (
-        f"--ulimit=nproc={limits.max_processes}:{limits.max_processes}"
-        in command
-    )
+    assert not any(argument.startswith("--ulimit=nproc=") for argument in command)
     assert f"src={workspace.resolve()},dst=/workspace,readonly" in joined
     assert f"src={fixture.resolve()},dst=/fixtures/customer_churn.csv,readonly" in joined
     assert f"src={output.resolve()},dst=/output" in joined
@@ -473,8 +470,14 @@ def test_executor_loads_only_bounded_fixed_outputs_and_records_enforcement(
         "/fixtures/customer_churn.csv",
         "/output",
     ]
-    assert all(record.evidence["limits"].values())
     if contained:
+        assert record.evidence["limits"] == {
+            "wallSeconds": True,
+            "memoryMb": True,
+            "maxProcesses": False,
+            "maxFiles": True,
+            "maxOutputBytes": True,
+        }
         assert record.evidence["limitMode"] == (
             "process-address-space-rlimit-with-unenforced-cgroup-intent"
         )
@@ -482,12 +485,17 @@ def test_executor_loads_only_bounded_fixed_outputs_and_records_enforcement(
         assert record.evidence["limitAuthority"]["memoryMb"]["scope"] == (
             "per-process-address-space-rlimit"
         )
+        assert record.evidence["limitAuthority"]["maxProcesses"] == {
+            "enforced": False,
+            "scope": "container-cgroup-pids-intent-unverified",
+        }
         assert record.evidence["timeoutAuthority"] == {
             "candidateWallSeconds": 20,
             "controlBudgetSeconds": CONTAINED_RUNTIME_CONTROL_BUDGET_SECONDS,
             "callerGraceSeconds": CONTAINED_RUNTIME_CALLER_GRACE_SECONDS,
         }
     else:
+        assert all(record.evidence["limits"].values())
         assert record.evidence["limitMode"] == (
             "container-cgroup-and-process-rlimit"
         )

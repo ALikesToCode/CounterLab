@@ -109,7 +109,6 @@ function startupCommand(): string[] {
     "--ulimit=as=2147483648:2147483648",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
-    "--ulimit=nproc=32:32",
     "--tmpfs",
     "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700",
     "-e",
@@ -147,7 +146,6 @@ function scientificRuntimeCommand(): string[] {
     "--ulimit=as=2147483648:2147483648",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
-    "--ulimit=nproc=32:32",
     "--tmpfs",
     "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=1000,gid=1000,mode=0700",
     "-e",
@@ -193,7 +191,6 @@ function reachabilityCommand(): string[] {
     "--ulimit=as=2147483648:2147483648",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
-    "--ulimit=nproc=32:32",
     "--tmpfs=/counterlab-runtime:rw,noexec,nosuid,nodev,size=256m,uid=1000,gid=1000,mode=0700",
     "--env=TMPDIR=/counterlab-runtime",
     "--mount",
@@ -241,7 +238,6 @@ function boundedAdapterCommand(): string[] {
     "--ulimit=as=2147483648:2147483648",
     "--ulimit=fsize=262144:262144",
     "--ulimit=nofile=64:64",
-    "--ulimit=nproc=16:16",
     "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=16m,uid=65532,gid=65532,mode=0700",
     "--mount",
     `type=bind,src=${workspace},dst=/workspace,readonly`,
@@ -1614,7 +1610,7 @@ describe("contained runtime command policy", () => {
     expect(plan.create.args).not.toContain("--ulimit=as=2147483648:2147483648");
     expect(
       plan.create.args.filter((argument) => argument.startsWith("--ulimit=")),
-    ).toHaveLength(4);
+    ).toHaveLength(3);
     const createIndex = plan.create.args.indexOf("create");
     const invocationLabelIndex = plan.create.args.indexOf("--label");
     expect(
@@ -1672,7 +1668,7 @@ describe("contained runtime command policy", () => {
     });
     expect(plan.cleanupStaging.args.slice(-2)).toEqual(["rm", "--force"]);
     expect(plan.cleanupImageAlias.args.slice(-2)).toEqual(["images", "remove"]);
-    expect(plan.expected.rlimits).toHaveLength(5);
+    expect(plan.expected.rlimits).toHaveLength(4);
     const fullCommandAuthority = imageFixture(startupCommand()).authority;
     const fullCommandSha256 = createHash("sha256")
       .update(canonicalJson(startupCommand()))
@@ -1710,7 +1706,7 @@ describe("contained runtime command policy", () => {
     expect(splitUlimitPlan.create.args).not.toContain(
       "as=2147483648:2147483648",
     );
-    expect(splitUlimitPlan.expected.rlimits).toHaveLength(5);
+    expect(splitUlimitPlan.expected.rlimits).toHaveLength(4);
     const invalidAddressSpaceCommands = [
       startupCommand().filter(
         (argument) => argument !== "--ulimit=as=2147483648:2147483648",
@@ -2370,7 +2366,7 @@ describe("contained runtime command policy", () => {
       secondPrepared.finalContainerId,
     );
     expect(secondPrepared.receipt).toMatchObject({
-      schemaVersion: "4",
+      schemaVersion: "5",
       readOnlyMountManifest: second.readOnlyMountManifest,
       readOnlyMountManifestSha256: second.readOnlyMountManifestSha256,
       imageAuthority: {
@@ -3018,7 +3014,7 @@ describe("contained runtime command policy", () => {
       .digest("hex");
     changedReceipt.finalContainerId = createHash("sha256")
       .update(
-        `counterlab-rootless-v4\0${changedReceipt.invocationId}\0${changedReceipt.stagingContainerId}\0${changedReceipt.sanitizedSpecSha256}\0${changedReceipt.commandSha256}\0${changedReceipt.internalMountManifestSha256}\0${changedReceipt.readOnlyMountManifestSha256}`,
+        `counterlab-rootless-v5\0${changedReceipt.invocationId}\0${changedReceipt.stagingContainerId}\0${changedReceipt.sanitizedSpecSha256}\0${changedReceipt.commandSha256}\0${changedReceipt.internalMountManifestSha256}\0${changedReceipt.readOnlyMountManifestSha256}`,
       )
       .digest("hex");
     const { receiptPayloadSha256: _receiptHash, ...changedReceiptPayload } =
@@ -3172,7 +3168,6 @@ describe("contained runtime command policy", () => {
                 { type: "RLIMIT_AS", soft: 2147483648, hard: 2147483648 },
                 { type: "RLIMIT_FSIZE", soft: 1048576, hard: 1048576 },
                 { type: "RLIMIT_NOFILE", soft: 64, hard: 64 },
-                { type: "RLIMIT_NPROC", soft: 32, hard: 32 },
               ],
               sessionRoot,
             },
@@ -3702,6 +3697,14 @@ describe("contained runtime command policy", () => {
     const result = validate(...boundedAdapterCommand(), "sh", "-c", "id");
     expect(result.status).not.toBe(0);
     expect(result.stderr).toMatch(/profile is incomplete/u);
+  });
+
+  it("rejects a host-user process rlimit in the bounded adapter profile", () => {
+    const command = boundedAdapterCommand();
+    command.splice(command.length - 1, 0, "--ulimit=nproc=16:16");
+    const result = validate(...command);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/option shape is not approved/u);
   });
 
   it("rejects extra environment in the startup profile", () => {

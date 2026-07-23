@@ -137,7 +137,7 @@ def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str,
         "receiptPayloadSha256": _hash(aggregate_payload),
     }
     payload: dict[str, object] = {
-        "schemaVersion": "4",
+        "schemaVersion": "5",
         "status": "VALIDATED",
         "limitMode": "container-cgroup-and-process-rlimit",
         "aggregateLimitIntentEnforced": True,
@@ -179,11 +179,6 @@ def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str,
             {"type": "RLIMIT_CPU", "soft": 20, "hard": 20},
             {"type": "RLIMIT_FSIZE", "soft": 262_144, "hard": 262_144},
             {"type": "RLIMIT_NOFILE", "soft": 64, "hard": 64},
-            {
-                "type": "RLIMIT_NPROC",
-                "soft": intended_limits["maxProcesses"],
-                "hard": intended_limits["maxProcesses"],
-            },
         ],
         "aggregateLimitEvidence": aggregate_evidence,
     }
@@ -282,11 +277,6 @@ def test_rootless_rlimit_validator_matches_the_runtime_contract() -> None:
         {"type": "RLIMIT_CPU", "soft": 20, "hard": 20},
         {"type": "RLIMIT_FSIZE", "soft": 262_144, "hard": 262_144},
         {"type": "RLIMIT_NOFILE", "soft": 64, "hard": 64},
-        {
-            "type": "RLIMIT_NPROC",
-            "soft": intended["maxProcesses"],
-            "hard": intended["maxProcesses"],
-        },
     ]
 
     assert timeout_proof_module._validate_enforced_rlimits(runtime_limits, intended)
@@ -299,7 +289,7 @@ def test_rootless_rlimit_validator_matches_the_runtime_contract() -> None:
         ],
         intended,
     )
-    for limit_type in ("RLIMIT_AS", "RLIMIT_NPROC"):
+    for limit_type in ("RLIMIT_AS",):
         changed = json.loads(json.dumps(runtime_limits))
         entry = next(item for item in changed if item["type"] == limit_type)
         entry["soft"] -= 1
@@ -364,7 +354,7 @@ def test_rootless_receipt_binds_control_and_exact_adapter_authority() -> None:
         )
         == direct
     )
-    for limit_type in ("RLIMIT_AS", "RLIMIT_NPROC"):
+    for limit_type in ("RLIMIT_AS",):
         changed_control = _control()
         changed = _rootless(changed_control, build)
         limit = next(

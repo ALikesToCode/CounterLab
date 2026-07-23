@@ -72,7 +72,7 @@ export function createQualifiedContainedRootlessReceipt({
   exactKeys(observerBindings, observerBindingKeys, "observer binding");
   const { receiptPayloadSha256, ...basePayload } = baseReceipt;
   if (
-    baseReceipt.schemaVersion !== "4" ||
+    baseReceipt.schemaVersion !== "5" ||
     baseReceipt.status !== "VALIDATED" ||
     baseReceipt.limitMode !== UNQUALIFIED_AGGREGATE_LIMIT_MODE ||
     baseReceipt.aggregateLimitIntentEnforced !== false ||

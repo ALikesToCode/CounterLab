@@ -218,7 +218,6 @@ STARTUP_PROBE_OUTPUT="$("${DOCKER_COMMAND[@]}" run --rm --name "${STARTUP_CONTAI
   --ulimit=as=1073741824:1073741824 \
   --ulimit=fsize=1048576:1048576 \
   --ulimit=nofile=64:64 \
-  --ulimit=nproc=32:32 \
   --tmpfs /counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700 \
   -e TMPDIR=/counterlab-runtime \
   -e COUNTERLAB_RUNNER_STARTUP_PROBE=1 \
@@ -271,7 +270,6 @@ RUNTIME_VERIFICATION_OUTPUT="$("${DOCKER_COMMAND[@]}" run --rm --name "${RUNTIME
   --ulimit=as=1073741824:1073741824 \
   --ulimit=fsize=1048576:1048576 \
   --ulimit=nofile=64:64 \
-  --ulimit=nproc=32:32 \
   --tmpfs "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=${HOST_UID},gid=${HOST_GID},mode=0700" \
   -e TMPDIR=/counterlab-runtime \
   --mount "type=bind,src=${ROOT_DIR}/scripts/verify_scientific_runtime.py,dst=/repo/scripts/verify_scientific_runtime.py,readonly" \

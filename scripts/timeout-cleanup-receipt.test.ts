@@ -102,18 +102,18 @@ function aggregateInput() {
 }
 
 describe("timeout cleanup aggregate resource authority", () => {
-  it("matches the five rlimits emitted by the contained runtime", () => {
+  it("matches the four container-scoped rlimits emitted by the contained runtime", () => {
     expect(TIMEOUT_ROOTLESS_RLIMIT_TYPES).toEqual([
       "RLIMIT_AS",
       "RLIMIT_CPU",
       "RLIMIT_FSIZE",
       "RLIMIT_NOFILE",
-      "RLIMIT_NPROC",
     ]);
+    expect(TIMEOUT_ROOTLESS_RLIMIT_TYPES).not.toContain("RLIMIT_NPROC");
     expect(TIMEOUT_ROOTLESS_RLIMIT_TYPES).not.toContain("RLIMIT_CORE");
   });
 
-  it("cross-binds process limits to aggregate memory and process intent", () => {
+  it("cross-binds process rlimits to aggregate memory intent", () => {
     const enforcedRlimits = [
       {
         type: "RLIMIT_AS" as const,
@@ -123,11 +123,6 @@ describe("timeout cleanup aggregate resource authority", () => {
       { type: "RLIMIT_CPU" as const, soft: 20, hard: 20 },
       { type: "RLIMIT_FSIZE" as const, soft: 262_144, hard: 262_144 },
       { type: "RLIMIT_NOFILE" as const, soft: 64, hard: 64 },
-      {
-        type: "RLIMIT_NPROC" as const,
-        soft: intendedAggregateLimits.maxProcesses,
-        hard: intendedAggregateLimits.maxProcesses,
-      },
     ];
     expect(() =>
       assertRootlessRlimitBindings({
@@ -139,12 +134,6 @@ describe("timeout cleanup aggregate resource authority", () => {
     for (const mutate of [
       (limits: typeof enforcedRlimits) => {
         const limit = limits.find((entry) => entry.type === "RLIMIT_AS");
-        if (limit === undefined) throw new Error("missing test rlimit");
-        limit.soft -= 1;
-        limit.hard -= 1;
-      },
-      (limits: typeof enforcedRlimits) => {
-        const limit = limits.find((entry) => entry.type === "RLIMIT_NPROC");
         if (limit === undefined) throw new Error("missing test rlimit");
         limit.soft -= 1;
         limit.hard -= 1;

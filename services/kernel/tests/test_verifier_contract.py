@@ -90,14 +90,14 @@ def test_complete_reference_contract_is_verified() -> None:
     assert report["verifiedInvariants"]
 
 
-def test_scoped_rootless_limits_are_not_reported_as_aggregate_enforcement() -> None:
+def test_unobserved_rootless_process_intent_is_not_verified() -> None:
     candidate = reference_candidate()
     candidate["resourceEnforcement"] = {
         "networkDenied": True,
         "limits": {
             "wallSeconds": True,
             "memoryMb": True,
-            "maxProcesses": True,
+            "maxProcesses": False,
             "maxFiles": True,
             "maxOutputBytes": True,
         },
@@ -118,8 +118,8 @@ def test_scoped_rootless_limits_are_not_reported_as_aggregate_enforcement() -> N
                 "scope": "per-process-address-space-rlimit",
             },
             "maxProcesses": {
-                "enforced": True,
-                "scope": "real-user-process-count-rlimit",
+                "enforced": False,
+                "scope": "container-cgroup-pids-intent-unverified",
             },
             "maxFiles": {
                 "enforced": True,
@@ -134,10 +134,13 @@ def test_scoped_rootless_limits_are_not_reported_as_aggregate_enforcement() -> N
 
     report = verify_candidate(candidate)
 
-    assert report["status"] == "VERIFIED"
-    assert "scoped_resource_limits_enforced" in report["verifiedInvariants"]
+    assert report["status"] == "REJECTED"
+    assert "scoped_resource_limits_enforced" not in report["verifiedInvariants"]
     assert "resource_limits_enforced" not in report["verifiedInvariants"]
-    assert any("Aggregate cgroup intent was not enforced" in item for item in report["limitations"])
+    assert any(
+        failure["invariant"] == "resource_limits_enforced"
+        for failure in report["failures"]
+    )
 
 
 def test_legacy_resource_evidence_remains_scoped_without_limit_mode() -> None:

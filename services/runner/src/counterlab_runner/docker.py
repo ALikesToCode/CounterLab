@@ -426,7 +426,6 @@ def build_docker_command(
         f"--ulimit=as={address_space_bytes}:{address_space_bytes}",
         f"--ulimit=fsize={limits.max_output_bytes}:{limits.max_output_bytes}",
         "--ulimit=nofile=64:64",
-        f"--ulimit=nproc={limits.max_processes}:{limits.max_processes}",
         "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=16m,uid=65532,gid=65532,mode=0700",
         "--mount",
         _mount(workspace, "/workspace", readonly=True),
@@ -808,7 +807,7 @@ class DockerAdapterExecutor:
         evidence["limits"] = {
             "wallSeconds": True,
             "memoryMb": True,
-            "maxProcesses": True,
+            "maxProcesses": not self.runtime_owns_cleanup,
             "maxFiles": True,
             "maxOutputBytes": True,
         }
@@ -834,8 +833,8 @@ class DockerAdapterExecutor:
                     "scope": "per-process-address-space-rlimit",
                 },
                 "maxProcesses": {
-                    "enforced": True,
-                    "scope": "real-user-process-count-rlimit",
+                    "enforced": False,
+                    "scope": "container-cgroup-pids-intent-unverified",
                 },
                 "maxFiles": {
                     "enforced": True,
@@ -863,7 +862,7 @@ class DockerAdapterExecutor:
                 },
                 "maxProcesses": {
                     "enforced": True,
-                    "scope": "container-cgroup-and-process-count-rlimit",
+                    "scope": "container-cgroup-pids-max",
                 },
                 "maxFiles": {
                     "enforced": True,
