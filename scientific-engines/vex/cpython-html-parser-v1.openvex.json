@@ -2,8 +2,8 @@
   "@context": "https://openvex.dev/ns/v0.2.0",
   "@id": "https://counterlab.dev/vex/cpython-html-parser-v1",
   "author": "CounterLab release engineering",
-  "timestamp": "2026-07-23T15:12:00.431Z",
-  "version": 29,
+  "timestamp": "2026-07-23T15:38:38.533Z",
+  "version": 30,
   "statements": [
     {
       "vulnerability": {
@@ -11,7 +11,7 @@
       },
       "products": [
         {
-          "@id": "counterlab-runner:git-4cfa808e92651c025f4ddc2d3e3d5a18e0eb7917",
+          "@id": "counterlab-runner:git-2a53428176674fb882e3eb4ad8936cc94df2efbf",
           "subcomponents": [
             {
               "@id": "pkg:generic/python@3.13.14"
