@@ -510,7 +510,7 @@ def _validate_enforced_rlimits(value: object, intended: object) -> bool:
         or not _safe_integer(intended.get("memoryBytes"), positive=True)
         or not 64 * 1024 * 1024
         <= intended["memoryBytes"]
-        <= 1024 * 1024 * 1024
+        <= 4 * 1024 * 1024 * 1024
         or not isinstance(value, list)
         or len(value) != len(required)
     ):
@@ -701,7 +701,7 @@ def _validate_aggregate_limit_evidence(
         or not _safe_integer(intended.get("memoryBytes"), positive=True)
         or not 64 * 1024 * 1024
         <= intended["memoryBytes"]
-        <= 1024 * 1024 * 1024
+        <= 4 * 1024 * 1024 * 1024
         or not all(
             _safe_integer(observed.get(field), positive=field != "memorySwapMaxBytes")
             for field in observed

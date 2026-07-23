@@ -112,7 +112,7 @@ function validateExpected(value) {
     intended.maxProcesses > 32 ||
     !safeInteger(intended.memoryBytes, { positive: true }) ||
     intended.memoryBytes < 64 * 1024 * 1024 ||
-    intended.memoryBytes > 1024 * 1024 * 1024
+    intended.memoryBytes > 4 * 1024 * 1024 * 1024
   ) {
     throw new Error("aggregate cgroup evidence expected binding is invalid");
   }

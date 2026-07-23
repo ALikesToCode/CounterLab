@@ -27,7 +27,10 @@ const verifiedCleanup = {
   imageRootfsUnchanged: true,
 };
 
-function manifest(cgroupParentPath: "" | "containerd" = "containerd") {
+function manifest(
+  cgroupParentPath: "" | "containerd" = "containerd",
+  memoryBytes = 512 * 1024 * 1024,
+) {
   return createContainedCgroupObserverManifest({
     baseReceiptFileSha256: "4".repeat(64),
     baseReceiptPayloadSha256: "5".repeat(64),
@@ -35,7 +38,7 @@ function manifest(cgroupParentPath: "" | "containerd" = "containerd") {
     intendedAggregateLimits: {
       cpuCount: 1,
       maxProcesses: 16,
-      memoryBytes: 512 * 1024 * 1024,
+      memoryBytes,
     },
     invocationId,
     observerBindings: {
@@ -65,6 +68,18 @@ describe("contained cgroup observer protocol", () => {
     expect(value.cgroupPath).toBe(`containerd/counterlab-v6.1-${invocationId}`);
     expect(manifest("").cgroupPath).toBe(`counterlab-v6.1-${invocationId}`);
     expect(value.receiptPayloadSha256).toMatch(/^[a-f0-9]{64}$/u);
+  });
+
+  it("accepts the hosted 4 GiB aggregate and rejects any larger request", () => {
+    expect(() =>
+      validateContainedCgroupObserverManifest(
+        manifest("containerd", 4 * 1024 * 1024 * 1024),
+        { observedAtMs: requestedAt.getTime() },
+      ),
+    ).not.toThrow();
+    expect(() => manifest("containerd", 4 * 1024 * 1024 * 1024 + 1)).toThrow(
+      /aggregate intent/u,
+    );
   });
 
   it("rejects unknown, stale, and drifted requests", () => {

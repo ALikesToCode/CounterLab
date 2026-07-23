@@ -32,7 +32,7 @@ const AggregateLimitIntentSchema = z.strictObject({
     .number()
     .int()
     .min(64 * 1024 * 1024)
-    .max(1024 * 1024 * 1024),
+    .max(4 * 1024 * 1024 * 1024),
 });
 
 const AggregateLimitEvidenceSchema = z

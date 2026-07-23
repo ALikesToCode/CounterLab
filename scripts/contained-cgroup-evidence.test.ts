@@ -11,13 +11,19 @@ import {
 const invocationId = "1".repeat(64);
 const finalContainerId = "2".repeat(64);
 const sanitizedSpecSha256 = "3".repeat(64);
-const intendedAggregateLimits = {
-  cpuCount: 1,
-  maxProcesses: 16,
-  memoryBytes: 512 * 1024 * 1024,
-};
+function intendedAggregateLimits(memoryBytes = 512 * 1024 * 1024) {
+  return {
+    cpuCount: 1,
+    maxProcesses: 16,
+    memoryBytes,
+  };
+}
 
-function evidence(cgroupParentPath: "" | "containerd" = "containerd") {
+function evidence(
+  cgroupParentPath: "" | "containerd" = "containerd",
+  memoryBytes = 512 * 1024 * 1024,
+) {
+  const intended = intendedAggregateLimits(memoryBytes);
   const memberPids = [100, 101];
   const payload = {
     schemaVersion: "3",
@@ -40,9 +46,9 @@ function evidence(cgroupParentPath: "" | "containerd" = "containerd") {
     sanitizedSpecSha256,
     runtimeAttestationSha256: "4".repeat(64),
     observedLimits: {
-      memoryMaxBytes: intendedAggregateLimits.memoryBytes,
-      memorySwapMaxBytes: intendedAggregateLimits.memoryBytes,
-      pidsMax: intendedAggregateLimits.maxProcesses,
+      memoryMaxBytes: intended.memoryBytes,
+      memorySwapMaxBytes: intended.memoryBytes,
+      pidsMax: intended.maxProcesses,
       cpuQuotaMicros: 100_000,
       cpuPeriodMicros: 100_000,
     },
@@ -55,7 +61,7 @@ function evidence(cgroupParentPath: "" | "containerd" = "containerd") {
     },
     negativeControls: {
       memory: {
-        requestedBytes: intendedAggregateLimits.memoryBytes + 64 * 1024 * 1024,
+        requestedBytes: intended.memoryBytes + 64 * 1024 * 1024,
         maxEventsBefore: 0,
         maxEventsAfter: 1,
         oomKillBefore: 0,
@@ -63,7 +69,7 @@ function evidence(cgroupParentPath: "" | "containerd" = "containerd") {
         enforced: true,
       },
       processes: {
-        attemptedProcesses: intendedAggregateLimits.maxProcesses + 1,
+        attemptedProcesses: intended.maxProcesses + 1,
         maxEventsBefore: 0,
         maxEventsAfter: 1,
         enforced: true,
@@ -91,13 +97,16 @@ function evidence(cgroupParentPath: "" | "containerd" = "containerd") {
   };
 }
 
-function expected(cgroupParentPath: "" | "containerd" = "containerd") {
+function expected(
+  cgroupParentPath: "" | "containerd" = "containerd",
+  memoryBytes = 512 * 1024 * 1024,
+) {
   return {
     cgroupParentPath,
     invocationId,
     finalContainerId,
     sanitizedSpecSha256,
-    intendedAggregateLimits,
+    intendedAggregateLimits: intendedAggregateLimits(memoryBytes),
     runtimeAttestationSha256: "4".repeat(64),
     runtimeSessionId: "rt-v61-test1",
     driverCliSha256: "5".repeat(64),
@@ -116,6 +125,22 @@ describe("contained cgroup evidence", () => {
     expect(validateContainedCgroupEvidence(evidence(""), expected(""))).toEqual(
       evidence(""),
     );
+  });
+
+  it("accepts the hosted 4 GiB aggregate and rejects a self-consistent larger binding", () => {
+    const hostedMemoryBytes = 4 * 1024 * 1024 * 1024;
+    expect(
+      validateContainedCgroupEvidence(
+        evidence("containerd", hostedMemoryBytes),
+        expected("containerd", hostedMemoryBytes),
+      ),
+    ).toEqual(evidence("containerd", hostedMemoryBytes));
+    expect(() =>
+      validateContainedCgroupEvidence(
+        evidence("containerd", hostedMemoryBytes + 1),
+        expected("containerd", hostedMemoryBytes + 1),
+      ),
+    ).toThrow(/expected binding/u);
   });
 
   it("rejects identity, limit, membership, counter, cleanup, and hash drift", () => {

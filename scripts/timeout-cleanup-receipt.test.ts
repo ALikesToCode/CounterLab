@@ -152,6 +152,37 @@ describe("timeout cleanup aggregate resource authority", () => {
     }
   });
 
+  it("accepts exactly 4 GiB of aggregate memory and rejects any larger intent", () => {
+    const enforcedRlimits = [
+      {
+        type: "RLIMIT_AS" as const,
+        soft: TIMEOUT_PROCESS_ADDRESS_SPACE_BYTES,
+        hard: TIMEOUT_PROCESS_ADDRESS_SPACE_BYTES,
+      },
+      { type: "RLIMIT_CPU" as const, soft: 20, hard: 20 },
+      { type: "RLIMIT_FSIZE" as const, soft: 262_144, hard: 262_144 },
+      { type: "RLIMIT_NOFILE" as const, soft: 64, hard: 64 },
+    ];
+    expect(() =>
+      assertRootlessRlimitBindings({
+        intendedAggregateLimits: {
+          ...intendedAggregateLimits,
+          memoryBytes: 4 * 1024 * 1024 * 1024,
+        },
+        enforcedRlimits,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertRootlessRlimitBindings({
+        intendedAggregateLimits: {
+          ...intendedAggregateLimits,
+          memoryBytes: 4 * 1024 * 1024 * 1024 + 1,
+        },
+        enforcedRlimits,
+      }),
+    ).toThrow();
+  });
+
   it("rejects process-only or merely declared aggregate limits", () => {
     expect(() =>
       assertQualifiedAggregateRuntimeLimits({

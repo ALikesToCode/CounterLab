@@ -579,11 +579,31 @@ outputs.set("scientific-engines/evidence-catalog.json", pretty(catalog));
 const runtime = ScientificEngineRuntimeManifestSchema.parse(
   await json("scientific-engines/runtime-manifest.json"),
 );
+const resourceProfilePath = `scientific-engines/fixtures/validation/${runtime.resourceLimitProfileId}.json`;
+const resourceProfile = object(
+  await json(resourceProfilePath),
+  resourceProfilePath,
+);
+const resourceContainer = object(
+  resourceProfile.container,
+  `${resourceProfilePath}.container`,
+);
+if (
+  resourceProfile.evidenceId !== runtime.resourceLimitProfileId ||
+  typeof resourceContainer.vcpu !== "number" ||
+  typeof resourceContainer.memoryMb !== "number" ||
+  typeof resourceContainer.diskMb !== "number"
+) {
+  throw new Error("Runner resource profile is invalid");
+}
 runtime.generatedAt = generatedIso;
 runtime.sourceCommit = receipt.sourceCommit;
 runtime.registryHash = registryHash;
 runtime.bindingsHash = bindingsHash;
 runtime.container.imageDigest = receipt.localImageDigest;
+runtime.container.vcpu = resourceContainer.vcpu;
+runtime.container.memoryMb = resourceContainer.memoryMb;
+runtime.container.diskMb = resourceContainer.diskMb;
 for (const installed of runtime.installedEngines) {
   const integrity = object(
     await json(ENGINE_INTEGRITY[installed.engineId]!),

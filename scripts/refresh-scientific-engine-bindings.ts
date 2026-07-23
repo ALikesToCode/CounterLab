@@ -183,6 +183,26 @@ async function desiredOutputs(): Promise<Map<string, string>> {
   const runtime = ScientificEngineRuntimeManifestSchema.parse(
     await json("scientific-engines/runtime-manifest.json"),
   );
+  const resourceProfilePath = `scientific-engines/fixtures/validation/${runtime.resourceLimitProfileId}.json`;
+  const resourceProfile = object(
+    await json(resourceProfilePath),
+    resourceProfilePath,
+  );
+  const resourceContainer = object(
+    resourceProfile.container,
+    `${resourceProfilePath}.container`,
+  );
+  if (
+    resourceProfile.evidenceId !== runtime.resourceLimitProfileId ||
+    typeof resourceContainer.vcpu !== "number" ||
+    typeof resourceContainer.memoryMb !== "number" ||
+    typeof resourceContainer.diskMb !== "number"
+  ) {
+    throw new Error("Runner resource profile is invalid");
+  }
+  runtime.container.vcpu = resourceContainer.vcpu;
+  runtime.container.memoryMb = resourceContainer.memoryMb;
+  runtime.container.diskMb = resourceContainer.diskMb;
 
   for (const evidence of internal) {
     const record = exactRecord(

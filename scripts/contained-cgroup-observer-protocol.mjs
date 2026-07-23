@@ -99,7 +99,7 @@ function validIntent(value) {
     intent.maxProcesses > 32 ||
     !Number.isSafeInteger(intent.memoryBytes) ||
     intent.memoryBytes < 64 * 1024 * 1024 ||
-    intent.memoryBytes > 1024 * 1024 * 1024
+    intent.memoryBytes > 4 * 1024 * 1024 * 1024
   ) {
     throw new Error("contained cgroup observer aggregate intent is invalid");
   }

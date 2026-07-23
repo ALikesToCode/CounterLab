@@ -60,13 +60,18 @@ def _control(schema_version: str = "2") -> dict[str, object]:
     return {**payload, "receiptPayloadSha256": _hash(payload)}
 
 
-def _rootless(control: dict[str, object], build: dict[str, object]) -> dict[str, object]:
+def _rootless(
+    control: dict[str, object],
+    build: dict[str, object],
+    *,
+    memory_bytes: int = 512 * 1024 * 1024,
+) -> dict[str, object]:
     invocation_id = str(control["invocationId"])
     final_container_id = str(control["finalContainerId"])
     intended_limits = {
         "cpuCount": 1,
         "maxProcesses": 16,
-        "memoryBytes": 512 * 1024 * 1024,
+        "memoryBytes": memory_bytes,
     }
     sanitized_spec_sha256 = "a" * 64
     member_pids = [100, 101]
@@ -337,6 +342,63 @@ def test_rootless_rlimit_validator_matches_the_runtime_contract() -> None:
         entry["soft"] -= 1
         entry["hard"] -= 1
         assert not timeout_proof_module._validate_enforced_rlimits(changed, intended)
+
+
+def test_rootless_rlimit_validator_accepts_4_gib_and_rejects_more() -> None:
+    runtime_limits = [
+        {
+            "type": "RLIMIT_AS",
+            "soft": timeout_proof_module.CONTAINED_PROCESS_ADDRESS_SPACE_BYTES,
+            "hard": timeout_proof_module.CONTAINED_PROCESS_ADDRESS_SPACE_BYTES,
+        },
+        {"type": "RLIMIT_CPU", "soft": 20, "hard": 20},
+        {"type": "RLIMIT_FSIZE", "soft": 262_144, "hard": 262_144},
+        {"type": "RLIMIT_NOFILE", "soft": 64, "hard": 64},
+    ]
+    intended = {
+        "cpuCount": 1,
+        "maxProcesses": 16,
+        "memoryBytes": 4 * 1024 * 1024 * 1024,
+    }
+    assert timeout_proof_module._validate_enforced_rlimits(
+        runtime_limits, intended
+    )
+    assert not timeout_proof_module._validate_enforced_rlimits(
+        runtime_limits,
+        {**intended, "memoryBytes": intended["memoryBytes"] + 1},
+    )
+
+
+def test_rootless_receipt_accepts_4_gib_and_rejects_more() -> None:
+    build = {
+        "sourceCommit": "e" * 40,
+        "sourceTreeSha256": "a" * 64,
+        "adapterImageDigest": f"sha256:{'b' * 64}",
+        "adapterManifestDigest": f"sha256:{'c' * 64}",
+    }
+    control = _control("3")
+    four_gib = _rootless(
+        control,
+        build,
+        memory_bytes=4 * 1024 * 1024 * 1024,
+    )
+    assert (
+        validate_rootless_receipt(four_gib, control=control, build=build)
+        == four_gib
+    )
+
+    rejected_control = _control("3")
+    above_four_gib = _rootless(
+        rejected_control,
+        build,
+        memory_bytes=4 * 1024 * 1024 * 1024 + 1,
+    )
+    with pytest.raises(RuntimeError, match="authority|aggregate limit evidence"):
+        validate_rootless_receipt(
+            above_four_gib,
+            control=rejected_control,
+            build=build,
+        )
 
 
 def test_timeout_candidate_observes_the_exact_address_space_limit() -> None:
