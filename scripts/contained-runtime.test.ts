@@ -3840,6 +3840,15 @@ describe("contained runtime command policy", () => {
         .status,
     ).toBe(0);
     expect(
+      validate(
+        "image",
+        "inspect",
+        `sha256:${"a".repeat(64)}`,
+        "--format",
+        "{{.Id}}",
+      ).status,
+    ).not.toBe(0);
+    expect(
       validate("load", "--platform", "linux/amd64", "--input", "package.json")
         .status,
     ).toBe(0);

@@ -334,7 +334,7 @@ async function promoteImage(input: {
       runtimeAdapterArguments([
         "image",
         "inspect",
-        input.expectedConfigDigest,
+        input.localImage,
         "--format",
         "{{.Id}}",
       ]),
