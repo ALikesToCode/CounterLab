@@ -1,11 +1,11 @@
 {
   "schemaVersion": "1",
-  "generatedAt": "2026-07-23T11:14:08.403Z",
+  "generatedAt": "2026-07-23T14:05:03.362Z",
   "environmentId": "counterlab-runner-linux-amd64-v2",
   "environmentKind": "local_candidate",
-  "sourceCommit": "363172d2d90712ae154691bf699a6826fd38cac7",
-  "registryHash": "64529a7015e72858fbd905fbf94ae9adb446af50aca9f378974f530de1621fa2",
-  "bindingsHash": "53ce600558609d83dce15331fad5fbaebb066c35dd4ef43cd6d1ac0083fe4e92",
+  "sourceCommit": "e900ff5eba903a94548fd1d5e99c0fc764a2f044",
+  "registryHash": "34d2d175e8f4cfa7d303c8f19c2b86d7d5474010ab173632a1e5b7085bda77a0",
+  "bindingsHash": "f927858b989e637756a08508dcc6a4af09651d1f416f95e284d39f8cef5d7873",
   "platform": {
     "os": "linux",
     "architecture": "amd64"
@@ -24,7 +24,7 @@
       "engineId": "counterlab-fixed-ml-kernel",
       "packageName": "counterlab-kernel",
       "exactVersion": "0.1.0",
-      "artifactSha256": "92a854cf2ba4003587a28ef9049f84c9a4d7748600bc15de030942ab1944a2b6",
+      "artifactSha256": "cc70dbbb266c62524f5cb770c6cc8ee06eee5c260ed26fe4d2bbf26e1c2ec958",
       "healthEvidenceId": "counterlab-fixed-ml-kernel-health-v1",
       "toleranceProfileId": "counterlab-ml-f64-v1"
     },
@@ -54,10 +54,10 @@
     }
   ],
   "container": {
-    "imageDigest": "sha256:86899abd2852345333a65bea5a8d88ab459a657756e1a1bf96af98a711387f81",
-    "vcpu": 0.25,
-    "memoryMb": 1024,
-    "diskMb": 4000
+    "imageDigest": "sha256:b340365ffe59d3aa66897c7a70eafe33fe94e8d1ff38cff56abd36d6cc67a0e7",
+    "vcpu": 0.5,
+    "memoryMb": 4096,
+    "diskMb": 8000
   },
   "resourceLimitProfileId": "runner-resource-limits-v1",
   "lockHashes": {
@@ -70,16 +70,16 @@
   "sbomHashes": {
     "node-sbom": "acd31358dfebccb99ea22d042887650423c625cc50eb8e6742aa602bd5448745",
     "python-sbom": "24f1d2cf673e8ac7c45289d3fbbc900f609ca53430b4166597b493fac8debc54",
-    "runner-container-sbom": "f54ff672bcf5ce19e213fe7f6fc93460bf5e09b6c941455f57a9a08c500d367c"
+    "runner-container-sbom": "7384ce2cbeba4c690d3dd859f3511f4b5cac2c6e9a69c6639ec1352d561b4e94"
   },
   "sbomManifestEvidenceId": "sbom-manifest-v1",
-  "sbomManifestHash": "0247f74c3e3a59cbe9fae470c6d679f517a6624452aad8b04068b4f3c4f3eef6",
+  "sbomManifestHash": "311ff0adfc755197b58dfff929acbc142de82cfd72e2c2d0bcbf383ef0ef6848",
   "vulnerabilityReportEvidenceId": "vulnerability-report-v2",
-  "vulnerabilityReportHash": "368a3671b879e0cebe8a9d8ec8d083a50fb79cb67dc94c46b9d026832f23571a",
+  "vulnerabilityReportHash": "ec06260b71b8e802224d795d198b1cfc6986644e9e1227faef8a659b47d8d4d7",
   "vexEvidenceId": "cpython-html-parser-vex-v1",
-  "vexEvidenceHash": "7de01f83e6d1d3dab5b6ce98ea1bd848f510da8d7a934325fe4b93e239dc529a",
+  "vexEvidenceHash": "166abd640c819798b9f7ef79027a881dde545a50c4a5580746ce4bc9e5656a13",
   "reachabilityEvidenceId": "cpython-html-parser-reachability-v2",
-  "reachabilityEvidenceHash": "22e711c6ddcd2551466fdbe53b61a64922ba09852de5076c60fe6d3471427aa0",
+  "reachabilityEvidenceHash": "90761c15f33a35208982117814bc8af6c6607cdcfdcc8a52236e6ce667e735ac",
   "vexApplicationEvidenceId": "cpython-html-parser-vex-application-v1",
-  "vexApplicationEvidenceHash": "b744f16a5fb6e686aa3c4b9a88c7b07126e0bfdc0bb817d3cb3334568857bdf8"
+  "vexApplicationEvidenceHash": "f4ab818c78f02b9e29a66fbd8d7b35c54abc9ca7775cbe41d79edad9f3a4f48d"
 }

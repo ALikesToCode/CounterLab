@@ -66,7 +66,7 @@
           "authorityId": "counterlab-independent-fixtures",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-oracle-integrity-v2",
-          "integrityHash": "80580c5c449e902977e087ebb4deb7d0aed460a8dc16d84bdb602c0fafacc170",
+          "integrityHash": "864154b6a0576d84edecb25d4ea5225e93bdcb2caf864f82fd3714ad4458a678",
           "validationEvidenceIds": [
             "ml-independent-fixtures-v2"
           ],
@@ -169,7 +169,7 @@
           "authorityId": "counterlab-independent-fixtures",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-oracle-integrity-v2",
-          "integrityHash": "80580c5c449e902977e087ebb4deb7d0aed460a8dc16d84bdb602c0fafacc170",
+          "integrityHash": "864154b6a0576d84edecb25d4ea5225e93bdcb2caf864f82fd3714ad4458a678",
           "validationEvidenceIds": [
             "ml-independent-fixtures-v2"
           ],
