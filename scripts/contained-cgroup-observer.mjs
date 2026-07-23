@@ -576,7 +576,7 @@ export async function observeContainedCgroup(
   );
   reportPhase("CPU_CONTROL");
   await adapter.runControl(
-    { mode: "cpu", busyWindowMs: 500, workers: 4 },
+    { mode: "cpu", busyWindowMs: 500, workers: 2 },
     initial.memberPids,
   );
   reportPhase("CPU_COUNTERS_AFTER");

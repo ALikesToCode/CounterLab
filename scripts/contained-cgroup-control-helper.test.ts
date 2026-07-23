@@ -56,6 +56,7 @@ describe("contained cgroup negative-control helper", () => {
     );
 
     expect(source).toContain('from "node:worker_threads"');
+    expect(source).toContain("{ length: workers - 1 }");
     expect(source).not.toContain('[scriptPath, "--internal-busy"');
   });
 });

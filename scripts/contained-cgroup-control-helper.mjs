@@ -246,7 +246,7 @@ async function processControl(
 
 async function cpuControl(busyWindowMs, workers, scriptPath, controller) {
   const cpuWorkers = Array.from(
-    { length: workers },
+    { length: workers - 1 },
     () =>
       new Worker(scriptPath, {
         workerData: {
@@ -258,6 +258,7 @@ async function cpuControl(busyWindowMs, workers, scriptPath, controller) {
   const completions = cpuWorkers.map(workerCompletion);
   let results;
   try {
+    runCpuLoad(busyWindowMs);
     results = await bounded(
       Promise.all(completions),
       busyWindowMs + 2_000,
@@ -280,6 +281,13 @@ async function cpuControl(busyWindowMs, workers, scriptPath, controller) {
   process.stdout.write(`${JSON.stringify({ busyWindowMs, workers })}\n`);
 }
 
+function runCpuLoad(busyWindowMs) {
+  const deadline = performance.now() + busyWindowMs;
+  while (performance.now() < deadline) {
+    // Fixed release-only CPU load. Kernel counters are authoritative.
+  }
+}
+
 function runCpuWorker(value) {
   if (
     value === null ||
@@ -294,10 +302,7 @@ function runCpuWorker(value) {
   if (busyWindowMs < 100 || busyWindowMs > 5_000) {
     throw new Error("contained cgroup CPU worker bound is invalid");
   }
-  const deadline = performance.now() + busyWindowMs;
-  while (performance.now() < deadline) {
-    // Fixed release-only CPU load. Kernel counters are authoritative.
-  }
+  runCpuLoad(busyWindowMs);
 }
 
 async function main() {

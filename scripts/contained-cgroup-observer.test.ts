@@ -193,7 +193,7 @@ describe("contained cgroup observer", () => {
     });
 
     expect(fake.controls).toEqual([
-      { mode: "cpu", busyWindowMs: 500, workers: 4 },
+      { mode: "cpu", busyWindowMs: 500, workers: 2 },
       { mode: "processes", attemptedProcesses: 17 },
       { mode: "memory", requestedBytes: 576 * 1024 * 1024 },
     ]);
