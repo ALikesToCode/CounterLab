@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 
@@ -1312,6 +1312,7 @@ describe("custom Responses endpoint", () => {
   });
 
   it("returns a provider-neutral typed setup error for endpoint authentication failure", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     const transport = new OpenAIResponsesTransport({
       apiKey: "server-only-key",
       baseURL: "https://responses.example.test/v1",
@@ -1320,8 +1321,9 @@ describe("custom Responses endpoint", () => {
           JSON.stringify({
             error: {
               message: "upstream-specific authentication details",
-              type: "invalid_request_error",
-              code: "invalid_api_key",
+              type: "provider-name\r\nsecret-type",
+              code: "secret-code",
+              param: "private-endpoint.example",
             },
           }),
           { status: 401, headers: { "content-type": "application/json" } },
@@ -1354,6 +1356,14 @@ describe("custom Responses endpoint", () => {
       details: { category: "authentication", status: 401 },
     });
     expect(JSON.stringify(failure)).not.toContain("upstream-specific");
+    expect(errorLog).toHaveBeenCalledWith(
+      "CounterLab Responses request rejected",
+      { status: 401, category: "authentication" },
+    );
+    expect(JSON.stringify(errorLog.mock.calls)).not.toMatch(
+      /provider-name|secret-type|secret-code|private-endpoint/u,
+    );
+    errorLog.mockRestore();
   });
 
   it("classifies connection failures as transport errors instead of request rejections", async () => {

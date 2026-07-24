@@ -1201,11 +1201,19 @@ export class OpenAIResponsesTransport implements ResponsesTransport {
       }
       if (error instanceof OpenAI.APIError) {
         const status = error.status;
+        const category =
+          status === 401 || status === 403
+            ? "authentication"
+            : status === 404
+              ? "configuration"
+              : status === 429
+                ? "rate_limit"
+                : status !== undefined && status >= 500
+                  ? "upstream"
+                  : "request";
         console.error("CounterLab Responses request rejected", {
           status: status ?? null,
-          type: error.type ?? null,
-          code: error.code ?? null,
-          param: error.param ?? null,
+          category,
         });
         if (status === 401 || status === 403) {
           throw new BeliefAnalystError(
@@ -1232,8 +1240,7 @@ export class OpenAIResponsesTransport implements ResponsesTransport {
           "LIVE_UNAVAILABLE",
           "Responses endpoint rejected the request",
           {
-            category:
-              status !== undefined && status >= 500 ? "upstream" : "request",
+            category,
             ...(status === undefined ? {} : { status }),
           },
         );
