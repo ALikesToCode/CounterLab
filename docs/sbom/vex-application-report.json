@@ -1,13 +1,13 @@
 {
   "schemaVersion": "1",
   "evidenceKind": "vex-application-report",
-  "imageDigest": "sha256:576e6662e076f7d448fb1430c4e455f7cadf403c60a0469f447af6d24faaadae",
-  "manifestDigest": "sha256:00fe2ca9f5760528bb7865b0626efcc933f4d163da7bc2af5e18a063522ea1ca",
+  "imageDigest": "sha256:bacee090301ff278deb4bfd79e2bdc35b126986d25e4a93a4550067bd4474124",
+  "manifestDigest": "sha256:12e1c4572c73983e55121cb53f40649e776e8266e75255c743a3cccddc6d221e",
   "loadedImage": {
-    "imageTag": "counterlab-runner:git-b4321bbd64fb11eff0952ea7a4c933cd32dd5e8b",
-    "imageDigest": "sha256:576e6662e076f7d448fb1430c4e455f7cadf403c60a0469f447af6d24faaadae",
-    "sourceCommit": "b4321bbd64fb11eff0952ea7a4c933cd32dd5e8b",
-    "sourceTreeSha256": "5dce2b886879a4bd5ae331b095ebdc1f48b4a632fdfd5de134123ebbf7afb172",
+    "imageTag": "counterlab-runner:git-bb4003d5579cebf1d2273c7227f766f1c1fb4786",
+    "imageDigest": "sha256:bacee090301ff278deb4bfd79e2bdc35b126986d25e4a93a4550067bd4474124",
+    "sourceCommit": "bb4003d5579cebf1d2273c7227f766f1c1fb4786",
+    "sourceTreeSha256": "7a39ea01cae4a072b3d9e8cc89daa83bf61f99cbed14f30886e4e5a21f465e7b",
     "sourceUrl": "https://github.com/ALikesToCode/CounterLab",
     "platform": {
       "architecture": "amd64",
@@ -19,22 +19,22 @@
     "exactVersion": "0.112.0",
     "binarySha256": "d515f53bd5ee4930e144c6ea14a2659084763c336a1833b723db0b05080fcaf5",
     "databaseSchema": "v6.1.9",
-    "databaseBuiltAt": "2026-07-23T07:03:49.000Z",
+    "databaseBuiltAt": "2026-07-24T07:05:19.000Z",
     "databaseValid": true
   },
-  "vexSha256": "b40212b3dce0764ce1245a7c3790afd52f361374d51c5c811fe72bc973639aa0",
+  "vexSha256": "ee9980135d05448706dd4a7f3d943d8ef06ac6c68202fa4a7dd25832adbc739a",
   "inputs": {
     "baseline": {
       "evidenceId": "grype-raw-scan-v2",
-      "sha256": "d548ae5bd9f28aad50707c623713a3631cb92758bdef126a8095cb43d9e34604"
+      "sha256": "bb783afca04b32dd3d36c8df979657f4503cb2418b70388f00638ffc84a61b3d"
     },
     "applied": {
       "evidenceId": "grype-vex-applied-v1",
-      "sha256": "625ef72ec752b2d204be3bc319dee0fde62c3ad0be3158ba2710556c81b811df"
+      "sha256": "2e27d6c2c873ad8de618bf481ebbbee9ce15d17daf7e8bb2df0406863e9c7bb9"
     },
     "negativeControl": {
       "evidenceId": "grype-vex-negative-v1",
-      "sha256": "266fc9d20658da0ebaeea87f983f851a7198a94854402a691b10cddac645e231"
+      "sha256": "beab252c3132fdf859d422ffd0f4a663ef35517460f53ebe049a67d7ba57e2d4"
     }
   },
   "suppressedFinding": {
@@ -52,11 +52,11 @@
     "subcomponent": "pkg:generic/python-negative-control@3.13.14"
   },
   "counts": {
-    "baselineActive": 171,
+    "baselineActive": 172,
     "baselineIgnored": 0,
-    "appliedActive": 170,
+    "appliedActive": 171,
     "appliedIgnored": 1,
-    "negativeActive": 171,
+    "negativeActive": 172,
     "negativeIgnored": 0
   },
   "checks": {

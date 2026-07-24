@@ -5,10 +5,10 @@
   "packageName": "counterlab-kernel",
   "exactVersion": "0.1.0",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:576e6662e076f7d448fb1430c4e455f7cadf403c60a0469f447af6d24faaadae",
+  "imageDigest": "sha256:bacee090301ff278deb4bfd79e2bdc35b126986d25e4a93a4550067bd4474124",
   "sourceBinding": {
     "status": "BOUND",
-    "commit": "b4321bbd64fb11eff0952ea7a4c933cd32dd5e8b",
+    "commit": "bb4003d5579cebf1d2273c7227f766f1c1fb4786",
     "ociLabel": "org.opencontainers.image.revision"
   },
   "artifact": {

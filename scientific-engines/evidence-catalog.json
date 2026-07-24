@@ -15,7 +15,7 @@
       "kind": "integrity",
       "engineId": "counterlab-fixed-ml-kernel",
       "path": "scientific-engines/fixtures/integrity/counterlab-fixed-ml-kernel-0.1.0.json",
-      "sha256": "af362b95b603f89ec788b470f538d7916632cb44d49886e902b984a9f9a230e3",
+      "sha256": "a5c4025a8e106f9c14ac109346e5e4d590d5b86643b0c0227a4bd4b55e0c0548",
       "status": "VERIFIED",
       "limitations": [
         "Authority is limited to the fixed registered ML operations."
@@ -25,7 +25,7 @@
       "id": "cpython-runtime-integrity-v1",
       "kind": "integrity",
       "path": "scientific-engines/fixtures/integrity/cpython-runtime-3.13.14.json",
-      "sha256": "a97c79da989e0120bc0fbd939289da9771f05f34e5ea674191fcc4fc147dd8d2",
+      "sha256": "b8598e3d8ab1573737aaef5a4dd2fdeaa158010480c72f670064bee9f3d88068",
       "status": "VERIFIED",
       "limitations": [
         "The base-image binding covers the pinned Linux amd64 runner runtime, not the Cloudflare host platform."
@@ -47,7 +47,7 @@
       "kind": "integrity",
       "engineId": "numpy",
       "path": "scientific-engines/fixtures/integrity/numpy-2.4.6.json",
-      "sha256": "bfa0308f16bdf1b726a93d55d9f68277d1e6f60d54c302ec882b38f5bffe0179",
+      "sha256": "700e9888276cc8741c3689291a7d1aed4ac38de15ba3d4428cab8ed90c096556",
       "status": "VERIFIED",
       "limitations": [
         "The locked wheel and health evidence cover Linux amd64."
@@ -69,7 +69,7 @@
       "kind": "integrity",
       "engineId": "pandas",
       "path": "scientific-engines/fixtures/integrity/pandas-2.3.3.json",
-      "sha256": "e36202b025f0ff7dd5d57410289e0e5afc00efa936b1d005e0a2ffc292511ae1",
+      "sha256": "08a0fb8c3b755c39f3b0d97aa4922ee1e6ad14eb1ce83e8c17deb03999bd0df1",
       "status": "VERIFIED",
       "limitations": [
         "The installed wheel has a license body but no License-Expression metadata field."
@@ -89,7 +89,7 @@
       "kind": "integrity",
       "engineId": "scikit-learn",
       "path": "scientific-engines/fixtures/integrity/scikit-learn-1.9.0.json",
-      "sha256": "d204cf9b8264d3338468e5e602c05b0d87c5f9758207b285cc51bea614764d7a",
+      "sha256": "a0707e4309b991f3952cff018e822dc4f3193ef295e8d1942ff20a1740d8e8cd",
       "status": "VERIFIED",
       "limitations": [
         "The locked wheel and health evidence cover the fixed CounterLab estimator configuration."
@@ -194,7 +194,7 @@
       "kind": "health_report",
       "engineId": "counterlab-fixed-ml-kernel",
       "path": "scientific-engines/fixtures/health/counterlab-fixed-ml-kernel-health-v1.json",
-      "sha256": "70f0a1c9bf9942db3df1b462e1ceeb1ce1f3c837096266fbb4c159e84b57fa02",
+      "sha256": "1d69c74e2f5077f161985b1d4c835523e8c56af2f5c51f8b8c0cf26a70d988c6",
       "status": "VERIFIED",
       "limitations": [
         "Health was measured in the recorded local candidate image."
@@ -205,7 +205,7 @@
       "kind": "health_report",
       "engineId": "numpy",
       "path": "scientific-engines/fixtures/health/numpy-health-v1.json",
-      "sha256": "aff97af6ce27f2dca9b748f84abbc3f0acedebb502923da82b3f48ed3009f32e",
+      "sha256": "86afbfd28689c49c4c4c89cfa67a8109d79efd9653bc1cf9e58ddf0a3fdc6e5a",
       "status": "VERIFIED",
       "limitations": [
         "Health was measured in the recorded local candidate image."
@@ -216,7 +216,7 @@
       "kind": "health_report",
       "engineId": "pandas",
       "path": "scientific-engines/fixtures/health/pandas-health-v1.json",
-      "sha256": "38c14a6975d568042e56f878d3d9b77731eb620f84230e0315928d01f5214f96",
+      "sha256": "d08566d28729013db25dddedc08c0dbac072fc22460ed78ccfc2785a15f9b901",
       "status": "VERIFIED",
       "limitations": [
         "Health was measured in the recorded local candidate image."
@@ -227,7 +227,7 @@
       "kind": "health_report",
       "engineId": "scikit-learn",
       "path": "scientific-engines/fixtures/health/scikit-learn-health-v1.json",
-      "sha256": "7a6e341f26fed0498c57ad38966fc4a92229e8529c8ae01dc88b8a3985e5f6d0",
+      "sha256": "5fdc8c231ca75845c640ee5542772b3b14538c11089ba65efa56b417e2c63a19",
       "status": "VERIFIED",
       "limitations": [
         "Health was measured in the recorded local candidate image."
@@ -305,7 +305,7 @@
       "id": "runner-container-sbom",
       "kind": "sbom",
       "path": "docs/sbom/runner-container.cdx.json",
-      "sha256": "c01fb87124ba352576cdba00bbe45524a71f6a134df292f3a601ad6aa10ed1f7",
+      "sha256": "94b1981508d38eadcf5ed23301fe766cb2169de3d92dd1fdcd673dee194f3e5d",
       "status": "VERIFIED",
       "limitations": [
         "This inventory covers the local candidate image filesystem, not the Cloudflare host platform."
@@ -315,7 +315,7 @@
       "id": "sbom-manifest-v1",
       "kind": "sbom_manifest",
       "path": "docs/sbom/manifest.json",
-      "sha256": "051db5b1f547edd091089f3b4706e8f1587539f43f76b2b3f0a9ee2de3500647",
+      "sha256": "86944745f2da3690b023abdc3d09cc8fe151e2277fa7c0c3826b6ffbcffd5d0e",
       "status": "VERIFIED",
       "limitations": [
         "Vulnerability findings remain a separate release artifact."
@@ -325,7 +325,7 @@
       "id": "vulnerability-report-v2",
       "kind": "vulnerability_report",
       "path": "docs/sbom/vulnerability-report.json",
-      "sha256": "cb5e8c58d2f75da4f35612a555c06ac6584f6301c8a3c1b99f0f208733edd192",
+      "sha256": "46614d419f02126776e8d82f9f2f7361e6acb5a223bcb42621ca74b896fb225c",
       "status": "VERIFIED",
       "limitations": [
         "The local candidate retains known findings; one fixable High has an exact-image reviewed exception."
@@ -335,7 +335,7 @@
       "id": "grype-raw-scan-v2",
       "kind": "vulnerability_scan",
       "path": "docs/sbom/grype-raw.json",
-      "sha256": "d548ae5bd9f28aad50707c623713a3631cb92758bdef126a8095cb43d9e34604",
+      "sha256": "bb783afca04b32dd3d36c8df979657f4503cb2418b70388f00638ffc84a61b3d",
       "status": "VERIFIED",
       "limitations": [
         "This is the unsuppressed scanner output and includes known findings without published fixes.",
@@ -346,7 +346,7 @@
       "id": "grype-vex-applied-v1",
       "kind": "vulnerability_scan",
       "path": "docs/sbom/grype-vex-applied.json",
-      "sha256": "625ef72ec752b2d204be3bc319dee0fde62c3ad0be3158ba2710556c81b811df",
+      "sha256": "2e27d6c2c873ad8de618bf481ebbbee9ce15d17daf7e8bb2df0406863e9c7bb9",
       "status": "VERIFIED",
       "limitations": [
         "One finding is ignored only through the linked exact-image VEX statement."
@@ -356,7 +356,7 @@
       "id": "grype-vex-negative-v1",
       "kind": "vulnerability_scan",
       "path": "docs/sbom/grype-vex-negative-control.json",
-      "sha256": "266fc9d20658da0ebaeea87f983f851a7198a94854402a691b10cddac645e231",
+      "sha256": "beab252c3132fdf859d422ffd0f4a663ef35517460f53ebe049a67d7ba57e2d4",
       "status": "VERIFIED",
       "limitations": [
         "The negative control changes the VEX subcomponent and must suppress no findings."
@@ -366,7 +366,7 @@
       "id": "cpython-html-parser-vex-v1",
       "kind": "vex",
       "path": "scientific-engines/vex/cpython-html-parser-v1.openvex.json",
-      "sha256": "b40212b3dce0764ce1245a7c3790afd52f361374d51c5c811fe72bc973639aa0",
+      "sha256": "ee9980135d05448706dd4a7f3d943d8ef06ac6c68202fa4a7dd25832adbc739a",
       "status": "VERIFIED",
       "limitations": [
         "The not-affected statement covers only the exact image and CPython subcomponent."
@@ -376,7 +376,7 @@
       "id": "cpython-html-parser-reachability-v2",
       "kind": "reachability_report",
       "path": "scientific-engines/fixtures/integrity/cpython-html-parser-reachability-v2.json",
-      "sha256": "e4b03794d718414f3054e400e51b8cb55082519d2affa384de12bdbcfe7d21f1",
+      "sha256": "f743ffe5eae0d2061324e8c60f85d2a9b412004a9a2106d0456db8962bd84ddf",
       "status": "VERIFIED",
       "limitations": [
         "This is bounded fixed-entrypoint evidence, not whole-program proof."
@@ -386,7 +386,7 @@
       "id": "cpython-html-parser-vex-application-v1",
       "kind": "vex_application_report",
       "path": "docs/sbom/vex-application-report.json",
-      "sha256": "df2de2052923d93a82e3116eecaa1bfb6d9208f8642e31d04d8cd2216a98ad87",
+      "sha256": "529dd04b7b2be79fe8311575f1c5afea4d7391db68101219d3e7bce9cc20e13a",
       "status": "VERIFIED",
       "limitations": [
         "The suppression proof is specific to Grype 0.112.0 and the recorded database."
