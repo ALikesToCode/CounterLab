@@ -763,6 +763,26 @@ describe("evidence resolution", () => {
     ).toThrowError(expect.objectContaining({ code: "UNRESOLVED_EVIDENCE" }));
   });
 
+  it("rejects a paraphrased code excerpt even when its hash and index resolve", () => {
+    const artifact = manifest();
+    const beliefTest = {
+      ...liveModelOutput(artifact),
+      evidenceRefs: [
+        {
+          cellIndex: 2,
+          kind: "code" as const,
+          hash: digest("a"),
+          excerpt: "The notebook performs a random train/test split.",
+          relevance: "Paraphrased split evidence",
+        },
+      ],
+    } satisfies BeliefTest;
+
+    expect(() =>
+      resolveBeliefTestEvidence(beliefTest, artifact, claim),
+    ).toThrowError(expect.objectContaining({ code: "UNRESOLVED_EVIDENCE" }));
+  });
+
   it("accepts an explicit insufficient-evidence result with no references", () => {
     const insufficient = {
       ...liveModelOutput(manifest()),
@@ -883,6 +903,9 @@ describe("LiveBeliefAnalyst", () => {
     expect(transport.request?.instructions).toContain(
       "CounterLab binds the same pack-owned candidate experiment IDs to both primary hypotheses",
     );
+    expect(transport.request?.instructions).toContain(
+      "exact contiguous verbatim substring",
+    );
     expect(JSON.parse(transport.request!.input)).toMatchObject({
       conceptPack: {
         candidateExperimentIds: [
@@ -891,6 +914,88 @@ describe("LiveBeliefAnalyst", () => {
         ],
       },
     });
+  });
+
+  it("rebinds model-authored evidence presentation to trusted sanitized references", async () => {
+    const artifact = manifest();
+    const output = liveBeliefSpecOutput(artifact);
+    const paraphrasedCodeEvidence = {
+      ...output.evidenceRefs[0],
+      excerpt: "The notebook performs a random train/test split.",
+      relevance: "Model-authored top-level relevance",
+    };
+    const analyst = new LiveBeliefAnalyst({
+      apiKey: "server-only-key",
+      transport: new CapturingTransport({
+        outputParsed: {
+          ...output,
+          evidenceRefs: [paraphrasedCodeEvidence, output.evidenceRefs[1]],
+          hypotheses: [
+            {
+              ...output.hypotheses[0],
+              evidence: [
+                {
+                  ...paraphrasedCodeEvidence,
+                  relevance: "Different nested relevance",
+                },
+              ],
+            },
+            output.hypotheses[1],
+          ],
+        },
+        refusals: [],
+      }),
+    });
+
+    const result = await analyst.proposeBeliefSpec({
+      sessionId: "session_v2_canonical_evidence",
+      learnerClaim: claim,
+      manifest: artifact,
+      concept: "entity_leakage",
+    });
+
+    const trustedEvidence = result.beliefSpec.evidenceRefs[0]!;
+    expect(trustedEvidence.excerpt).toContain("train_test_split(X, y)");
+    expect(trustedEvidence.excerpt).not.toContain(
+      "The notebook performs a random train/test split.",
+    );
+    expect(result.beliefSpec.hypotheses[0].evidence[0]).toEqual(
+      trustedEvidence,
+    );
+  });
+
+  it("accepts an empty model code excerpt and rehydrates trusted display text", async () => {
+    const artifact = manifest();
+    const output = liveBeliefSpecOutput(artifact);
+    const codeEvidence = {
+      ...output.evidenceRefs[0],
+      excerpt: "",
+    };
+    const analyst = new LiveBeliefAnalyst({
+      apiKey: "server-only-key",
+      transport: new CapturingTransport({
+        outputParsed: {
+          ...output,
+          evidenceRefs: [codeEvidence, output.evidenceRefs[1]],
+          hypotheses: [
+            { ...output.hypotheses[0], evidence: [codeEvidence] },
+            output.hypotheses[1],
+          ],
+        },
+        refusals: [],
+      }),
+    });
+
+    const result = await analyst.proposeBeliefSpec({
+      sessionId: "session_v2_empty_excerpt",
+      learnerClaim: claim,
+      manifest: artifact,
+      concept: "entity_leakage",
+    });
+
+    expect(result.beliefSpec.evidenceRefs[0]?.excerpt).toContain(
+      "train_test_split(X, y)",
+    );
   });
 
   it("emits a Responses-compatible object schema for exactly two hypotheses", async () => {
@@ -926,6 +1031,9 @@ describe("LiveBeliefAnalyst", () => {
 
     expect(Array.isArray(hypotheses.items)).toBe(false);
     expect(hypotheses).toMatchObject({ minItems: 2, maxItems: 2 });
+    expect(JSON.stringify(transport.request?.text.format)).toContain(
+      "exact contiguous verbatim substring",
+    );
   });
 
   it("rejects unregistered v2 candidate experiments before state can advance", async () => {

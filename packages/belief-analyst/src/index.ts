@@ -47,13 +47,13 @@ const conceptInstructions = releasedConceptPacks()
 
 export const BELIEF_ANALYST_INSTRUCTIONS = `You are CounterLab's reasoning analyst. Formalize the learner's claim as a Belief Test; do not execute code, invent results, grade mastery, or decide whether generated code is valid.
 
-Use only the supplied sanitized evidence. Every evidence reference must copy an exact supplied hash. Use null for cellIndex or outputIndex when that index does not apply. Return no more than three evidence references. Keep the learner's current hypothesis distinct from the competing hypothesis. The decisive intervention must predict observably different outcomes. If the supplied evidence cannot support a discriminating test, set uncertainty.insufficientEvidence to true, explain the limitation, and return an empty evidenceRefs array. Always require learner confirmation.
+Use only the supplied sanitized evidence. Every evidence reference must copy an exact supplied hash. For code and learner_claim evidence, excerpt must be an empty string or an exact contiguous verbatim substring of the supplied sanitized text; never summarize or paraphrase inside excerpt. For all other evidence kinds, use an empty excerpt unless the exact displayed text is supplied. Use null for cellIndex or outputIndex when that index does not apply. Return no more than three evidence references. Keep the learner's current hypothesis distinct from the competing hypothesis. The decisive intervention must predict observably different outcomes. If the supplied evidence cannot support a discriminating test, set uncertainty.insufficientEvidence to true, explain the limitation, and return an empty evidenceRefs array. Always require learner confirmation.
 
 ${conceptInstructions}`;
 
 export const BELIEF_SPEC_ANALYST_INSTRUCTIONS = `You are CounterLab's reasoning analyst. Propose two meaningfully different models of the learner's claim using only the sanitized artifact evidence and the selected Concept Pack below. Do not execute code, invent results, grade mastery, choose for the learner, or decide verification.
 
-Every evidence item must copy an exact supplied hash. Use null for an inapplicable cellIndex or outputIndex. Hypothesis and alternative evidence must be selected from the top-level evidenceRefs. Candidate experiment IDs must come only from the selected Concept Pack's candidateExperimentIds. CounterLab binds the same pack-owned candidate experiment IDs to both primary hypotheses after validating the proposal, because a discriminating experiment must evaluate predictions under both hypotheses. State explicit conditions and at least one non-claim for each hypothesis. supportState describes readiness to run a discriminating experiment, not whether either hypothesis is already proven. Unknown experimental outcomes belong in conditions, non-claims, and uncertainty. Return SUPPORTED when the supplied supported artifact evidence can frame two candidate-linked hypotheses. If the evidence cannot support a discriminating experiment, return INSUFFICIENT_EVIDENCE with empty evidence and candidate lists. CounterLab will bind the original claim, concept, identifier, support readiness, and UNDECIDED learner state after local validation.
+Every evidence item must copy an exact supplied hash. For code and learner_claim evidence, excerpt must be an empty string or an exact contiguous verbatim substring of the supplied sanitized text; never summarize or paraphrase inside excerpt. For all other evidence kinds, use an empty excerpt unless the exact displayed text is supplied. Use null for an inapplicable cellIndex or outputIndex. Hypothesis and alternative evidence must copy a selected top-level evidenceRefs object exactly. Candidate experiment IDs must come only from the selected Concept Pack's candidateExperimentIds. CounterLab binds the same pack-owned candidate experiment IDs to both primary hypotheses after validating the proposal, because a discriminating experiment must evaluate predictions under both hypotheses. State explicit conditions and at least one non-claim for each hypothesis. supportState describes readiness to run a discriminating experiment, not whether either hypothesis is already proven. Unknown experimental outcomes belong in conditions, non-claims, and uncertainty. Return SUPPORTED when the supplied supported artifact evidence can frame two candidate-linked hypotheses. If the evidence cannot support a discriminating experiment, return INSUFFICIENT_EVIDENCE with empty evidence and candidate lists. CounterLab will bind the original claim, concept, identifier, support readiness, and UNDECIDED learner state after local validation.
 
 ${conceptInstructions}`;
 
@@ -63,7 +63,11 @@ const EvidenceRefWireSchema = z
     outputIndex: z.number().int().nonnegative().nullable(),
     kind: z.enum(["code", "metric", "schema", "output", "learner_claim"]),
     hash: z.string().regex(SHA256_PATTERN),
-    excerpt: z.string(),
+    excerpt: z
+      .string()
+      .describe(
+        "Use an empty string or an exact contiguous verbatim substring of supplied sanitized code or learner-claim text; never summarize or paraphrase. For other evidence kinds, use an empty string unless exact displayed text was supplied.",
+      ),
     relevance: z.string().trim().min(1),
   })
   .strict();
@@ -986,6 +990,54 @@ function withoutNullableIndexes(
   };
 }
 
+function canonicalEvidenceExcerpt(
+  evidence: z.infer<typeof EvidenceRefWireSchema>,
+  input: BeliefAnalystInput,
+): string {
+  if (evidence.kind === "learner_claim") {
+    return evidence.hash === learnerClaimHash(input.learnerClaim)
+      ? sanitizeArtifactText(
+          input.learnerClaim,
+          input.manifest,
+          MAX_CLAIM_CHARACTERS,
+        )
+      : "";
+  }
+  if (evidence.kind !== "code" || evidence.cellIndex === null) {
+    return "";
+  }
+  const cell = input.manifest.cells.find(
+    (candidate) => candidate.index === evidence.cellIndex,
+  );
+  return cell !== undefined && cell.sourceSha256 === evidence.hash
+    ? sanitizeArtifactText(cell.sourceExcerpt, input.manifest)
+    : "";
+}
+
+function canonicalEvidenceRef(
+  evidence: z.infer<typeof EvidenceRefWireSchema>,
+  input: BeliefAnalystInput,
+): EvidenceRef {
+  return {
+    ...withoutNullableIndexes(evidence),
+    excerpt: canonicalEvidenceExcerpt(evidence, input),
+  };
+}
+
+function evidenceReferenceIdentity(
+  evidence: Pick<EvidenceRef, "kind" | "hash"> & {
+    cellIndex?: number | null | undefined;
+    outputIndex?: number | null | undefined;
+  },
+): string {
+  return JSON.stringify([
+    evidence.kind,
+    evidence.hash,
+    evidence.cellIndex ?? null,
+    evidence.outputIndex ?? null,
+  ]);
+}
+
 function fromBeliefSpecWire(
   value: unknown,
   input: BeliefAnalystInput,
@@ -999,12 +1051,6 @@ function fromBeliefSpecWire(
     );
   }
 
-  const mapHypothesis = (
-    hypothesis: z.infer<typeof PrimaryHypothesisWireSchema>,
-  ) => ({
-    ...hypothesis,
-    evidence: hypothesis.evidence.map(withoutNullableIndexes),
-  });
   const registeredCandidateIds = [
     ...getConceptPack(input.concept).scientificMethod.candidateExperimentIds,
   ];
@@ -1023,7 +1069,26 @@ function fromBeliefSpecWire(
       }
     }
   }
-  const evidenceRefs = wire.data.evidenceRefs.map(withoutNullableIndexes);
+  const evidenceRefs = wire.data.evidenceRefs.map((evidence) =>
+    canonicalEvidenceRef(evidence, input),
+  );
+  const evidenceByIdentity = new Map(
+    evidenceRefs.map((evidence) => [
+      evidenceReferenceIdentity(evidence),
+      evidence,
+    ]),
+  );
+  const canonicalNestedEvidence = (
+    evidence: z.infer<typeof EvidenceRefWireSchema>,
+  ): EvidenceRef =>
+    evidenceByIdentity.get(evidenceReferenceIdentity(evidence)) ??
+    canonicalEvidenceRef(evidence, input);
+  const mapHypothesis = (
+    hypothesis: z.infer<typeof PrimaryHypothesisWireSchema>,
+  ) => ({
+    ...hypothesis,
+    evidence: hypothesis.evidence.map(canonicalNestedEvidence),
+  });
   const insufficientEvidence =
     wire.data.supportState === "INSUFFICIENT_EVIDENCE";
   const candidate = {
@@ -1048,7 +1113,7 @@ function fromBeliefSpecWire(
     })),
     alternatives: wire.data.alternatives.map((alternative) => ({
       ...alternative,
-      evidence: alternative.evidence.map(withoutNullableIndexes),
+      evidence: alternative.evidence.map(canonicalNestedEvidence),
     })),
     uncertainty: wire.data.uncertainty,
     // The model may express uncertainty about an unmeasured outcome as PARTIAL.
