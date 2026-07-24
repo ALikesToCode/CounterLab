@@ -218,6 +218,10 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   margin-top: 18px;
+  scroll-margin-block-start: 112px;
+  scroll-margin-block-end: calc(
+    var(--proof-console-handle-height, 52px) + 32px
+  );
 }
 
 .viewTabs button {
