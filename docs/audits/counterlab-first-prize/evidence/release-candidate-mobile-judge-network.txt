@@ -1,0 +1,6 @@
+97. [GET] http://127.0.0.1:4173/api/health => [200] OK
+98. [GET] http://127.0.0.1:4173/api/health => [200] OK
+130. [GET] http://127.0.0.1:4173/@fs/home/mysterious/storage/github/CounterLab/fixtures/public/leakage_sample_proof_capsule_v1.counterlab => [200] OK
+131. [GET] http://127.0.0.1:4173/@fs/home/mysterious/storage/github/CounterLab/fixtures/public/leakage_sample_proof_capsule_v1.counterlab => [200] OK
+
+Note: 127 static requests not shown, run with "static" option to see them.
