@@ -1267,9 +1267,9 @@ export class OpenAIResponsesTransport implements ResponsesTransport {
       if (error instanceof OpenAI.APIError) {
         const status = error.status;
         const category =
-          status === 401 || status === 403
+          status === 401
             ? "authentication"
-            : status === 404
+            : status === 403 || status === 404
               ? "configuration"
               : status === 429
                 ? "rate_limit"
@@ -1280,11 +1280,18 @@ export class OpenAIResponsesTransport implements ResponsesTransport {
           status: status ?? null,
           category,
         });
-        if (status === 401 || status === 403) {
+        if (status === 401) {
           throw new BeliefAnalystError(
             "LIVE_UNAVAILABLE",
             "Responses endpoint authentication failed",
             { category: "authentication", status },
+          );
+        }
+        if (status === 403) {
+          throw new BeliefAnalystError(
+            "LIVE_UNAVAILABLE",
+            "Responses endpoint access is not enabled for the configured model",
+            { category: "configuration", status },
           );
         }
         if (status === 404) {

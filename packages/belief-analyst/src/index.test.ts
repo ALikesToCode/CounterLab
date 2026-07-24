@@ -1474,6 +1474,55 @@ describe("custom Responses endpoint", () => {
     errorLog.mockRestore();
   });
 
+  it("reports model entitlement failures as configuration instead of invalid credentials", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const transport = new OpenAIResponsesTransport({
+      apiKey: "server-only-key",
+      baseURL: "https://responses.example.test/v1",
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              message: "private plan details",
+              type: "permission_error",
+              code: "insufficient_plan",
+            },
+          }),
+          { status: 403, headers: { "content-type": "application/json" } },
+        ),
+    });
+
+    await expect(
+      transport.parse({
+        model: "configured-model",
+        instructions: "Return the schema.",
+        input: "{}",
+        text: {
+          format: zodTextFormat(
+            z.object({ ok: z.literal(true) }),
+            "test_result",
+          ),
+        },
+        reasoning: { effort: "medium" },
+        store: false,
+        safety_identifier: deriveSafetyIdentifier("session_entitlement"),
+      }),
+    ).rejects.toMatchObject({
+      code: "LIVE_UNAVAILABLE",
+      message:
+        "Responses endpoint access is not enabled for the configured model",
+      details: { category: "configuration", status: 403 },
+    });
+    expect(errorLog).toHaveBeenCalledWith(
+      "CounterLab Responses request rejected",
+      { status: 403, category: "configuration" },
+    );
+    expect(JSON.stringify(errorLog.mock.calls)).not.toMatch(
+      /private plan details|permission_error|insufficient_plan/u,
+    );
+    errorLog.mockRestore();
+  });
+
   it("classifies connection failures as transport errors instead of request rejections", async () => {
     const transport = new OpenAIResponsesTransport({
       apiKey: "server-only-key",
