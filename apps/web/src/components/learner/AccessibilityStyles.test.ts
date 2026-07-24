@@ -67,7 +67,7 @@ describe("learner-facing responsive style safeguards", () => {
     );
     expect(deferredStyles).toContain("min-height: 388px");
     expect(judgeStyles).toContain("gap: 20px");
-    expect(judgeStyles).toContain("padding-block: 20px 52px");
+    expect(judgeStyles).toContain("padding-block: 14px 52px");
   });
 
   it("keeps prose floors and 44px product targets explicit", () => {
