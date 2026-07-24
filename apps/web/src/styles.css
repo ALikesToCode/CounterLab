@@ -6658,6 +6658,7 @@ body {
   grid-template-areas:
     "question"
     "belief-break"
+    "explainers"
     "support"
     "recent";
   gap: 18px;
@@ -6708,6 +6709,15 @@ body {
   width: min(780px, 100%);
   justify-self: center;
   min-width: 0;
+}
+
+.landing-explainer-strips {
+  grid-area: explainers;
+  width: min(780px, 100%);
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  justify-self: center;
 }
 
 .landing-comparison-preview {

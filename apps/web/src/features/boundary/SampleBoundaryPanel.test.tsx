@@ -66,7 +66,7 @@ describe("SampleBoundaryPanel", () => {
     );
   });
 
-  it("completes only after an explicit changing-condition classification", async () => {
+  it("completes when the verified map is revealed without grading the learner", async () => {
     const onComplete = vi.fn();
     verifier.mockResolvedValue({
       boundary: { report: { status: "VERIFIED" } },
@@ -80,11 +80,10 @@ describe("SampleBoundaryPanel", () => {
       onReveal?: () => void;
       onClassify: (classification: string) => void;
     };
-    props.onReveal?.();
     props.onClassify("CONCLUSION_STABLE");
     expect(onComplete).not.toHaveBeenCalled();
 
-    props.onClassify("CONCLUSION_CHANGES");
+    props.onReveal?.();
     expect(onComplete).toHaveBeenCalledOnce();
   });
 

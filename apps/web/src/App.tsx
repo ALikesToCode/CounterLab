@@ -1178,8 +1178,8 @@ function Landing({
               <p className="landing-trust-summary">
                 CounterLab is a belief debugger—not a tutor or notebook linter.
                 Ask a question or attach a supported notebook; it reads the
-                evidence and never runs its cells. Seal a Prediction, then let
-                one controlled test answer—not AI prose.
+                evidence and never runs its cells. Built for ML learners: seal a
+                Prediction, then let one controlled test answer—not AI prose.
               </p>
             </div>
 
@@ -1187,7 +1187,12 @@ function Landing({
               className="landing-entry-actions"
               aria-label="Fastest ways to see CounterLab work"
             >
-              <button type="button" disabled={busy} onClick={startSample}>
+              <button
+                type="button"
+                aria-label="Start verified sample lesson"
+                disabled={busy}
+                onClick={startSample}
+              >
                 Start verified sample <span aria-hidden="true">→</span>
               </button>
               <a href="/judge">
@@ -1203,9 +1208,6 @@ function Landing({
               inputRef={composerInputRef}
               busy={busy}
             />
-
-            <LearnerThesisStrip />
-            <LiveAuthorityStrip />
           </section>
 
           <aside
@@ -1214,6 +1216,11 @@ function Landing({
           >
             <LockedBeliefBreakPreview density="strip" />
           </aside>
+
+          <div className="landing-explainer-strips">
+            <LearnerThesisStrip />
+            <LiveAuthorityStrip />
+          </div>
 
           <div
             className="landing-proof-note"
@@ -1337,7 +1344,7 @@ function Landing({
           </div>
 
           <div className="landing-rail-group landing-rail-secondary">
-            <a href="/judge" aria-label="Judge Mode">
+            <a href="/judge" aria-label="Public evidence dossier">
               <span className="landing-rail-icon" aria-hidden="true">
                 <EntryIcon name="judge" />
               </span>

@@ -120,7 +120,7 @@ describe("JudgeModeView", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: /inspect a verified belief break from question to proof/i,
+        name: /see a verified belief break in ten seconds/i,
       }),
     ).toBeInTheDocument();
     const proof = screen.getByRole("complementary", {

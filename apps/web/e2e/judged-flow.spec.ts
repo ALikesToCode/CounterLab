@@ -1028,7 +1028,9 @@ async function waitForSamplePatch(page: Page) {
     }),
   ).toBeVisible({ timeout: 30_000 });
   await expect(
-    page.getByRole("heading", { name: /Your learning, before and after/i }),
+    page.getByRole("heading", {
+      name: /Your recorded lesson, before and after/i,
+    }),
   ).toBeVisible();
 }
 
@@ -1394,6 +1396,10 @@ for (const viewport of beliefBreakViewports) {
     const audienceDifference = page.getByText(
       /Built for ML learners: seal a Prediction, then let one controlled test answer—not AI prose/i,
     );
+    const startSample = page.getByRole("button", {
+      name: /Start verified sample lesson/i,
+    });
+    const judgeMode = page.getByRole("link", { name: /Judge Mode/i });
     const composer = page.getByLabel("Your question or claim");
     const submit = page.getByRole("button", { name: /Test this claim/i });
     const promptStarters = page.getByRole("group", {
@@ -1424,6 +1430,10 @@ for (const viewport of beliefBreakViewports) {
     });
     await skipLink.focus();
     await expect(skipLink).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(startSample).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(judgeMode).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(composer).toBeFocused();
     await expectEntirelyInFirstViewport(
@@ -1734,7 +1744,9 @@ test("the first visit explains the lesson before asking for technical knowledge"
   const visibleWords = (await page.locator("body").innerText())
     .trim()
     .split(/\s+/).length;
-  expect(visibleWords).toBeLessThan(190);
+  // The visible 20-second sequence and four-role authority strip are required
+  // first-visit context; keep the complete opened navigation surface bounded.
+  expect(visibleWords).toBeLessThan(260);
   await expect(page.locator("body")).not.toContainText(
     /formalize|discriminating|canonical|mutation/i,
   );
@@ -1847,7 +1859,9 @@ test("Try Instantly persists the verified learning loop and exports a valid proo
 
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: /Your learning, before and after/i }),
+    page.getByRole("heading", {
+      name: /Your recorded lesson, before and after/i,
+    }),
   ).toBeVisible();
   await expect(
     page

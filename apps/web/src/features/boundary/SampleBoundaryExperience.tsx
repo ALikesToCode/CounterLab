@@ -89,7 +89,10 @@ export function SampleBoundaryExperience({
         {huntSkipped ? (
           <section className="revision panel" role="status">
             <strong>Map revealed without a Boundary classification.</strong>
-            <p>Apply stays locked until you identify a changing condition.</p>
+            <p>
+              Apply is available once the verified map is visible; this lesson
+              does not grade your choice.
+            </p>
             <button
               className="button button-quiet"
               type="button"

@@ -68,8 +68,8 @@ export function SampleBoundaryPanel({
           stage: "boundary",
           classification,
         });
-        if (classification === "CONCLUSION_CHANGES") onComplete();
       }}
+      onReveal={onComplete}
     />
   );
 }

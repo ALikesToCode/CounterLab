@@ -1252,7 +1252,7 @@ describe("CounterLab judged flow", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: /inspect a verified belief break from question to proof/i,
+        name: /see a verified belief break in ten seconds/i,
       }),
     ).toBeInTheDocument();
     expect(window.location.pathname).toBe("/judge");
@@ -2937,7 +2937,7 @@ describe("CounterLab judged flow", () => {
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     await screen.findByRole("heading", {
-      name: /inspect a verified belief break from question to proof/i,
+      name: /see a verified belief break in ten seconds/i,
     });
     await act(async () => {
       pending.resolve(cancellationResponse);
@@ -3050,7 +3050,7 @@ describe("CounterLab judged flow", () => {
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     await screen.findByRole("heading", {
-      name: /inspect a verified belief break from question to proof/i,
+      name: /see a verified belief break in ten seconds/i,
     });
     await act(async () => {
       pending.resolve(cancellationResponse);
@@ -3060,7 +3060,7 @@ describe("CounterLab judged flow", () => {
     expect(window.location.pathname).toBe("/judge");
     expect(
       screen.getByRole("heading", {
-        name: /inspect a verified belief break from question to proof/i,
+        name: /see a verified belief break in ten seconds/i,
       }),
     ).toBeInTheDocument();
   });
@@ -4448,12 +4448,12 @@ describe("CounterLab judged flow", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText(/integrity-hashed/i)).toBeInTheDocument();
-    expect(applyTab).toBeDisabled();
+    expect(applyTab).toBeEnabled();
     expect(
       window.localStorage.getItem(
         "counterlab.sampleBoundaryClassifiedSessionId",
       ),
-    ).toBeNull();
+    ).toBe("session_ui");
 
     await user.click(
       screen.getByRole("radio", {

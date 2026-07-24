@@ -322,7 +322,7 @@ describe("SampleBoundaryExperience", () => {
     expect(onClassify).not.toHaveBeenCalled();
     expect(onReveal).toHaveBeenCalledOnce();
     expect(screen.getByRole("status")).toHaveTextContent(
-      /apply stays locked until you identify a changing condition/i,
+      /apply is available once the verified map is visible; this lesson does not grade your choice/i,
     );
     expect(
       screen.queryByRole("heading", {
