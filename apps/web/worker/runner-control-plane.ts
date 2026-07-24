@@ -158,7 +158,9 @@ export class HttpRunnerDispatcher implements RunnerDispatcher {
     this.baseURL = normalizeRunnerBaseURL(options.baseURL);
     assertExactRunnerReleaseIdentity(options.releaseIdentity);
     this.releaseIdentity = options.releaseIdentity;
-    this.fetcher = options.fetch ?? globalThis.fetch;
+    this.fetcher =
+      options.fetch ??
+      ((input, init) => globalThis.fetch(input, init));
   }
 
   async ready(): Promise<boolean> {

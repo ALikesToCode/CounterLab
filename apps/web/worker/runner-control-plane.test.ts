@@ -42,6 +42,42 @@ const runnerReleaseIdentity = {
 };
 
 describe("HttpRunnerDispatcher", () => {
+  it("keeps the runtime fetch receiver when no override is provided", async () => {
+    const originalFetch = globalThis.fetch;
+    const runtimeFetch = vi.fn(function (this: unknown) {
+      if (this !== globalThis) {
+        throw new TypeError("Illegal invocation");
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            status: "ready",
+            service: "counterlab-hosted-runner",
+            generationFilesystemReadIsolation: "OS_ENFORCED",
+            runnerSourceCommit,
+            runnerImageDigest,
+            generationIsolationEvidenceSha256,
+            generationIsolationProbeSha256,
+          }),
+          { status: 200 },
+        ),
+      );
+    });
+    globalThis.fetch = runtimeFetch as typeof fetch;
+
+    try {
+      const dispatcher = new HttpRunnerDispatcher({
+        baseURL: "https://runner.example.test",
+        releaseIdentity: runnerReleaseIdentity,
+      });
+
+      await expect(dispatcher.ready()).resolves.toBe(true);
+      expect(runtimeFetch).toHaveBeenCalledOnce();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("starts and probes the digest-bound Container readiness instance", async () => {
     const startAndWaitForPorts = vi.fn(async () => undefined);
     const readyResponse = new Response(
