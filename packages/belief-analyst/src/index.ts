@@ -1201,6 +1201,12 @@ export class OpenAIResponsesTransport implements ResponsesTransport {
       }
       if (error instanceof OpenAI.APIError) {
         const status = error.status;
+        console.error("CounterLab Responses request rejected", {
+          status: status ?? null,
+          type: error.type ?? null,
+          code: error.code ?? null,
+          param: error.param ?? null,
+        });
         if (status === 401 || status === 403) {
           throw new BeliefAnalystError(
             "LIVE_UNAVAILABLE",
