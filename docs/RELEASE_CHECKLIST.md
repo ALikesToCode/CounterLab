@@ -441,5 +441,15 @@ after the final source freeze.
       100/100. The test harness uses an explicit bounded five-second async wait
       for Vite's first-use route-module transform; behavioral assertions are
       unchanged.
+- [x] Complete web Vitest passes 86 files and 765/765 tests; repository, web,
+      and Worker TypeScript pass.
+- [x] All 28 complete-root failures pass their isolated/capability reruns:
+      Codex App Server 42/42, hosted-runner/read-isolation 9/9, and sequential
+      source-bound/release-verifier 20/20. The aggregate restricted run remains
+      recorded as 826 passed, 28 failed, and 2 skipped rather than rewritten.
+- [x] Kernel passes 221/222 under restriction plus the one loopback-dependent
+      service test 1/1 with the authorized capability.
+- [x] Repository-contained production build passes and the secret scan passes
+      across 1,485 files.
 - [ ] Publish Devpost and record the submission receipt. No learner-impact
       result or `main` merge is claimed.

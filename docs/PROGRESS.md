@@ -5916,6 +5916,20 @@ Release remains **NO-GO** until the replacement tuple completes every gate.
   App suite passed **100/100** after the test harness gave route-split module
   transforms an explicit bounded five-second async wait. No behavioral
   assertion or production code changed for that test-environment repair.
+- Complete web Vitest passed **86 files, 765/765 tests**. Repository, web, and
+  Worker TypeScript passed.
+- The complete root Vitest run reported **69 files passed, 6 failed; 826 tests
+  passed, 28 failed, 2 skipped**. Every failure then passed in the required
+  isolated/capability rerun: Codex App Server fixtures **42/42**, hosted-runner
+  loopback plus read-isolation **9/9**, and the resource-sensitive
+  source-bound/release-verifier files **20/20** when run sequentially.
+- Kernel Pytest reported **221/222** in the restricted process; its only failure
+  was loopback socket creation. The exact service test passed **1/1** with the
+  authorized local capability.
+- The repository-contained production build passed: Worker **1,942.57 kB /
+  374.56 kB gzip**, main client **497.91 kB / 139.83 kB gzip**, and client CSS
+  **209.69 kB / 36.22 kB gzip**. The repository secret scan passed across
+  **1,485 files**.
 - No consented learner-impact observation is claimed. Devpost publication,
   submission receipt, and `main` merge are not claimed.
 
