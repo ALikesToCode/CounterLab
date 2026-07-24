@@ -5851,3 +5851,75 @@ and public journeys actually pass.
 - Do not merge `main` in this slice.
 
 Release remains **NO-GO** until the replacement tuple completes every gate.
+
+## Qualified public sample/replay checkpoint — 2026-07-24T13:05:40Z
+
+### Public tuple reverified
+
+- `https://counterlab.cserules.workers.dev/ready` returned HTTP 200 with all
+  eight readiness checks true: admission, analyst configuration, maintenance,
+  persistence, private storage, release identity, runner, and signing.
+- The active Cloudflare Worker is
+  `fa85b4c8-25bf-4800-9110-f6fba3e3700a`, tagged to evidence commit
+  `6bab1a560fd534c66be7d07d5367942a2f440ba3`.
+- The bound runner source is
+  `b4321bbd64fb11eff0952ea7a4c933cd32dd5e8b` with image digest
+  `sha256:00fe2ca9f5760528bb7865b0626efcc933f4d163da7bc2af5e18a063522ea1ca`.
+- The live readiness probe returned HTTP 200 with
+  `generationFilesystemReadIsolation: "OS_ENFORCED"` and all three configured
+  capability labels present. A configured label is not substituted for a
+  successful model call.
+
+### Public journeys actually completed with CloakBrowser
+
+- Completed the full verified entity-leakage sample journey in session
+  `session_ff055fc7-cb68-418c-8707-025277cefbad`: Question, fixed Model Duel,
+  immutable Prediction at 72% confidence, verified Test, learner-authored
+  interpretation, interactive Boundary Hunt, reflection, deterministic Apply,
+  transfer pass, Repair, patched notebook download, and Proof Capsule download.
+- Every non-static request in the journey returned HTTP 200 or 201. The final
+  console error count was zero. The exact request log is
+  `.playwright-cli/production-2026-07-24/sample-complete-network.log`; the
+  console record is
+  `.playwright-cli/production-2026-07-24/sample-complete-console-errors.log`.
+- The patched notebook is
+  `.playwright-cli/customer-churn-leakage-counterlab-patched.ipynb`; the
+  checked-in fixed-sample Capsule download is
+  `.playwright-cli/leakage-sample-proof-capsule-v1.counterlab`.
+- Verified replay `/replay/leakage-01` remained persistently labelled
+  read-only, made no new model or Codex call, and exposed no patch unlock.
+  `/replay/not-a-real-replay` produced an immediate not-found recovery surface
+  rather than a perpetual loading state.
+- Judge Mode was inspected at 390 x 844 and 1440 x 900. The learner-facing
+  mechanism and 98.5% to 59.4% fixed-sample break were visible in the first
+  viewport, and the 390 px viewport had no horizontal overflow. Evidence:
+  `.playwright-cli/production-2026-07-24/judge-mobile-390x844.jpeg` and
+  `.playwright-cli/production-2026-07-24/judge-desktop-1440x900.jpeg`.
+
+### Remaining live and source gates
+
+- A supported held-out entity-leakage notebook reached supported intake and
+  packet preview, but the configured Responses endpoint rejected the real
+  analyst request. CounterLab returned 503, released no Belief Spec, result, or
+  runner job, and did not borrow sample/replay authority. The complete live
+  notebook journey is therefore **not qualified**.
+- A valid server-side Responses API credential compatible with the configured
+  endpoint is still required before a real GPT-5.6 live journey can pass.
+  Credentials must remain server-side and must not be committed.
+- The production tuple intentionally remains the qualified `6bab1a5` release.
+  Later source commits `df86855` and `dc1c54a` sanitize upstream diagnostic
+  categories and keep Theater tabs clear of sticky chrome; they are tested but
+  not claimed as deployed because a new upload would inherit the currently
+  incompatible latest-version analyst secret setting.
+- Focused analyst tests passed **62/62**; Experiment Theater passed **7/7**;
+  web TypeScript, scoped Prettier, and Git whitespace checks passed. The current
+  App suite passed **100/100** after the test harness gave route-split module
+  transforms an explicit bounded five-second async wait. No behavioral
+  assertion or production code changed for that test-environment repair.
+- No consented learner-impact observation is claimed. Devpost publication,
+  submission receipt, and `main` merge are not claimed.
+
+The public Sample and Replay paths are qualified at this checkpoint. The
+release remains **NO-GO for a complete Live notebook claim** until the analyst
+credential/endpoint accepts a real Responses request and the full source tip is
+rebuilt, redeployed, and requalified.

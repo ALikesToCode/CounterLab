@@ -413,3 +413,33 @@ after the final source freeze.
 - [ ] Persist and hash-bind the exact-image generation-isolation sentinel,
       require its exact probe hash from the production runner, and propagate it
       through new receipt versions without rewriting v5/v3/v5.
+
+## Qualified public sample/replay checkpoint — 2026-07-24
+
+- [x] Public `/ready` returned HTTP 200 with all eight readiness checks true for
+      Worker `fa85b4c8-25bf-4800-9110-f6fba3e3700a`.
+- [x] Public readiness bound runner source
+      `b4321bbd64fb11eff0952ea7a4c933cd32dd5e8b`, runner digest
+      `sha256:00fe2ca9f5760528bb7865b0626efcc933f4d163da7bc2af5e18a063522ea1ca`,
+      and `OS_ENFORCED` generation filesystem read isolation.
+- [x] CloakBrowser completed the full entity-leakage sample through Prediction,
+      Test, interactive Boundary, Apply, Repair, patched notebook download, and
+      fixed-sample Proof Capsule download with no console errors.
+- [x] Verified replay remained persistently read-only with no new model/Codex
+      call or patch unlock; an unknown replay ID rendered direct recovery.
+- [x] Judge first-fold evidence was captured at 390 x 844 and 1440 x 900; the
+      fixed-sample mechanism remained visible and mobile had no horizontal
+      overflow.
+- [ ] Complete one supported public Live notebook journey. Supported intake and
+      packet preview passed, but the configured Responses endpoint rejected the
+      analyst request; the Worker failed closed with no Belief Spec, result, or
+      runner job.
+- [ ] Supply a valid server-side Responses API credential compatible with the
+      configured endpoint, then rebuild and qualify the exact current source
+      before changing the active deployment.
+- [x] Current focused UI gate: Experiment Theater passes 7/7 and App passes
+      100/100. The test harness uses an explicit bounded five-second async wait
+      for Vite's first-use route-module transform; behavioral assertions are
+      unchanged.
+- [ ] Publish Devpost and record the submission receipt. No learner-impact
+      result or `main` merge is claimed.
