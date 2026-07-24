@@ -451,5 +451,7 @@ after the final source freeze.
       service test 1/1 with the authorized capability.
 - [x] Repository-contained production build passes and the secret scan passes
       across 1,485 files.
+- [x] The configured user identity and `ALikesToCode/CounterLab` destination
+      were verified, and the feature branch was pushed without merging `main`.
 - [ ] Publish Devpost and record the submission receipt. No learner-impact
       result or `main` merge is claimed.
