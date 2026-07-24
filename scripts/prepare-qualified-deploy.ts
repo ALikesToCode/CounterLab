@@ -974,7 +974,7 @@ function assertProductionBindings(config: Record<string, unknown>): void {
   }
   const variables = record(config.vars, "Worker vars");
   const requiredVariables = {
-    OPENAI_MODEL: "gpt-5.6",
+    OPENAI_MODEL: "gpt-5.6-sol",
     OPENAI_REASONING_EFFORT: "medium",
     OPENAI_TIMEOUT_MS: "180000",
     COUNTERLAB_MAX_NOTEBOOK_BYTES: "10485760",
