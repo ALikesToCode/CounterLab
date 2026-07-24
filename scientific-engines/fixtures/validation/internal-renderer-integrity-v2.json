@@ -3,7 +3,7 @@
   "evidenceId": "internal-renderer-integrity-v2",
   "kind": "integrity",
   "files": {
-    "apps/web/src/App.tsx": "b769d18ae859d586d31772c641f3c3a863996efb6367ebd57190e97db1edd926",
+    "apps/web/src/App.tsx": "386bbe365a02029ffdbefbc7211ad7148ee6774dbfd4efbcc844243d7c0696a8",
     "apps/web/src/components/generative-ui/BoundaryMapBlock.tsx": "efba2409f64c4600f10c0faf7630e2c495a1699168af795f9aedae457822a0ef",
     "apps/web/src/components/generative-ui/TrustedLabSceneRenderer.tsx": "e27041666c64342790f81e33665fa61164134c374c11aa57a5378ebb6b42a180",
     "apps/web/src/components/generative-ui/VerifiedLabScenePanel.tsx": "e8ce00f1da04e4ba327b577915d77379ba103d69556689653ff619cf44e631bb",

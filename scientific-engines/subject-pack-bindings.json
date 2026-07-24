@@ -81,7 +81,7 @@
           "authorityId": "counterlab-signed-result-renderer",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-renderer-integrity-v2",
-          "integrityHash": "86f70fa8b18eb0d0af3da2a6c7709d02bb2951c877913a5270e387982d70b602",
+          "integrityHash": "37b05446c1dc40ad995035b47159fce2cc50fece38459e65c049a54d3617130a",
           "validationEvidenceIds": [
             "signed-result-binding-v2"
           ],
@@ -92,7 +92,7 @@
           "authorityId": "counterlab-mutation-matrix",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-mutations-integrity-v2",
-          "integrityHash": "57942390fbe6622222e78ae47497fd4fa0f69922af9812eb61102452c08d00c8",
+          "integrityHash": "1cc82b6e7472c8fec50a8332076195bc10fa0c7ba3fe7589dce71bc5ec5a80f6",
           "validationEvidenceIds": [
             "ml-row-order-invariance-v1"
           ],
@@ -184,7 +184,7 @@
           "authorityId": "counterlab-signed-result-renderer",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-renderer-integrity-v2",
-          "integrityHash": "86f70fa8b18eb0d0af3da2a6c7709d02bb2951c877913a5270e387982d70b602",
+          "integrityHash": "37b05446c1dc40ad995035b47159fce2cc50fece38459e65c049a54d3617130a",
           "validationEvidenceIds": [
             "signed-result-binding-v2"
           ],
@@ -195,7 +195,7 @@
           "authorityId": "counterlab-mutation-matrix",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-mutations-integrity-v2",
-          "integrityHash": "57942390fbe6622222e78ae47497fd4fa0f69922af9812eb61102452c08d00c8",
+          "integrityHash": "1cc82b6e7472c8fec50a8332076195bc10fa0c7ba3fe7589dce71bc5ec5a80f6",
           "validationEvidenceIds": [
             "ml-row-order-invariance-v1"
           ],
