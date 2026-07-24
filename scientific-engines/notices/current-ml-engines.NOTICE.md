@@ -1,7 +1,7 @@
 # CounterLab current ML engine notices
 
 This notice covers the scientific-engine local candidate
-`sha256:bacee090301ff278deb4bfd79e2bdc35b126986d25e4a93a4550067bd4474124`.
+`sha256:feab579b43ed7cc14fdc1060f46ff525b141a23d326d21176233ade709b43932`.
 It is not labelled as the Cloudflare production image until deployment and
 production smoke finish.
 It does not replace the complete installed license texts preserved under
