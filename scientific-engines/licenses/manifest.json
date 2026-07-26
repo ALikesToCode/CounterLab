@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "scope": "scientific-engine-local-candidate",
-  "imageDigest": "sha256:1f1397aa71f2334010db6399f6cc04ed5bba943f23c177eca1ec4a06645785d2",
+  "imageDigest": "sha256:bfe88d912d9ed46e528397357bb411735a62bf701548a00716dec74a3a051cf8",
   "capturedOn": "2026-07-26",
   "entries": [
     {
