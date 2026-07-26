@@ -1,5 +1,6 @@
 export interface ContainedImageTarget {
   canonicalImage: string;
+  digestRepositories?: string[];
   reportedConfigDigest?: string;
   targetDigest: string;
   targetMediaType?: string;

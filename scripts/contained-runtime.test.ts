@@ -2282,13 +2282,14 @@ describe("contained runtime command policy", () => {
     const alias = `docker.io/library/counterlab-runtime-invocation:${invocationId}`;
     const publishedTargetMetadata = JSON.parse(fixture.targetSource);
     publishedTargetMetadata[0].RepoDigests.push(
-      `registry.cloudflare.com/9b0a1524e478000ec9b3ff2da6104d81/counterlab-runner@${fixture.target.targetDigest}`,
+      `registry.cloudflare.com/9b0a1524e478000ec9b3ff2da6104d81/counterlab-runner:git-${sourceCommit}@${fixture.target.targetDigest}`,
     );
+    const publishedTarget = parseContainedImageTarget({
+      image,
+      source: JSON.stringify(publishedTargetMetadata),
+    });
     expect(
-      parseContainedImageTarget({
-        image,
-        source: JSON.stringify(publishedTargetMetadata),
-      }).targetDigest,
+      publishedTarget.targetDigest,
     ).toBe(fixture.target.targetDigest);
 
     const conflictingPublishedTarget = structuredClone(publishedTargetMetadata);
@@ -2304,9 +2305,23 @@ describe("contained runtime command policy", () => {
 
     validateContainedImageAliasTarget({
       alias,
-      expectedTarget: fixture.target,
-      source: aliasMetadata(alias, fixture),
+      expectedTarget: publishedTarget,
+      source: JSON.stringify({
+        ...JSON.parse(aliasMetadata(alias, fixture))[0],
+        RepoDigests: publishedTargetMetadata[0].RepoDigests,
+      }),
     });
+    const unrelatedPublishedAlias = JSON.parse(aliasMetadata(alias, fixture));
+    unrelatedPublishedAlias[0].RepoDigests = [
+      `registry.cloudflare.com/9b0a1524e478000ec9b3ff2da6104d81/counterlab-shadow:git-${sourceCommit}@${fixture.target.targetDigest}`,
+    ];
+    expect(() =>
+      validateContainedImageAliasTarget({
+        alias,
+        expectedTarget: publishedTarget,
+        source: JSON.stringify(unrelatedPublishedAlias),
+      }),
+    ).toThrow(/repository path/u);
     const sourceRepositoryMetadata = JSON.parse(aliasMetadata(alias, fixture));
     sourceRepositoryMetadata[0].RepoDigests = [
       `counterlab-runner@${fixture.target.targetDigest}`,

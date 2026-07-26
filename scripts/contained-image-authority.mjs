@@ -18,7 +18,7 @@ const repositoryRoot = realpathSync(
 const imagePattern = /^counterlab-(?:adapter|runner):git-([a-f0-9]{40})$/;
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
 const externalRepositoryPattern =
-  /^[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[0-9]+)?(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)+$/;
+  /^[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[0-9]+)?(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)+(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?$/;
 const manifestMediaTypes = new Set([
   "application/vnd.docker.distribution.manifest.v2+json",
   "application/vnd.oci.image.manifest.v1+json",
@@ -183,6 +183,7 @@ function inspectedImageIdentity({
   record,
   label,
   allowedDigestImages = [],
+  allowedDigestRepositories = [],
   allowExternalRepositoryDigests = false,
 }) {
   const canonicalImage = normalizedInspectedImage(expectedImage);
@@ -203,9 +204,27 @@ function inspectedImageIdentity({
     [canonicalImage, ...allowedDigestImages].flatMap((image) => {
       const canonical = normalizedInspectedImage(image);
       const repository = canonical.slice(0, canonical.lastIndexOf(":"));
-      return [repository, repository.slice("docker.io/library/".length)];
+      return [
+        canonical,
+        canonical.slice("docker.io/library/".length),
+        repository,
+        repository.slice("docker.io/library/".length),
+      ];
     }),
   );
+  for (const repository of allowedDigestRepositories) {
+    if (
+      typeof repository !== "string" ||
+      (!allowedRepositories.has(repository) &&
+        !externalRepositoryPattern.test(repository))
+    ) {
+      throw new Error(
+        `contained image authority ${label} allowed repository is invalid`,
+      );
+    }
+    allowedRepositories.add(repository);
+  }
+  const observedRepositories = new Set();
   const targetDigests = new Set(
     repositoryDigests.map((entry) => {
       const separator = entry.lastIndexOf("@");
@@ -227,6 +246,7 @@ function inspectedImageIdentity({
           `contained image authority ${label} repository digest is invalid`,
         );
       }
+      observedRepositories.add(repository);
       return digest;
     }),
   );
@@ -244,6 +264,7 @@ function inspectedImageIdentity({
   }
   return {
     canonicalImage,
+    digestRepositories: [...observedRepositories].sort(),
     reportedConfigDigest: record.Id,
     targetDigest: [...targetDigests][0],
   };
@@ -361,6 +382,7 @@ export function validateContainedImageAliasTarget({
   if (Array.isArray(parsed)) {
     const inspected = inspectedImageIdentity({
       allowedDigestImages: [expectedTarget.canonicalImage],
+      allowedDigestRepositories: expectedTarget.digestRepositories,
       expectedImage: alias.slice("docker.io/library/".length),
       label: "alias metadata",
       record: inspectedImageRecord(source, "alias metadata"),
