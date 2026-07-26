@@ -1,6 +1,11 @@
 export const STOCK_CHROMIUM_DESIGN_REVIEW =
   "stock-chromium-design-review" as const;
 
+// Remote CDP journeys keep screenshots and traces as browser evidence. Leaving
+// Playwright video disabled avoids a second, local browser-runtime dependency
+// on its bundled FFmpeg executable.
+export const PLAYWRIGHT_VIDEO_MODE = "off" as const;
+
 const APPROVED_STOCK_CHROMIUM_EXECUTABLE = "/usr/bin/chromium";
 
 export type BrowserAuthority =

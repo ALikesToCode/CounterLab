@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  PLAYWRIGHT_VIDEO_MODE,
   resolveBrowserAuthority,
   STOCK_CHROMIUM_DESIGN_REVIEW,
   validateCloakCdpEndpoint,
 } from "../../e2e/browser-authority";
 
 describe("browser evidence authority", () => {
+  it("does not require a local FFmpeg runtime for remote CDP evidence", () => {
+    expect(PLAYWRIGHT_VIDEO_MODE).toBe("off");
+  });
+
   it("uses CloakBrowser when an explicit CDP endpoint exists", () => {
     expect(
       resolveBrowserAuthority({

@@ -12,7 +12,10 @@ import {
 } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
-import { resolveBrowserAuthority } from "./e2e/browser-authority";
+import {
+  PLAYWRIGHT_VIDEO_MODE,
+  resolveBrowserAuthority,
+} from "./e2e/browser-authority";
 import { DeploymentReceiptV7Schema } from "../../packages/scientific-engine-registry/src/index.js";
 import { PublicationReleaseBindingSchema } from "../../scripts/submission-publication-evidence.js";
 
@@ -237,10 +240,7 @@ export default defineConfig({
     viewport: { width: 1440, height: 900 },
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
-    // Stock Chromium is an explicitly labelled design-review fallback. It
-    // keeps screenshots and traces but cannot stand in for Cloak video
-    // evidence or install Playwright's FFmpeg outside this repository.
-    video: browserAuthority.kind === "cloak" ? "retain-on-failure" : "off",
+    video: PLAYWRIGHT_VIDEO_MODE,
   },
   ...(remoteBaseURL === undefined
     ? {
