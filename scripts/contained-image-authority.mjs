@@ -949,6 +949,9 @@ export function createContainedImageAuthority({
     canonicalImage: target.canonicalImage,
     commandSha256: sha256(canonicalJson(args)),
     configDigest,
+    ...(target.digestRepositories === undefined
+      ? {}
+      : { digestRepositories: [...target.digestRepositories] }),
     manifestDigest,
     layerDigests,
     process,

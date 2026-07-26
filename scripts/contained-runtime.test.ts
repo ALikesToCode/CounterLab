@@ -2311,6 +2311,26 @@ describe("contained runtime command policy", () => {
         },
       ]),
     });
+    const publishedAuthority = createContainedImageAuthority({
+      args: startupCommand(),
+      configSource: fixture.configSource,
+      manifestDigest: fixture.manifestDigest,
+      manifestSource: fixture.manifestSource,
+      target: publishedTarget,
+    });
+    expect(publishedAuthority.digestRepositories).toEqual(
+      publishedTarget.digestRepositories,
+    );
+    validateContainedImageAliasTarget({
+      alias,
+      expectedTarget: publishedAuthority,
+      source: JSON.stringify([
+        {
+          ...JSON.parse(aliasMetadata(alias, fixture))[0],
+          RepoDigests: publishedTargetMetadata[0].RepoDigests,
+        },
+      ]),
+    });
     const unrelatedPublishedAlias = JSON.parse(aliasMetadata(alias, fixture));
     unrelatedPublishedAlias[0].RepoDigests = [
       `registry.cloudflare.com/9b0a1524e478000ec9b3ff2da6104d81/counterlab-shadow:git-${sourceCommit}@${fixture.target.targetDigest}`,

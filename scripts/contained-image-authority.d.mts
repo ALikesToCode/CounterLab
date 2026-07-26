@@ -10,6 +10,7 @@ export interface ContainedImageAuthority {
   canonicalImage: string;
   commandSha256: string;
   configDigest: string;
+  digestRepositories?: string[];
   layerDigests: string[];
   manifestDigest: string;
   process: {
