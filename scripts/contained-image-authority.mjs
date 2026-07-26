@@ -17,6 +17,8 @@ const repositoryRoot = realpathSync(
 );
 const imagePattern = /^counterlab-(?:adapter|runner):git-([a-f0-9]{40})$/;
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
+const externalRepositoryPattern =
+  /^[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[0-9]+)?(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)+$/;
 const manifestMediaTypes = new Set([
   "application/vnd.docker.distribution.manifest.v2+json",
   "application/vnd.oci.image.manifest.v1+json",
@@ -181,6 +183,7 @@ function inspectedImageIdentity({
   record,
   label,
   allowedDigestImages = [],
+  allowExternalRepositoryDigests = false,
 }) {
   const canonicalImage = normalizedInspectedImage(expectedImage);
   const shortImage = canonicalImage.slice("docker.io/library/".length);
@@ -208,7 +211,13 @@ function inspectedImageIdentity({
       const separator = entry.lastIndexOf("@");
       const repository = separator > 0 ? entry.slice(0, separator) : "";
       const digest = separator > 0 ? entry.slice(separator + 1) : "";
-      if (!allowedRepositories.has(repository)) {
+      if (
+        !allowedRepositories.has(repository) &&
+        !(
+          allowExternalRepositoryDigests &&
+          externalRepositoryPattern.test(repository)
+        )
+      ) {
         throw new Error(
           `contained image authority ${label} repository path changed`,
         );
@@ -311,6 +320,7 @@ export function parseContainedImageTarget({ image, source }) {
       expectedImage: image,
       label: "target metadata",
       record: inspectedImageRecord(source, "target metadata"),
+      allowExternalRepositoryDigests: true,
     });
   }
   const metadata = object(parsed, "target metadata");

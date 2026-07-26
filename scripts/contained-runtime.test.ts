@@ -2280,6 +2280,27 @@ describe("contained runtime command policy", () => {
   it("authenticates image target, manifest, config, and invocation alias", () => {
     const fixture = imageFixture(startupCommand());
     const alias = `docker.io/library/counterlab-runtime-invocation:${invocationId}`;
+    const publishedTargetMetadata = JSON.parse(fixture.targetSource);
+    publishedTargetMetadata[0].RepoDigests.push(
+      `registry.cloudflare.com/9b0a1524e478000ec9b3ff2da6104d81/counterlab-runner@${fixture.target.targetDigest}`,
+    );
+    expect(
+      parseContainedImageTarget({
+        image,
+        source: JSON.stringify(publishedTargetMetadata),
+      }).targetDigest,
+    ).toBe(fixture.target.targetDigest);
+
+    const conflictingPublishedTarget = structuredClone(publishedTargetMetadata);
+    conflictingPublishedTarget[0].RepoDigests.push(
+      `registry.cloudflare.com/9b0a1524e478000ec9b3ff2da6104d81/counterlab-runner@sha256:${"9".repeat(64)}`,
+    );
+    expect(() =>
+      parseContainedImageTarget({
+        image,
+        source: JSON.stringify(conflictingPublishedTarget),
+      }),
+    ).toThrow(/target digest is ambiguous/u);
 
     validateContainedImageAliasTarget({
       alias,
