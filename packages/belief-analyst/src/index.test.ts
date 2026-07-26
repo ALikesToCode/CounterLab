@@ -906,6 +906,12 @@ describe("LiveBeliefAnalyst", () => {
     expect(transport.request?.instructions).toContain(
       "exact contiguous verbatim substring",
     );
+    expect(transport.request?.instructions).toContain(
+      "all model-authored narrative must remain qualitative and digit-free",
+    );
+    expect(JSON.stringify(transport.request?.text?.format)).toContain(
+      "Qualitative, digit-free",
+    );
     expect(JSON.parse(transport.request!.input)).toMatchObject({
       conceptPack: {
         candidateExperimentIds: [

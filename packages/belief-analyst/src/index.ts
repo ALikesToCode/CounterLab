@@ -53,7 +53,7 @@ ${conceptInstructions}`;
 
 export const BELIEF_SPEC_ANALYST_INSTRUCTIONS = `You are CounterLab's reasoning analyst. Propose two meaningfully different models of the learner's claim using only the sanitized artifact evidence and the selected Concept Pack below. Do not execute code, invent results, grade mastery, choose for the learner, or decide verification.
 
-Every evidence item must copy an exact supplied hash. For code and learner_claim evidence, excerpt must be an empty string or an exact contiguous verbatim substring of the supplied sanitized text; never summarize or paraphrase inside excerpt. For all other evidence kinds, use an empty excerpt unless the exact displayed text is supplied. Use null for an inapplicable cellIndex or outputIndex. Hypothesis and alternative evidence must copy a selected top-level evidenceRefs object exactly. Candidate experiment IDs must come only from the selected Concept Pack's candidateExperimentIds. CounterLab binds the same pack-owned candidate experiment IDs to both primary hypotheses after validating the proposal, because a discriminating experiment must evaluate predictions under both hypotheses. State explicit conditions and at least one non-claim for each hypothesis. supportState describes readiness to run a discriminating experiment, not whether either hypothesis is already proven. Unknown experimental outcomes belong in conditions, non-claims, and uncertainty. Return SUPPORTED when the supplied supported artifact evidence can frame two candidate-linked hypotheses. If the evidence cannot support a discriminating experiment, return INSUFFICIENT_EVIDENCE with empty evidence and candidate lists. CounterLab will bind the original claim, concept, identifier, support readiness, and UNDECIDED learner state after local validation.
+Every evidence item must copy an exact supplied hash. For code and learner_claim evidence, excerpt must be an empty string or an exact contiguous verbatim substring of the supplied sanitized text; never summarize or paraphrase inside excerpt. For all other evidence kinds, use an empty excerpt unless the exact displayed text is supplied. Use null for an inapplicable cellIndex or outputIndex. Hypothesis and alternative evidence must copy a selected top-level evidenceRefs object exactly. Candidate experiment IDs must come only from the selected Concept Pack's candidateExperimentIds. CounterLab binds the same pack-owned candidate experiment IDs to both primary hypotheses after validating the proposal, because a discriminating experiment must evaluate predictions under both hypotheses. State explicit conditions and at least one non-claim for each hypothesis. Before the learner seals a Prediction, all model-authored narrative must remain qualitative and digit-free: do not include digits, percentages, measured values, scores, thresholds, counts, cell numbers, or line numbers in relevance, hypothesis statements, conditions, non-claims, or alternative text. A learner claim or exact verbatim evidence excerpt may retain digits already present in the supplied input, but never copy those digits into model-authored narrative. supportState describes readiness to run a discriminating experiment, not whether either hypothesis is already proven. Unknown experimental outcomes belong in qualitative conditions, non-claims, and uncertainty. Return SUPPORTED when the supplied supported artifact evidence can frame two candidate-linked hypotheses. If the evidence cannot support a discriminating experiment, return INSUFFICIENT_EVIDENCE with empty evidence and candidate lists. CounterLab will bind the original claim, concept, identifier, support readiness, and UNDECIDED learner state after local validation.
 
 ${conceptInstructions}`;
 
@@ -68,9 +68,23 @@ const EvidenceRefWireSchema = z
       .describe(
         "Use an empty string or an exact contiguous verbatim substring of supplied sanitized code or learner-claim text; never summarize or paraphrase. For other evidence kinds, use an empty string unless exact displayed text was supplied.",
       ),
-    relevance: z.string().trim().min(1),
+    relevance: z
+      .string()
+      .trim()
+      .min(1)
+      .describe(
+        "Qualitative, digit-free explanation of why this supplied evidence is relevant. Do not include measured values, scores, percentages, thresholds, counts, cell numbers, or line numbers.",
+      ),
   })
   .strict();
+
+const PrePredictionNarrativeWireSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .describe(
+    "Qualitative, digit-free pre-Prediction narrative. Do not include measured values, scores, percentages, thresholds, counts, cell numbers, or line numbers.",
+  );
 
 const BeliefTestWireSchema = z
   .object({
@@ -122,9 +136,9 @@ const BeliefTestWireSchema = z
 const PrimaryHypothesisWireSchema = z
   .object({
     id: z.enum(["current", "competing"]),
-    statement: z.string().trim().min(1),
-    conditions: z.array(z.string().trim().min(1)).min(1),
-    nonClaims: z.array(z.string().trim().min(1)).min(1),
+    statement: PrePredictionNarrativeWireSchema,
+    conditions: z.array(PrePredictionNarrativeWireSchema).min(1),
+    nonClaims: z.array(PrePredictionNarrativeWireSchema).min(1),
     evidence: z.array(EvidenceRefWireSchema).max(6),
     supportedCandidateExperimentIds: z.array(z.string().trim().min(1)).max(12),
   })
@@ -140,11 +154,11 @@ const BeliefSpecV2WireSchema = z
         z
           .object({
             id: z.string().trim().min(1),
-            label: z.string().trim().min(1),
-            statement: z.string().trim().min(1),
-            rationale: z.string().trim().min(1),
-            conditions: z.array(z.string().trim().min(1)).min(1),
-            nonClaims: z.array(z.string().trim().min(1)).min(1),
+            label: PrePredictionNarrativeWireSchema,
+            statement: PrePredictionNarrativeWireSchema,
+            rationale: PrePredictionNarrativeWireSchema,
+            conditions: z.array(PrePredictionNarrativeWireSchema).min(1),
+            nonClaims: z.array(PrePredictionNarrativeWireSchema).min(1),
             evidence: z.array(EvidenceRefWireSchema).max(6),
             supportedCandidateExperimentIds: z
               .array(z.string().trim().min(1))
