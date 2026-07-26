@@ -20,7 +20,7 @@
     "staticAstScan": "PASSED"
   },
   "evidenceKind": "reachability-report",
-  "imageDigest": "sha256:ade504480de767c2ef3cacc6d574aef4ec4434a52f426f82def5621f3744fa18",
+  "imageDigest": "sha256:5e22f545566689a686dc2b5f0ff75b15660dfbec9dff32d31bd5c8dbbe768488",
   "limitations": [
     "This proves bounded non-reachability for the fixed hosted paths, not whole-program safety.",
     "The review expires and must be rerun when any recorded binding changes."
@@ -31,11 +31,11 @@
   },
   "pythonVersion": "3.13.14",
   "review": {
-    "expiresAt": "2026-08-09T18:20:16.766Z",
+    "expiresAt": "2026-08-09T18:44:30.554Z",
     "kevCatalogCount": 1653,
     "kevCatalogSha256": "036c579ee00120ad6b77a9e391ef96c96bd7ba4ab060214df0d79ddda2e64ce6",
     "kevCatalogVersion": "2026.07.24",
-    "kevCheckedAt": "2026-07-26T18:20:16.766Z",
+    "kevCheckedAt": "2026-07-26T18:44:30.554Z",
     "kevDateReleased": "2026-07-24T17:40:56.008Z",
     "kevSource": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
     "kevStatus": "NOT_LISTED",
@@ -48,11 +48,11 @@
       "Python or vulnerable module bytes change",
       "scanner database or vulnerability status changes"
     ],
-    "reviewedAt": "2026-07-26T18:20:16.766Z"
+    "reviewedAt": "2026-07-26T18:44:30.554Z"
   },
-  "sbomSha256": "de12326175749b475d42ed15a577fa58590cbf4c8c4d1d66344ba32712d21504",
+  "sbomSha256": "9f2367fcff548e11d3c7e8f1a37c027df22a1faaa2e390ea21c1954632379e72",
   "schemaVersion": "2",
-  "sourceCommit": "85bf6b71b787b40a93458b5981592882e31b1862",
+  "sourceCommit": "c78c4bc7521688000c625ac21557896c0c78148e",
   "status": "VERIFIED",
   "vulnerabilityId": "CVE-2026-15308"
 }
