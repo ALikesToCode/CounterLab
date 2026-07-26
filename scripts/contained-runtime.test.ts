@@ -2288,9 +2288,7 @@ describe("contained runtime command policy", () => {
       image,
       source: JSON.stringify(publishedTargetMetadata),
     });
-    expect(
-      publishedTarget.targetDigest,
-    ).toBe(fixture.target.targetDigest);
+    expect(publishedTarget.targetDigest).toBe(fixture.target.targetDigest);
 
     const conflictingPublishedTarget = structuredClone(publishedTargetMetadata);
     conflictingPublishedTarget[0].RepoDigests.push(
@@ -2306,10 +2304,12 @@ describe("contained runtime command policy", () => {
     validateContainedImageAliasTarget({
       alias,
       expectedTarget: publishedTarget,
-      source: JSON.stringify({
-        ...JSON.parse(aliasMetadata(alias, fixture))[0],
-        RepoDigests: publishedTargetMetadata[0].RepoDigests,
-      }),
+      source: JSON.stringify([
+        {
+          ...JSON.parse(aliasMetadata(alias, fixture))[0],
+          RepoDigests: publishedTargetMetadata[0].RepoDigests,
+        },
+      ]),
     });
     const unrelatedPublishedAlias = JSON.parse(aliasMetadata(alias, fixture));
     unrelatedPublishedAlias[0].RepoDigests = [
