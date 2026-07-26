@@ -1,200 +1,200 @@
 - main [ref=f8e5] [box=0,0,375,9632]:
-  - link "Skip to main content" [ref=f8e6] [cursor=pointer] [box=12,-56,197,44]:
-    - /url: "#judge-title"
-  - generic [ref=f8e7] [box=14,0,347,88]:
-    - link "CounterLab home" [ref=f8e8] [cursor=pointer] [box=14,22,185,44]:
-      - /url: /
-      - generic [ref=f8e9] [box=14,23,42,42]: C/L
-      - strong [ref=f8e10] [box=68,30,131,28]: CounterLab
-    - link "Learner view" [ref=f8e11] [cursor=pointer] [box=255,22,106,44]:
-      - /url: /
-      - text: Learner view
-      - generic [ref=f8e12] [box=349,35,12,18]: ↗
-  - region [ref=f8e13] [box=14,88,347,1052]:
-    - heading "See a verified belief break in ten seconds." [level=1] [ref=f8e15] [box=14,102,347,73]
-    - complementary "Ten second fixed sample preview" [ref=f8e16] [box=14,195,347,661]:
-      - text: FIXED SAMPLE
-      - generic [ref=f8e17] [box=28,209,319,43]:
-        - generic [ref=f8e18] [box=28,209,207,30]: Completed fixed sample · not a live result
-        - generic [ref=f8e19] [box=255,209,92,30]: Integrity checked
-      - blockquote [ref=f8e20] [box=28,266,319,74]: “This score proves the model works for customers it has never seen.”
-      - generic [ref=f8e21] [box=28,350,319,89]:
-        - paragraph [ref=f8e22] [box=28,350,222,75]: A belief debugger—not a tutor or notebook linter. Approved fixed sample framing. No GPT-5.6, Codex, or runner call occurs here.
-        - link "Inspect verified sample proof" [ref=f8e23] [cursor=pointer] [box=258,373,89,44]:
-          - /url: "#sample-evidence"
-          - text: Inspect proof
-      - region "Verified sample belief-break mechanism" [ref=f8e24] [box=28,449,319,393]:
-        - generic [ref=f8e25] [box=28,449,319,393]:
-          - status "Fixed sample evidence integrity verified" [ref=f8e26] [box=28,449,1,1]: Fixed sample evidence integrity verified.
-          - generic [ref=f8e27] [box=28,449,319,393]:
-            - figure "Fixed-kernel evidence Only the evaluation unit changed" [ref=f8e28] [box=28,449,319,244]:
-              - generic [ref=f8e29] [box=28,449,319,33]
-              - 'group "Changed variable: evaluation unit. Familiar-row testing lets identities cross the split; whole-customer holdout keeps every test identity unseen. The model, features, preprocessing, sample sizes, and seed stay fixed." [ref=f8e32] [box=28,490,319,43]'
-              - group "Customer overlap falls from 389 to 0; accuracy falls from 98.5% to 59.4%." [ref=f8e36] [box=28,545,319,107]
-              - paragraph [ref=f8e48] [box=28,659,319,34]
-            - paragraph [ref=f8e50] [box=28,701,319,41]: 98.5% became 59.4% when test identities were new.
-            - generic [ref=f8e51] [box=28,750,319,93]:
-              - generic [ref=f8e52] [box=28,758,156,85]
-              - generic [ref=f8e55] [box=192,758,156,85]
-    - generic [ref=f8e58] [box=14,876,347,212]:
-      - generic [ref=f8e59] [box=14,900,347,100]:
-        - button "Check live readiness" [ref=f8e60] [cursor=pointer] [box=14,900,347,44]
-        - link "Inspect stored evidence" [ref=f8e61] [cursor=pointer] [box=14,956,347,44]:
-          - /url: /replay/leakage-01
-      - paragraph [ref=f8e62] [box=14,1016,347,59]: "Released notebook support: entity leakage and class imbalance in documented Python/scikit-learn Jupyter patterns."
-  - region [ref=f8e63] [box=14,1140,347,1669]:
-    - generic [ref=f8e64] [box=14,1213,347,251]:
-      - paragraph [ref=f8e65] [box=14,1213,347,20]: Generated vs. computed vs. verified
-      - heading "Four authorities. No blurred hand-offs." [level=2] [ref=f8e66] [box=14,1260,347,76]
-      - paragraph [ref=f8e67] [box=14,1347,347,99]: These roles describe supported live notebook runs. The disclosed sample above uses checked-in fixed evidence; replay shows stored historical evidence and makes no new calls.
-    - generic [ref=f8e68] [box=14,1516,347,1221]:
-      - article [ref=f8e69] [box=14,1517,347,312]:
-        - generic [ref=f8e70] [box=38,1541,34,34]: A
-        - heading "GPT-5.6" [level=3] [ref=f8e71] [box=38,1619,299,18]
-        - strong [ref=f8e72] [box=38,1643,299,53]: Frames a supported live belief
-        - paragraph [ref=f8e73] [box=38,1695,299,93]: Reads only approved, sanitized evidence and proposes competing hypotheses. It cannot execute the notebook or invent results.
-      - article [ref=f8e74] [box=14,1828,347,288]:
-        - generic [ref=f8e75] [box=38,1852,34,34]: B
-        - heading "Runtime Codex" [level=3] [ref=f8e76] [box=38,1930,299,18]
-        - strong [ref=f8e77] [box=38,1954,299,53]: Compiles a supported live test plan
-        - paragraph [ref=f8e78] [box=38,2007,299,70]: Produces bounded operation IDs and repairs structured plans. It cannot author formulas, metrics, or unrestricted code.
-      - article [ref=f8e79] [box=14,2117,347,335]:
-        - generic [ref=f8e80] [box=38,2141,34,34]: C
-        - heading "Fixed kernel" [level=3] [ref=f8e81] [box=38,2219,299,18]
-        - strong [ref=f8e82] [box=38,2243,299,53]: Computes live result values
-        - paragraph [ref=f8e83] [box=38,2295,299,116]: In a live run, it executes registered split, metric, Boundary Map, and transfer operations deterministically. Sample and replay surfaces disclose stored evidence instead.
-      - article [ref=f8e84] [box=14,2451,347,284]:
-        - generic [ref=f8e85] [box=38,2475,34,34]: D
-        - heading "Frozen verifier" [level=3] [ref=f8e86] [box=38,2553,299,18]
-        - strong [ref=f8e87] [box=38,2577,299,26]: Decides what may ship
-        - paragraph [ref=f8e88] [box=38,2604,299,93]: Rejects confounded plans, unresolved bindings, sample leakage, broad patches, and claims that exceed the signed evidence.
-  - region [ref=f8e89] [box=14,2809,347,1556]:
-    - generic [ref=f8e90] [box=14,2882,347,124]:
-      - paragraph [ref=f8e91] [box=14,2882,347,20]: Choose the evidence mode
-      - heading "Three paths. Three explicit meanings." [level=2] [ref=f8e92] [box=14,2929,347,76]
-    - generic [ref=f8e93] [box=14,3058,347,1234]:
-      - article [ref=f8e94] [box=14,3058,347,398]:
-        - generic [ref=f8e95] [box=39,3083,137,29]: Sample lesson
-        - heading "Open the disclosed sample walkthrough." [level=3] [ref=f8e96] [box=39,3154,297,102]
-        - paragraph [ref=f8e97] [box=39,3256,297,116]: Bundled approved evidence. Fast, deterministic, no account or model credential. Because its answer is visible above, this path is not counted as an unassisted Prediction.
-        - button "Open disclosed walkthrough" [ref=f8e98] [cursor=pointer] [box=39,3387,266,44]:
-          - text: Open disclosed walkthrough
-          - generic [ref=f8e99] [box=272,3400,14,18]: →
-      - article [ref=f8e100] [box=14,3470,347,416]:
-        - generic [ref=f8e101] [box=39,3495,205,29]: Live notebook analysis
-        - heading "Test a supported notebook without running its cells." [level=3] [ref=f8e102] [box=39,3566,297,102]
-        - paragraph [ref=f8e103] [box=39,3668,297,70]: Artifact-specific Belief Spec, Codex plan, fixed kernel, independent verification, transfer, and repair to a copy.
-        - status [ref=f8e104] [box=39,3763,297,32]: Generation filesystem read isolation is partial, so live authority remains unavailable
-        - button "Check live status" [ref=f8e106] [cursor=pointer] [box=39,3817,155,44]
-      - article [ref=f8e107] [box=14,3900,347,392]:
-        - generic [ref=f8e108] [box=39,3925,140,29]: Verified replay
-        - heading "Inspect a genuine reject–repair trace." [level=3] [ref=f8e109] [box=39,3996,297,68]
-        - paragraph [ref=f8e110] [box=39,4064,297,70]: Read-only stored events. No new model call, no new experiment, and a persistent replay banner on every screen.
-        - link "Watch replay" [ref=f8e111] [cursor=pointer] [box=39,4149,163,44]:
-          - /url: /replay/leakage-01
-          - text: Watch replay
-          - generic [ref=f8e112] [box=169,4162,14,18]: →
-        - generic [ref=f8e113] [box=39,4211,297,57]: Recorded 7/14/2026. This legacy v1 replay is genuine but does not offer a Proof Capsule download.
-  - region [ref=f8e114] [box=14,4364,347,1574]:
-    - generic [ref=f8e115] [box=14,4461,347,267]:
-      - paragraph [ref=f8e116] [box=14,4461,347,40]: Established pedagogy, a different evidence layer
-      - heading "What CounterLab builds on—and adds." [level=2] [ref=f8e117] [box=14,4511,347,76]
-      - paragraph [ref=f8e118] [box=14,4597,347,116]: CounterLab does not claim to invent predict-before-reveal. Its narrower contribution is binding that learning loop to a supported artifact, fixed computation, frozen verification, deterministic transfer, and a portable evidence record.
-    - generic [ref=f8e119] [box=14,4780,347,1062]:
-      - article [ref=f8e120] [box=14,4781,347,374]:
-        - generic [ref=f8e121] [box=38,4805,299,15]: Learning-science lineage
-        - heading "Predict–Observe–Explain and Peer Instruction" [level=3] [ref=f8e122] [box=38,4862,299,93]
-        - paragraph [ref=f8e123] [box=38,4955,299,116]: These approaches establish prediction and commitment before the reveal. CounterLab carries that lineage into a machine-checked, artifact-bound loop; the pedagogy itself is not new.
-        - generic [ref=f8e124] [box=38,5087,299,44]:
-          - link "LAMS POE overview" [ref=f8e125] [cursor=pointer] [box=38,5087,125,44]:
-            - /url: https://teach.lams.es/pedagogies/poe
-          - link "Peer Instruction review" [ref=f8e126] [cursor=pointer] [box=181,5087,141,44]:
-            - /url: https://www.frontiersin.org/journals/education/articles/10.3389/feduc.2018.00033/full
-      - article [ref=f8e127] [box=14,5156,347,343]:
-        - generic [ref=f8e128] [box=38,5180,299,15]: Closest lesson pattern
-        - heading "LAMS Predict–Observe–Explain" [level=3] [ref=f8e129] [box=38,5237,299,62]
-        - paragraph [ref=f8e130] [box=38,5299,299,116]: LAMS already pairs prediction, confidence, explanation, and reflection. CounterLab adds a fixed transfer gate and separates learner-facing Reasoning Diff from machine-facing Proof Capsule.
-        - link "Inspect the prior-art template" [ref=f8e131] [cursor=pointer] [box=38,5430,299,44]:
-          - /url: https://teach.lams.es/pedagogies/poe
-      - article [ref=f8e132] [box=14,5499,347,342]:
-        - generic [ref=f8e133] [box=38,5523,299,15]: Closest notebook tooling
-        - heading "NBLyzer and sklearn-diagnose" [level=3] [ref=f8e134] [box=38,5580,299,62]
-        - paragraph [ref=f8e135] [box=38,5642,299,116]: "These tools detect or diagnose notebook and model problems. CounterLab's scoped difference is learner action: predict, inspect one controlled test, map a Boundary, and pass transfer before Repair unlocks."
-        - generic [ref=f8e136] [box=38,5773,299,44]:
-          - link "NBLyzer paper" [ref=f8e137] [cursor=pointer] [box=38,5773,87,44]:
-            - /url: https://arxiv.org/html/2603.10742v3
-          - link "sklearn-diagnose repository" [ref=f8e138] [cursor=pointer] [box=143,5773,174,44]:
-            - /url: https://github.com/leockl/sklearn-diagnose
-  - region [ref=f8e139] [box=0,5938,375,554]:
-    - generic [ref=f8e140] [box=28,5967,319,167]:
-      - paragraph [ref=f8e141] [box=28,5967,319,21]: Fixed sample proof
-      - heading "Sample Proof Capsule v1" [level=2] [ref=f8e142] [box=28,5999,319,27]
-      - paragraph [ref=f8e143] [box=28,6042,319,93]: A checked-in, integrity-verified archive of this fixed sample. It is not a live Proof Capsule v2 and does not imply a model, Codex, runner, or learner event occurred.
-    - generic [ref=f8e144] [box=28,6155,319,310]:
-      - status [ref=f8e145] [box=28,6155,319,180]: ✓ Capsule bytes match the checked-in reference; fixed sample authority bindings resolve
-      - group [ref=f8e146] [box=28,6347,319,62]:
-        - generic "Inspect Sample Proof Capsule" [ref=f8e147] [cursor=pointer] [box=29,6364,317,44]
-      - link "Download Sample Proof Capsule" [ref=f8e148] [cursor=pointer] [box=28,6421,319,44]:
-        - /url: blob:http://127.0.0.1:4173/dced47ef-a960-454e-b9b0-c93562811082
-  - region [ref=f8e149] [box=14,6493,347,1151]:
-    - generic [ref=f8e150] [box=14,6566,347,222]:
-      - paragraph [ref=f8e151] [box=14,6566,347,20]: Not another answer box
-      - heading "A learning loop with a release gate." [level=2] [ref=f8e152] [box=14,6603,347,76]
-      - paragraph [ref=f8e153] [box=14,6680,347,93]: Repair stays locked until the learner applies the rule in a changed context. The result is a Reasoning Diff for people and a Proof Capsule for machines.
-    - list [ref=f8e154] [box=14,6848,347,724]:
-      - listitem [ref=f8e155] [box=14,6849,347,121]:
-        - generic [ref=f8e156] [box=14,6871,50,76]: "01"
-        - generic [ref=f8e157] [box=82,6871,279,76]:
-          - strong [ref=f8e158] [box=82,6871,86,24]: Question
-          - paragraph [ref=f8e159] [box=82,6902,279,45]: Name the claim and bind it to exact evidence.
-      - listitem [ref=f8e160] [box=14,6970,347,121]:
-        - generic [ref=f8e161] [box=14,6992,50,76]: "02"
-        - generic [ref=f8e162] [box=82,6992,279,76]:
-          - strong [ref=f8e163] [box=82,6992,98,24]: Prediction
-          - paragraph [ref=f8e164] [box=82,7023,279,45]: Commit an expectation before results exist.
-      - listitem [ref=f8e165] [box=14,7091,347,121]:
-        - generic [ref=f8e166] [box=14,7113,50,76]: "03"
-        - generic [ref=f8e167] [box=82,7113,279,76]:
-          - strong [ref=f8e168] [box=82,7113,40,24]: Test
-          - paragraph [ref=f8e169] [box=82,7144,279,45]: Select and verify one discriminating intervention.
-      - listitem [ref=f8e170] [box=14,7212,347,121]:
-        - generic [ref=f8e171] [box=14,7234,50,76]: "04"
-        - generic [ref=f8e172] [box=82,7234,279,76]:
-          - strong [ref=f8e173] [box=82,7234,92,24]: Boundary
-          - paragraph [ref=f8e174] [box=82,7265,279,45]: Map where the result changes or stops applying.
-      - listitem [ref=f8e175] [box=14,7333,347,118]:
-        - generic [ref=f8e176] [box=14,7355,50,73]: "05"
-        - generic [ref=f8e177] [box=82,7355,279,73]:
-          - strong [ref=f8e178] [box=82,7355,57,24]: Apply
-          - paragraph [ref=f8e179] [box=82,7386,279,23]: Use the rule on a surface-different case.
-      - listitem [ref=f8e180] [box=14,7451,347,121]:
-        - generic [ref=f8e181] [box=14,7473,50,76]: "06"
-        - generic [ref=f8e182] [box=82,7473,279,76]:
-          - strong [ref=f8e183] [box=82,7473,60,24]: Repair
-          - paragraph [ref=f8e184] [box=82,7504,279,45]: Unlock the smallest verified notebook correction.
-  - region [ref=f8e185] [box=14,7644,347,1252]:
-    - generic [ref=f8e186] [box=14,7717,347,442]:
-      - paragraph [ref=f8e187] [box=14,7717,347,19]: What the evidence can claim
-      - heading "Bounded proof, visible limitations." [level=2] [ref=f8e188] [box=14,7753,347,76]
-      - list [ref=f8e189] [box=14,7868,347,291]:
-        - listitem [ref=f8e190] [box=14,7868,347,67]: ✓Exact notebook cells and hashes bind the learner's claim.
-        - listitem [ref=f8e191] [box=14,7949,347,67]: ✓A verified result cannot appear before Prediction is locked.
-        - listitem [ref=f8e192] [box=14,8030,347,67]: ✓Transfer is fixed-code scored; no model grades free-form prose.
-        - listitem [ref=f8e193] [box=14,8111,347,48]: ✓The original notebook is never overwritten.
-    - complementary [ref=f8e194] [box=14,8207,347,617]:
-      - text: Known boundary
-      - heading "CounterLab does not claim universal notebook support." [level=3] [ref=f8e195] [box=51,8275,280,98]
-      - paragraph [ref=f8e196] [box=51,8372,280,279]: It supports two reviewed ML Subject Packs and refuses unknown packages, arbitrary code execution, unsupported patch shapes, and insufficient evidence. A Proof Capsule proves integrity and scoped verification—not global mastery or formal sandbox security. The hosted Codex launch has a credential-and-privilege boundary. No exact released filesystem generation read-isolation status is available, so live authority remains unproven.
-      - region [ref=f8e197] [box=51,8677,280,102]:
-        - heading "Exact public build" [level=4] [ref=f8e198] [box=51,8700,280,18]
-        - paragraph [ref=f8e199] [box=51,8732,280,47]: Release identity is unbound. Treat live qualification as unproven.
-  - region [ref=f8e200] [box=14,8896,347,499]:
-    - generic [ref=f8e201] [box=14,8969,347,114]:
-      - paragraph [ref=f8e202] [box=14,8969,347,20]: Source & license
-      - heading "Source reproduction is gated." [level=2] [ref=f8e203] [box=14,9007,347,76]
-    - paragraph [ref=f8e204] [box=14,9143,347,180]: Local reproduction commands are withheld until the repository and MIT License are anonymously accessible. CounterLab will not present unactionable source instructions as public evidence.
-  - generic [ref=f8e205] [box=14,9395,347,237]:
-    - strong [ref=f8e206] [box=14,9451,202,29]: Chatbots explain.
-    - generic [ref=f8e207] [box=14,9492,341,29]: CounterLab lets reality answer.
-    - link "Open learner view" [ref=f8e208] [cursor=pointer] [box=14,9533,109,44]:
-      - /url: /
+    - link "Skip to main content" [ref=f8e6] [cursor=pointer] [box=12,-56,197,44]:
+        - /url: "#judge-title"
+    - generic [ref=f8e7] [box=14,0,347,88]:
+        - link "CounterLab home" [ref=f8e8] [cursor=pointer] [box=14,22,185,44]:
+            - /url: /
+            - generic [ref=f8e9] [box=14,23,42,42]: C/L
+            - strong [ref=f8e10] [box=68,30,131,28]: CounterLab
+        - link "Learner view" [ref=f8e11] [cursor=pointer] [box=255,22,106,44]:
+            - /url: /
+            - text: Learner view
+            - generic [ref=f8e12] [box=349,35,12,18]: ↗
+    - region [ref=f8e13] [box=14,88,347,1052]:
+        - heading "See a verified belief break in ten seconds." [level=1] [ref=f8e15] [box=14,102,347,73]
+        - complementary "Ten second fixed sample preview" [ref=f8e16] [box=14,195,347,661]:
+            - text: FIXED SAMPLE
+            - generic [ref=f8e17] [box=28,209,319,43]:
+                - generic [ref=f8e18] [box=28,209,207,30]: Completed fixed sample · not a live result
+                - generic [ref=f8e19] [box=255,209,92,30]: Integrity checked
+            - blockquote [ref=f8e20] [box=28,266,319,74]: “This score proves the model works for customers it has never seen.”
+            - generic [ref=f8e21] [box=28,350,319,89]:
+                - paragraph [ref=f8e22] [box=28,350,222,75]: A belief debugger—not a tutor or notebook linter. Approved fixed sample framing. No GPT-5.6, Codex, or runner call occurs here.
+                - link "Inspect verified sample proof" [ref=f8e23] [cursor=pointer] [box=258,373,89,44]:
+                    - /url: "#sample-evidence"
+                    - text: Inspect proof
+            - region "Verified sample belief-break mechanism" [ref=f8e24] [box=28,449,319,393]:
+                - generic [ref=f8e25] [box=28,449,319,393]:
+                    - status "Fixed sample evidence integrity verified" [ref=f8e26] [box=28,449,1,1]: Fixed sample evidence integrity verified.
+                    - generic [ref=f8e27] [box=28,449,319,393]:
+                        - figure "Fixed-kernel evidence Only the evaluation unit changed" [ref=f8e28] [box=28,449,319,244]:
+                            - generic [ref=f8e29] [box=28,449,319,33]
+                            - 'group "Changed variable: evaluation unit. Familiar-row testing lets identities cross the split; whole-customer holdout keeps every test identity unseen. The model, features, preprocessing, sample sizes, and seed stay fixed." [ref=f8e32] [box=28,490,319,43]'
+                            - group "Customer overlap falls from 389 to 0; accuracy falls from 98.5% to 59.4%." [ref=f8e36] [box=28,545,319,107]
+                            - paragraph [ref=f8e48] [box=28,659,319,34]
+                        - paragraph [ref=f8e50] [box=28,701,319,41]: 98.5% became 59.4% when test identities were new.
+                        - generic [ref=f8e51] [box=28,750,319,93]:
+                            - generic [ref=f8e52] [box=28,758,156,85]
+                            - generic [ref=f8e55] [box=192,758,156,85]
+        - generic [ref=f8e58] [box=14,876,347,212]:
+            - generic [ref=f8e59] [box=14,900,347,100]:
+                - button "Check live readiness" [ref=f8e60] [cursor=pointer] [box=14,900,347,44]
+                - link "Inspect stored evidence" [ref=f8e61] [cursor=pointer] [box=14,956,347,44]:
+                    - /url: /replay/leakage-01
+            - paragraph [ref=f8e62] [box=14,1016,347,59]: "Released notebook support: entity leakage and class imbalance in documented Python/scikit-learn Jupyter patterns."
+    - region [ref=f8e63] [box=14,1140,347,1669]:
+        - generic [ref=f8e64] [box=14,1213,347,251]:
+            - paragraph [ref=f8e65] [box=14,1213,347,20]: Generated vs. computed vs. verified
+            - heading "Four authorities. No blurred hand-offs." [level=2] [ref=f8e66] [box=14,1260,347,76]
+            - paragraph [ref=f8e67] [box=14,1347,347,99]: These roles describe supported live notebook runs. The disclosed sample above uses checked-in fixed evidence; replay shows stored historical evidence and makes no new calls.
+        - generic [ref=f8e68] [box=14,1516,347,1221]:
+            - article [ref=f8e69] [box=14,1517,347,312]:
+                - generic [ref=f8e70] [box=38,1541,34,34]: A
+                - heading "GPT-5.6" [level=3] [ref=f8e71] [box=38,1619,299,18]
+                - strong [ref=f8e72] [box=38,1643,299,53]: Frames a supported live belief
+                - paragraph [ref=f8e73] [box=38,1695,299,93]: Reads only approved, sanitized evidence and proposes competing hypotheses. It cannot execute the notebook or invent results.
+            - article [ref=f8e74] [box=14,1828,347,288]:
+                - generic [ref=f8e75] [box=38,1852,34,34]: B
+                - heading "Runtime Codex" [level=3] [ref=f8e76] [box=38,1930,299,18]
+                - strong [ref=f8e77] [box=38,1954,299,53]: Compiles a supported live test plan
+                - paragraph [ref=f8e78] [box=38,2007,299,70]: Produces bounded operation IDs and repairs structured plans. It cannot author formulas, metrics, or unrestricted code.
+            - article [ref=f8e79] [box=14,2117,347,335]:
+                - generic [ref=f8e80] [box=38,2141,34,34]: C
+                - heading "Fixed kernel" [level=3] [ref=f8e81] [box=38,2219,299,18]
+                - strong [ref=f8e82] [box=38,2243,299,53]: Computes live result values
+                - paragraph [ref=f8e83] [box=38,2295,299,116]: In a live run, it executes registered split, metric, Boundary Map, and transfer operations deterministically. Sample and replay surfaces disclose stored evidence instead.
+            - article [ref=f8e84] [box=14,2451,347,284]:
+                - generic [ref=f8e85] [box=38,2475,34,34]: D
+                - heading "Frozen verifier" [level=3] [ref=f8e86] [box=38,2553,299,18]
+                - strong [ref=f8e87] [box=38,2577,299,26]: Decides what may ship
+                - paragraph [ref=f8e88] [box=38,2604,299,93]: Rejects confounded plans, unresolved bindings, sample leakage, broad patches, and claims that exceed the signed evidence.
+    - region [ref=f8e89] [box=14,2809,347,1556]:
+        - generic [ref=f8e90] [box=14,2882,347,124]:
+            - paragraph [ref=f8e91] [box=14,2882,347,20]: Choose the evidence mode
+            - heading "Three paths. Three explicit meanings." [level=2] [ref=f8e92] [box=14,2929,347,76]
+        - generic [ref=f8e93] [box=14,3058,347,1234]:
+            - article [ref=f8e94] [box=14,3058,347,398]:
+                - generic [ref=f8e95] [box=39,3083,137,29]: Sample lesson
+                - heading "Open the disclosed sample walkthrough." [level=3] [ref=f8e96] [box=39,3154,297,102]
+                - paragraph [ref=f8e97] [box=39,3256,297,116]: Bundled approved evidence. Fast, deterministic, no account or model credential. Because its answer is visible above, this path is not counted as an unassisted Prediction.
+                - button "Open disclosed walkthrough" [ref=f8e98] [cursor=pointer] [box=39,3387,266,44]:
+                    - text: Open disclosed walkthrough
+                    - generic [ref=f8e99] [box=272,3400,14,18]: →
+            - article [ref=f8e100] [box=14,3470,347,416]:
+                - generic [ref=f8e101] [box=39,3495,205,29]: Live notebook analysis
+                - heading "Test a supported notebook without running its cells." [level=3] [ref=f8e102] [box=39,3566,297,102]
+                - paragraph [ref=f8e103] [box=39,3668,297,70]: Artifact-specific Belief Spec, Codex plan, fixed kernel, independent verification, transfer, and repair to a copy.
+                - status [ref=f8e104] [box=39,3763,297,32]: Generation filesystem read isolation is partial, so live authority remains unavailable
+                - button "Check live status" [ref=f8e106] [cursor=pointer] [box=39,3817,155,44]
+            - article [ref=f8e107] [box=14,3900,347,392]:
+                - generic [ref=f8e108] [box=39,3925,140,29]: Verified replay
+                - heading "Inspect a genuine reject–repair trace." [level=3] [ref=f8e109] [box=39,3996,297,68]
+                - paragraph [ref=f8e110] [box=39,4064,297,70]: Read-only stored events. No new model call, no new experiment, and a persistent replay banner on every screen.
+                - link "Watch replay" [ref=f8e111] [cursor=pointer] [box=39,4149,163,44]:
+                    - /url: /replay/leakage-01
+                    - text: Watch replay
+                    - generic [ref=f8e112] [box=169,4162,14,18]: →
+                - generic [ref=f8e113] [box=39,4211,297,57]: Recorded 7/14/2026. This legacy v1 replay is genuine but does not offer a Proof Capsule download.
+    - region [ref=f8e114] [box=14,4364,347,1574]:
+        - generic [ref=f8e115] [box=14,4461,347,267]:
+            - paragraph [ref=f8e116] [box=14,4461,347,40]: Established pedagogy, a different evidence layer
+            - heading "What CounterLab builds on—and adds." [level=2] [ref=f8e117] [box=14,4511,347,76]
+            - paragraph [ref=f8e118] [box=14,4597,347,116]: CounterLab does not claim to invent predict-before-reveal. Its narrower contribution is binding that learning loop to a supported artifact, fixed computation, frozen verification, deterministic transfer, and a portable evidence record.
+        - generic [ref=f8e119] [box=14,4780,347,1062]:
+            - article [ref=f8e120] [box=14,4781,347,374]:
+                - generic [ref=f8e121] [box=38,4805,299,15]: Learning-science lineage
+                - heading "Predict–Observe–Explain and Peer Instruction" [level=3] [ref=f8e122] [box=38,4862,299,93]
+                - paragraph [ref=f8e123] [box=38,4955,299,116]: These approaches establish prediction and commitment before the reveal. CounterLab carries that lineage into a machine-checked, artifact-bound loop; the pedagogy itself is not new.
+                - generic [ref=f8e124] [box=38,5087,299,44]:
+                    - link "LAMS POE overview" [ref=f8e125] [cursor=pointer] [box=38,5087,125,44]:
+                        - /url: https://teach.lams.es/pedagogies/poe
+                    - link "Peer Instruction review" [ref=f8e126] [cursor=pointer] [box=181,5087,141,44]:
+                        - /url: https://www.frontiersin.org/journals/education/articles/10.3389/feduc.2018.00033/full
+            - article [ref=f8e127] [box=14,5156,347,343]:
+                - generic [ref=f8e128] [box=38,5180,299,15]: Closest lesson pattern
+                - heading "LAMS Predict–Observe–Explain" [level=3] [ref=f8e129] [box=38,5237,299,62]
+                - paragraph [ref=f8e130] [box=38,5299,299,116]: LAMS already pairs prediction, confidence, explanation, and reflection. CounterLab adds a fixed transfer gate and separates learner-facing Reasoning Diff from machine-facing Proof Capsule.
+                - link "Inspect the prior-art template" [ref=f8e131] [cursor=pointer] [box=38,5430,299,44]:
+                    - /url: https://teach.lams.es/pedagogies/poe
+            - article [ref=f8e132] [box=14,5499,347,342]:
+                - generic [ref=f8e133] [box=38,5523,299,15]: Closest notebook tooling
+                - heading "NBLyzer and sklearn-diagnose" [level=3] [ref=f8e134] [box=38,5580,299,62]
+                - paragraph [ref=f8e135] [box=38,5642,299,116]: "These tools detect or diagnose notebook and model problems. CounterLab's scoped difference is learner action: predict, inspect one controlled test, map a Boundary, and pass transfer before Repair unlocks."
+                - generic [ref=f8e136] [box=38,5773,299,44]:
+                    - link "NBLyzer paper" [ref=f8e137] [cursor=pointer] [box=38,5773,87,44]:
+                        - /url: https://arxiv.org/html/2603.10742v3
+                    - link "sklearn-diagnose repository" [ref=f8e138] [cursor=pointer] [box=143,5773,174,44]:
+                        - /url: https://github.com/leockl/sklearn-diagnose
+    - region [ref=f8e139] [box=0,5938,375,554]:
+        - generic [ref=f8e140] [box=28,5967,319,167]:
+            - paragraph [ref=f8e141] [box=28,5967,319,21]: Fixed sample proof
+            - heading "Sample Proof Capsule v1" [level=2] [ref=f8e142] [box=28,5999,319,27]
+            - paragraph [ref=f8e143] [box=28,6042,319,93]: A checked-in, integrity-verified archive of this fixed sample. It is not a live Proof Capsule v2 and does not imply a model, Codex, runner, or learner event occurred.
+        - generic [ref=f8e144] [box=28,6155,319,310]:
+            - status [ref=f8e145] [box=28,6155,319,180]: ✓ Capsule bytes match the checked-in reference; fixed sample authority bindings resolve
+            - group [ref=f8e146] [box=28,6347,319,62]:
+                - generic "Inspect Sample Proof Capsule" [ref=f8e147] [cursor=pointer] [box=29,6364,317,44]
+            - link "Download Sample Proof Capsule" [ref=f8e148] [cursor=pointer] [box=28,6421,319,44]:
+                - /url: blob:http://127.0.0.1:4173/dced47ef-a960-454e-b9b0-c93562811082
+    - region [ref=f8e149] [box=14,6493,347,1151]:
+        - generic [ref=f8e150] [box=14,6566,347,222]:
+            - paragraph [ref=f8e151] [box=14,6566,347,20]: Not another answer box
+            - heading "A learning loop with a release gate." [level=2] [ref=f8e152] [box=14,6603,347,76]
+            - paragraph [ref=f8e153] [box=14,6680,347,93]: Repair stays locked until the learner applies the rule in a changed context. The result is a Reasoning Diff for people and a Proof Capsule for machines.
+        - list [ref=f8e154] [box=14,6848,347,724]:
+            - listitem [ref=f8e155] [box=14,6849,347,121]:
+                - generic [ref=f8e156] [box=14,6871,50,76]: "01"
+                - generic [ref=f8e157] [box=82,6871,279,76]:
+                    - strong [ref=f8e158] [box=82,6871,86,24]: Question
+                    - paragraph [ref=f8e159] [box=82,6902,279,45]: Name the claim and bind it to exact evidence.
+            - listitem [ref=f8e160] [box=14,6970,347,121]:
+                - generic [ref=f8e161] [box=14,6992,50,76]: "02"
+                - generic [ref=f8e162] [box=82,6992,279,76]:
+                    - strong [ref=f8e163] [box=82,6992,98,24]: Prediction
+                    - paragraph [ref=f8e164] [box=82,7023,279,45]: Commit an expectation before results exist.
+            - listitem [ref=f8e165] [box=14,7091,347,121]:
+                - generic [ref=f8e166] [box=14,7113,50,76]: "03"
+                - generic [ref=f8e167] [box=82,7113,279,76]:
+                    - strong [ref=f8e168] [box=82,7113,40,24]: Test
+                    - paragraph [ref=f8e169] [box=82,7144,279,45]: Select and verify one discriminating intervention.
+            - listitem [ref=f8e170] [box=14,7212,347,121]:
+                - generic [ref=f8e171] [box=14,7234,50,76]: "04"
+                - generic [ref=f8e172] [box=82,7234,279,76]:
+                    - strong [ref=f8e173] [box=82,7234,92,24]: Boundary
+                    - paragraph [ref=f8e174] [box=82,7265,279,45]: Map where the result changes or stops applying.
+            - listitem [ref=f8e175] [box=14,7333,347,118]:
+                - generic [ref=f8e176] [box=14,7355,50,73]: "05"
+                - generic [ref=f8e177] [box=82,7355,279,73]:
+                    - strong [ref=f8e178] [box=82,7355,57,24]: Apply
+                    - paragraph [ref=f8e179] [box=82,7386,279,23]: Use the rule on a surface-different case.
+            - listitem [ref=f8e180] [box=14,7451,347,121]:
+                - generic [ref=f8e181] [box=14,7473,50,76]: "06"
+                - generic [ref=f8e182] [box=82,7473,279,76]:
+                    - strong [ref=f8e183] [box=82,7473,60,24]: Repair
+                    - paragraph [ref=f8e184] [box=82,7504,279,45]: Unlock the smallest verified notebook correction.
+    - region [ref=f8e185] [box=14,7644,347,1252]:
+        - generic [ref=f8e186] [box=14,7717,347,442]:
+            - paragraph [ref=f8e187] [box=14,7717,347,19]: What the evidence can claim
+            - heading "Bounded proof, visible limitations." [level=2] [ref=f8e188] [box=14,7753,347,76]
+            - list [ref=f8e189] [box=14,7868,347,291]:
+                - listitem [ref=f8e190] [box=14,7868,347,67]: ✓Exact notebook cells and hashes bind the learner's claim.
+                - listitem [ref=f8e191] [box=14,7949,347,67]: ✓A verified result cannot appear before Prediction is locked.
+                - listitem [ref=f8e192] [box=14,8030,347,67]: ✓Transfer is fixed-code scored; no model grades free-form prose.
+                - listitem [ref=f8e193] [box=14,8111,347,48]: ✓The original notebook is never overwritten.
+        - complementary [ref=f8e194] [box=14,8207,347,617]:
+            - text: Known boundary
+            - heading "CounterLab does not claim universal notebook support." [level=3] [ref=f8e195] [box=51,8275,280,98]
+            - paragraph [ref=f8e196] [box=51,8372,280,279]: It supports two reviewed ML Subject Packs and refuses unknown packages, arbitrary code execution, unsupported patch shapes, and insufficient evidence. A Proof Capsule proves integrity and scoped verification—not global mastery or formal sandbox security. The hosted Codex launch has a credential-and-privilege boundary. No exact released filesystem generation read-isolation status is available, so live authority remains unproven.
+            - region [ref=f8e197] [box=51,8677,280,102]:
+                - heading "Exact public build" [level=4] [ref=f8e198] [box=51,8700,280,18]
+                - paragraph [ref=f8e199] [box=51,8732,280,47]: Release identity is unbound. Treat live qualification as unproven.
+    - region [ref=f8e200] [box=14,8896,347,499]:
+        - generic [ref=f8e201] [box=14,8969,347,114]:
+            - paragraph [ref=f8e202] [box=14,8969,347,20]: Source & license
+            - heading "Source reproduction is gated." [level=2] [ref=f8e203] [box=14,9007,347,76]
+        - paragraph [ref=f8e204] [box=14,9143,347,180]: Local reproduction commands are withheld until the repository and MIT License are anonymously accessible. CounterLab will not present unactionable source instructions as public evidence.
+    - generic [ref=f8e205] [box=14,9395,347,237]:
+        - strong [ref=f8e206] [box=14,9451,202,29]: Chatbots explain.
+        - generic [ref=f8e207] [box=14,9492,341,29]: CounterLab lets reality answer.
+        - link "Open learner view" [ref=f8e208] [cursor=pointer] [box=14,9533,109,44]:
+            - /url: /
