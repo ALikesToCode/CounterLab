@@ -1,10 +1,10 @@
 {
   "schemaVersion": "1",
-  "generatedAt": "2026-07-26T17:27:22.998Z",
+  "generatedAt": "2026-07-26T18:03:02.225Z",
   "environmentId": "counterlab-runner-linux-amd64-v2",
   "environmentKind": "local_candidate",
-  "sourceCommit": "301f69672db07ba951f1433b311f908b1f50db23",
-  "registryHash": "42c4f89fcfe41ea95c344b88ca6e43dec4a4422c5e8f3bc2d1cca3a243473be0",
+  "sourceCommit": "922aa3096cf43d9a70af0ab10f369e00c12d49fd",
+  "registryHash": "39abb6504c31ca26246ae0352716a67dcabee7c987a75f41fd908c1a7b283ad3",
   "bindingsHash": "e74179705d2bc3740d9d6c1b7e46caaa3d2bc81776cb41e9be99e86c74d7b76c",
   "platform": {
     "os": "linux",
@@ -54,7 +54,7 @@
     }
   ],
   "container": {
-    "imageDigest": "sha256:b747eb78bad80cc3d64e922fca8e956d5ebf3567e1ee0793f785b8c6086a1911",
+    "imageDigest": "sha256:0aad72feed2fdf5f6e5fc965e723511dfd32f2887d9ca0fd9ea8dfe45dd57a13",
     "vcpu": 0.5,
     "memoryMb": 4096,
     "diskMb": 8000
@@ -70,16 +70,16 @@
   "sbomHashes": {
     "node-sbom": "acd31358dfebccb99ea22d042887650423c625cc50eb8e6742aa602bd5448745",
     "python-sbom": "24f1d2cf673e8ac7c45289d3fbbc900f609ca53430b4166597b493fac8debc54",
-    "runner-container-sbom": "c7b9f1c93d6bbf986fdf13e225c5be1246b37be3c363d208c1a7379961f0ef48"
+    "runner-container-sbom": "fdf3cc569031d5be869b5f1a62d04b4a86a502e61c566fa29c8791a61cf88f53"
   },
   "sbomManifestEvidenceId": "sbom-manifest-v1",
-  "sbomManifestHash": "7f4729a1b84a558db2c3eae3e527925ffdc166b65a812a93715ba4e40a464c53",
+  "sbomManifestHash": "7cd2a6a9aa26fc12b8105372db0eb88bd4fa0cac59fe348827fab36258b6f603",
   "vulnerabilityReportEvidenceId": "vulnerability-report-v2",
-  "vulnerabilityReportHash": "7415923f3fc94cd6b4388beef5b6f3edd058fef83a8f5ca24a3666862e7a9ddb",
+  "vulnerabilityReportHash": "5eede65f98618cc777cbcb3d87a6266c6e4fe1613e09d61340be6e9bf2595adc",
   "vexEvidenceId": "cpython-html-parser-vex-v1",
-  "vexEvidenceHash": "cf49f5cf04b024b6f393dce8f79d894ff43f4ab857d85561dc1d457eea3c9ae5",
+  "vexEvidenceHash": "fa49b0e0b749dcdc6c7d5cee766a8c040406b04b1fb0a01015944ed6dd973c8d",
   "reachabilityEvidenceId": "cpython-html-parser-reachability-v2",
-  "reachabilityEvidenceHash": "989dbddc20e59d0b94da233e9fc7481a2b210bb8081dcdaa9b063ee33120c6a1",
+  "reachabilityEvidenceHash": "90ea8852fbd28473a6e64c5a7a5e381a4389c639bc615c6c88e4173e89f4fab5",
   "vexApplicationEvidenceId": "cpython-html-parser-vex-application-v1",
-  "vexApplicationEvidenceHash": "44f1969eabb2349c086c86a2427cdca4f6a880549e963615cb63f7b97bb5b9f0"
+  "vexApplicationEvidenceHash": "5acf5ae6208376ee3010409b8c07d4572ae96a8f794dc898c9ae9f3f6f373296"
 }
