@@ -35,6 +35,8 @@ export const cgroupFinalizationTimeoutMs = 120_000;
 const membershipQuiescenceSamples = 3;
 const membershipQuiescenceMaximumAttempts = 40;
 const membershipQuiescenceIntervalMs = 50;
+const cpuControlBusyWindowMs = 500;
+const cpuControlWorkers = 2;
 const allowedCgroupFiles = new Set([
   "cgroup.procs",
   "cpu.max",
@@ -632,7 +634,11 @@ export async function observeContainedCgroup(
   );
   reportPhase("CPU_CONTROL");
   await adapter.runControl(
-    { mode: "cpu", busyWindowMs: 500, workers: 1 },
+    {
+      mode: "cpu",
+      busyWindowMs: cpuControlBusyWindowMs,
+      workers: cpuControlWorkers,
+    },
     initial.memberPids,
   );
   reportPhase("CPU_COUNTERS_AFTER");
@@ -706,7 +712,7 @@ export async function observeContainedCgroup(
         enforced: processesAfter.max > processesBefore.max,
       },
       cpu: {
-        busyWindowMs: 500,
+        busyWindowMs: cpuControlBusyWindowMs,
         nrThrottledBefore: cpuBefore.nr_throttled,
         nrThrottledAfter: cpuAfter.nr_throttled,
         throttledUsecBefore: cpuBefore.throttled_usec,
