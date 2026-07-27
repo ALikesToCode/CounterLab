@@ -19,6 +19,7 @@ import { PythonFixedKernelExecutor } from "./fixed-kernel.js";
 import { PythonFixedPatchExecutor } from "./fixed-patch.js";
 import {
   createHostedRunnerBootstrapServer,
+  hostedRunnerStartupFailureDiagnostic,
   hostedRunnerStartupFailureReason,
   HostedRunnerStartupError,
   runHostedRunnerStartupStage,
@@ -435,6 +436,7 @@ async function startProductionServer(): Promise<void> {
     console.error("CounterLab hosted runner failed to start", {
       name: error instanceof Error ? error.name : "UnknownError",
       reason,
+      ...hostedRunnerStartupFailureDiagnostic(error),
     });
     console.error("CounterLab hosted runner remains fail-closed", {
       port,
@@ -451,6 +453,7 @@ if (
     console.error("CounterLab hosted runner failed to start", {
       name: error instanceof Error ? error.name : "UnknownError",
       reason: hostedRunnerStartupFailureReason(error),
+      ...hostedRunnerStartupFailureDiagnostic(error),
     });
     process.exitCode = 1;
   });

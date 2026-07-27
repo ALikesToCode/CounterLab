@@ -389,33 +389,63 @@ async function runProbe(state: BrokerState) {
   await chmod(credential, 0o440);
 
   const probeScript = String.raw`
-set -euo pipefail
-trap 'printf "probeFailure=line-%s\n" "$LINENO" >&2' ERR
+set -uo pipefail
+probe_fail() {
+  printf 'probeFailure=%s\n' "$1" >&2
+  exit 1
+}
+probe_require() {
+  stage="$1"
+  shift
+  "$@" || probe_fail "$stage"
+}
 workspace="$1"
 credential="$2"
 runner_pid="$3"
-test "$(id -u)" = "10002"
-test "$(id -g)" = "10002"
-test "$(id -G)" = "10002"
+probe_require uid test "$(id -u)" = "10002"
+probe_require gid test "$(id -g)" = "10002"
+probe_require groups test "$(id -G)" = "10002"
 for field in CapInh CapPrm CapEff CapBnd CapAmb; do
-  test "$(awk -v key="$field:" '$1 == key {print $2}' /proc/self/status)" = "0000000000000000"
+  probe_require capabilities test "$(awk -v key="$field:" '$1 == key {print $2}' /proc/self/status)" = "0000000000000000"
 done
-test "$(awk '$1 == "NoNewPrivs:" {print $2}' /proc/self/status)" = "1"
-test "$(cat "$workspace/approved.txt")" = "approved"
-printf 'bounded output\n' > "$workspace/probe-output.txt"
-test "$(cat "$workspace/probe-output.txt")" = "bounded output"
-test -r "$credential"
-! sh -c 'printf denied > "$1"' probe "$credential" 2>/dev/null
-! cat /proc/1/environ >/dev/null 2>&1
-! cat "/proc/$runner_pid/environ" >/dev/null 2>&1
-! cat /app/runner.mjs >/dev/null 2>&1
-! ls /repo >/dev/null 2>&1
-! ls /opt/counterlab-venv >/dev/null 2>&1
-! ls /opt/counterlab-wheelhouse >/dev/null 2>&1
-! /opt/counterlab-venv/bin/python -c 'import counterlab_kernel' >/dev/null 2>&1
-! sh -c 'printf denied > /app/counterlab-posix-dac-write' >/dev/null 2>&1
-! sh -c 'printf denied > /repo/counterlab-posix-dac-write' >/dev/null 2>&1
-! sh -c 'printf denied > /tmp/counterlab-posix-dac-write' >/dev/null 2>&1
+probe_require no-new-privs test "$(awk '$1 == "NoNewPrivs:" {print $2}' /proc/self/status)" = "1"
+probe_require workspace-read test "$(cat "$workspace/approved.txt")" = "approved"
+printf 'bounded output\n' > "$workspace/probe-output.txt" || probe_fail workspace-write
+probe_require workspace-write test "$(cat "$workspace/probe-output.txt")" = "bounded output"
+probe_require credential-read test -r "$credential"
+if sh -c 'printf denied > "$1"' probe "$credential" 2>/dev/null; then
+  probe_fail credential-write-denied
+fi
+if cat /proc/1/environ >/dev/null 2>&1; then
+  probe_fail pid1-env-denied
+fi
+if cat "/proc/$runner_pid/environ" >/dev/null 2>&1; then
+  probe_fail runner-env-denied
+fi
+if cat /app/runner.mjs >/dev/null 2>&1; then
+  probe_fail app-read-denied
+fi
+if ls /repo >/dev/null 2>&1; then
+  probe_fail repo-read-denied
+fi
+if ls /opt/counterlab-venv >/dev/null 2>&1; then
+  probe_fail venv-read-denied
+fi
+if ls /opt/counterlab-wheelhouse >/dev/null 2>&1; then
+  probe_fail wheelhouse-read-denied
+fi
+if /opt/counterlab-venv/bin/python -c 'import counterlab_kernel' >/dev/null 2>&1; then
+  probe_fail fixed-kernel-denied
+fi
+if sh -c 'printf denied > /app/counterlab-posix-dac-write' >/dev/null 2>&1; then
+  probe_fail app-write-denied
+fi
+if sh -c 'printf denied > /repo/counterlab-posix-dac-write' >/dev/null 2>&1; then
+  probe_fail repo-write-denied
+fi
+if sh -c 'printf denied > /tmp/counterlab-posix-dac-write' >/dev/null 2>&1; then
+  probe_fail tmp-write-denied
+fi
 printf 'brokerUid=0\nbrokerGid=0\n'
 printf 'runnerUid=10001\nrunnerGid=10001\n'
 printf 'generatorUid=10002\ngeneratorGid=10002\n'
@@ -533,7 +563,7 @@ async function handleControl(
     if (request.operation === "probe") {
       const failure =
         error instanceof Error
-          ? error.message.match(/probeFailure=(line-\d{1,4})/u)?.[1]
+          ? error.message.match(/probeFailure=([a-z0-9-]{2,48})/u)?.[1]
           : undefined;
       console.error("CounterLab privilege broker probe failed", {
         reason: failure ?? "probe-execution-failed",

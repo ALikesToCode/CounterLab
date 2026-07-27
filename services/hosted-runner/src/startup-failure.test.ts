@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   createHostedRunnerBootstrapServer,
+  hostedRunnerStartupFailureDiagnostic,
   hostedRunnerStartupFailureReason,
   HostedRunnerStartupError,
   runHostedRunnerStartupStage,
@@ -118,5 +119,30 @@ describe("hosted runner startup failure boundary", () => {
     expect(hostedRunnerStartupFailureReason(new Error("unknown"))).toBe(
       "RUNNER_STARTUP_FAILED",
     );
+  });
+
+  it("reports only allowlisted startup cause classifications", () => {
+    const socketError = Object.assign(new Error("private socket path"), {
+      code: "EACCES",
+    });
+    expect(
+      hostedRunnerStartupFailureDiagnostic(
+        new HostedRunnerStartupError("PRIVSEP_PROBE_FAILED", {
+          cause: socketError,
+        }),
+      ),
+    ).toEqual({ causeName: "Error", causeCode: "EACCES" });
+
+    const privateCause = Object.assign(new Error("private-token-value"), {
+      name: "PrivateProviderError",
+      code: "PRIVATE_TOKEN_VALUE",
+    });
+    expect(
+      hostedRunnerStartupFailureDiagnostic(
+        new HostedRunnerStartupError("STARTUP_PROBE_FAILED", {
+          cause: privateCause,
+        }),
+      ),
+    ).toEqual({ causeName: "UnknownError" });
   });
 });

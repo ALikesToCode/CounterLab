@@ -56,6 +56,45 @@ export function hostedRunnerStartupFailureReason(
     : "RUNNER_STARTUP_FAILED";
 }
 
+const SAFE_CAUSE_NAMES = new Set([
+  "CompilerSetupError",
+  "Error",
+  "SyntaxError",
+  "ZodError",
+]);
+const SAFE_CAUSE_CODES = new Set([
+  "CODEX_ISOLATION_UNAVAILABLE",
+  "EACCES",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ENOENT",
+]);
+
+export function hostedRunnerStartupFailureDiagnostic(error: unknown): {
+  causeName: string;
+  causeCode?: string;
+} {
+  const cause =
+    error instanceof Error && error.cause instanceof Error
+      ? error.cause
+      : undefined;
+  const causeName =
+    cause !== undefined && SAFE_CAUSE_NAMES.has(cause.name)
+      ? cause.name
+      : "UnknownError";
+  const causeCode =
+    cause !== undefined &&
+    "code" in cause &&
+    typeof cause.code === "string" &&
+    SAFE_CAUSE_CODES.has(cause.code)
+      ? cause.code
+      : undefined;
+  return {
+    causeName,
+    ...(causeCode === undefined ? {} : { causeCode }),
+  };
+}
+
 function respondJson(
   response: Parameters<RequestListener>[1],
   status: number,
