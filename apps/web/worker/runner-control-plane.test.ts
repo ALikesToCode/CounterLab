@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { RunnerJob } from "@counterlab/contracts";
 
@@ -40,6 +40,10 @@ const runnerReleaseIdentity = {
   generationIsolationEvidenceSha256,
   generationIsolationProbeSha256,
 };
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("HttpRunnerDispatcher", () => {
   it("keeps the runtime fetch receiver when no override is provided", async () => {
@@ -133,6 +137,7 @@ describe("HttpRunnerDispatcher", () => {
     ["stale isolation probe identity", "probe"],
     ["partial filesystem isolation", "isolation"],
   ])("fails Container readiness closed on %s", async (_label, failure) => {
+    const report = vi.spyOn(console, "error").mockImplementation(() => {});
     const startAndWaitForPorts = vi.fn(async () => {
       if (failure === "startup") throw new Error("image did not start");
     });
@@ -168,6 +173,39 @@ describe("HttpRunnerDispatcher", () => {
     );
 
     await expect(dispatcher.ready()).resolves.toBe(false);
+    expect(report).toHaveBeenCalledWith(
+      "CounterLab Container runner readiness failed",
+      expect.objectContaining({
+        phase: failure === "startup" ? "container-start" : "container-response",
+      }),
+    );
+  });
+
+  it("redacts credentials from Container readiness diagnostics", async () => {
+    const report = vi.spyOn(console, "error").mockImplementation(() => {});
+    const dispatcher = new CloudflareContainerRunnerDispatcher(
+      {
+        getByName: () => ({
+          startAndWaitForPorts: vi.fn(async () => {
+            throw new Error(
+              'Bearer secret-token access_token="private-token-value"',
+            );
+          }),
+          fetch: vi.fn(),
+        }),
+      },
+      {},
+      runnerReleaseIdentity,
+    );
+
+    await expect(dispatcher.ready()).resolves.toBe(false);
+    expect(report).toHaveBeenCalledWith(
+      "CounterLab Container runner readiness failed",
+      expect.objectContaining({
+        message: 'Bearer [REDACTED] access_token="[REDACTED]"',
+        phase: "container-start",
+      }),
+    );
   });
 
   it.each([

@@ -50,6 +50,37 @@ export type HttpRunnerDispatcherOptions = {
   fetch?: typeof globalThis.fetch;
 };
 
+type RunnerReadinessFailurePhase =
+  "container-start" | "container-fetch" | "container-response";
+
+function sanitizedReadinessError(error: unknown): {
+  message: string;
+  name: string;
+} {
+  const name = error instanceof Error ? error.name : "UnknownError";
+  const source =
+    error instanceof Error ? error.message : "Unknown runner readiness error";
+  const message = source
+    .replace(/Bearer\s+\S+/giu, "Bearer [REDACTED]")
+    .replace(
+      /((?:access_token|refresh_token|id_token|api_key|authorization)["']?\s*[:=]\s*["']?)[^"',;\s}]+/giu,
+      "$1[REDACTED]",
+    )
+    .replace(/[A-Za-z0-9_-]{80,}/gu, "[REDACTED]")
+    .slice(0, 512);
+  return { message, name };
+}
+
+function reportContainerReadinessFailure(
+  phase: RunnerReadinessFailurePhase,
+  error: unknown,
+): void {
+  console.error("CounterLab Container runner readiness failed", {
+    phase,
+    ...sanitizedReadinessError(error),
+  });
+}
+
 async function releaseRunnerResponse(response: Response): Promise<void> {
   if (response.body !== null && !response.bodyUsed) {
     await response.body.cancel();
@@ -106,46 +137,77 @@ function assertExactRunnerReleaseIdentity(
   }
 }
 
+type RunnerReadinessAssessment =
+  { ready: true } | { ready: false; reason: string };
+
+async function assessRunnerReadiness(
+  response: Response,
+  releaseIdentity: RunnerReleaseIdentity,
+): Promise<RunnerReadinessAssessment> {
+  const source = await response.text();
+  if (response.status !== 200) {
+    return { ready: false, reason: `http-status-${response.status}` };
+  }
+  if (source.length > 1_024) {
+    return { ready: false, reason: "response-too-large" };
+  }
+  let payload: unknown;
+  try {
+    payload = JSON.parse(source);
+  } catch {
+    return { ready: false, reason: "invalid-json" };
+  }
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    Array.isArray(payload)
+  ) {
+    return { ready: false, reason: "invalid-payload-shape" };
+  }
+  const record = payload as Record<string, unknown>;
+  if (
+    JSON.stringify(Object.keys(record).sort()) !==
+    JSON.stringify(
+      [
+        "generationFilesystemReadIsolation",
+        "generationIsolationEvidenceSha256",
+        "generationIsolationProbeSha256",
+        "runnerImageDigest",
+        "runnerSourceCommit",
+        "service",
+        "status",
+      ].sort(),
+    )
+  ) {
+    return { ready: false, reason: "unexpected-payload-keys" };
+  }
+  for (const [field, expected] of [
+    ["status", "ready"],
+    ["service", "counterlab-hosted-runner"],
+    ["generationFilesystemReadIsolation", "OS_ENFORCED"],
+    [
+      "generationIsolationEvidenceSha256",
+      releaseIdentity.generationIsolationEvidenceSha256,
+    ],
+    [
+      "generationIsolationProbeSha256",
+      releaseIdentity.generationIsolationProbeSha256,
+    ],
+    ["runnerSourceCommit", releaseIdentity.runnerSourceCommit],
+    ["runnerImageDigest", releaseIdentity.runnerImageDigest],
+  ] as const) {
+    if (!(field in record) || record[field] !== expected) {
+      return { ready: false, reason: `mismatched-${field}` };
+    }
+  }
+  return { ready: true };
+}
+
 async function runnerReadinessMatches(
   response: Response,
   releaseIdentity: RunnerReleaseIdentity,
 ): Promise<boolean> {
-  const source = await response.text();
-  if (response.status !== 200 || source.length > 1_024) return false;
-  const payload: unknown = JSON.parse(source);
-  return (
-    typeof payload === "object" &&
-    payload !== null &&
-    !Array.isArray(payload) &&
-    JSON.stringify(Object.keys(payload).sort()) ===
-      JSON.stringify(
-        [
-          "generationFilesystemReadIsolation",
-          "generationIsolationEvidenceSha256",
-          "generationIsolationProbeSha256",
-          "runnerImageDigest",
-          "runnerSourceCommit",
-          "service",
-          "status",
-        ].sort(),
-      ) &&
-    "status" in payload &&
-    payload.status === "ready" &&
-    "service" in payload &&
-    payload.service === "counterlab-hosted-runner" &&
-    "generationFilesystemReadIsolation" in payload &&
-    payload.generationFilesystemReadIsolation === "OS_ENFORCED" &&
-    "generationIsolationEvidenceSha256" in payload &&
-    payload.generationIsolationEvidenceSha256 ===
-      releaseIdentity.generationIsolationEvidenceSha256 &&
-    "generationIsolationProbeSha256" in payload &&
-    payload.generationIsolationProbeSha256 ===
-      releaseIdentity.generationIsolationProbeSha256 &&
-    "runnerSourceCommit" in payload &&
-    payload.runnerSourceCommit === releaseIdentity.runnerSourceCommit &&
-    "runnerImageDigest" in payload &&
-    payload.runnerImageDigest === releaseIdentity.runnerImageDigest
-  );
+  return (await assessRunnerReadiness(response, releaseIdentity)).ready;
 }
 
 export class HttpRunnerDispatcher implements RunnerDispatcher {
@@ -236,8 +298,9 @@ export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
   }
 
   async ready(): Promise<boolean> {
+    let instance: RunnerInstance;
     try {
-      const instance = this.binding.getByName(this.readinessInstanceName);
+      instance = this.binding.getByName(this.readinessInstanceName);
       await instance.startAndWaitForPorts({
         ports: [8080],
         cancellationOptions: {
@@ -249,13 +312,35 @@ export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
           entrypoint: ["/usr/local/bin/node", "/app/runner.mjs"],
         },
       });
-      const response = await instance.fetch("http://runner.internal/ready", {
+    } catch (error) {
+      reportContainerReadinessFailure("container-start", error);
+      return false;
+    }
+    let response: Response;
+    try {
+      response = await instance.fetch("http://runner.internal/ready", {
         method: "GET",
         headers: { accept: "application/json" },
         signal: AbortSignal.timeout(10_000),
       });
-      return runnerReadinessMatches(response, this.releaseIdentity);
-    } catch {
+    } catch (error) {
+      reportContainerReadinessFailure("container-fetch", error);
+      return false;
+    }
+    try {
+      const assessment = await assessRunnerReadiness(
+        response,
+        this.releaseIdentity,
+      );
+      if (!assessment.ready) {
+        reportContainerReadinessFailure(
+          "container-response",
+          new Error(`Runner readiness response failed: ${assessment.reason}`),
+        );
+      }
+      return assessment.ready;
+    } catch (error) {
+      reportContainerReadinessFailure("container-response", error);
       return false;
     }
   }
