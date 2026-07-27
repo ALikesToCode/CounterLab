@@ -31,6 +31,7 @@ import {
   PRIVSEP_RUNNER_UID,
   PRIVSEP_SOCKET_PATH,
 } from "./privsep-protocol.js";
+import { enforcePrivsepScratchPolicy } from "./privsep-runtime-policy.js";
 
 const MAX_CONTROL_BYTES = 16_384;
 const WORKSPACE_ROOT = "/work/jobs";
@@ -606,6 +607,7 @@ export async function runPrivsepBroker(): Promise<void> {
   );
   delete process.env.CODEX_AUTH_JSON;
 
+  await enforcePrivsepScratchPolicy();
   await mkdir(dirname(PRIVSEP_SOCKET_PATH), { recursive: true, mode: 0o750 });
   await chown(dirname(PRIVSEP_SOCKET_PATH), 0, PRIVSEP_RUNNER_GID);
   await chmod(dirname(PRIVSEP_SOCKET_PATH), 0o750);
