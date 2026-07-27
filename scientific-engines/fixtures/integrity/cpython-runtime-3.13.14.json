@@ -4,7 +4,7 @@
   "runtimeId": "cpython",
   "exactVersion": "3.13.14",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:ae8ea68ec1e7f17353d051d508020202e1bd055e27f9cff8ee3cc8ca70327b40",
+  "imageDigest": "sha256:d47a13c368407b810eb9d7ebc8661a19725059b9efccf564d0cf03481e62cbda",
   "baseImage": {
     "reference": "python:3.13-slim-trixie@sha256:bffeb7bd6a85767587059c6ba23e1e9122078e3aa3fa836099171b9bb5a9bb00",
     "platform": "linux/amd64"
