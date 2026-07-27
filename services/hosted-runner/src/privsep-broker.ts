@@ -390,6 +390,7 @@ async function runProbe(state: BrokerState) {
 
   const probeScript = String.raw`
 set -euo pipefail
+trap 'printf "probeFailure=line-%s\n" "$LINENO" >&2' ERR
 workspace="$1"
 credential="$2"
 runner_pid="$3"
@@ -529,6 +530,15 @@ async function handleControl(
       }
     }
   } catch (error) {
+    if (request.operation === "probe") {
+      const failure =
+        error instanceof Error
+          ? error.message.match(/probeFailure=(line-\d{1,4})/u)?.[1]
+          : undefined;
+      console.error("CounterLab privilege broker probe failed", {
+        reason: failure ?? "probe-execution-failed",
+      });
+    }
     const code =
       error instanceof Error && error.message === "LAUNCH_LIMIT_REACHED"
         ? "LAUNCH_LIMIT_REACHED"
