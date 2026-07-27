@@ -2612,7 +2612,7 @@ test("a configured hosted runner completes an untouched leakage notebook", async
   );
   test.setTimeout(12 * 60_000);
 
-  const health = await page.request.get("/api/health");
+  const health = await page.request.get("/api/health?readiness=probe");
   expect(health.ok()).toBe(true);
   expect((await health.json()).data).toMatchObject({
     readiness: "ready",
@@ -2848,7 +2848,7 @@ test("a configured hosted runner completes an untouched class-imbalance notebook
   );
   test.setTimeout(12 * 60_000);
 
-  const health = await page.request.get("/api/health");
+  const health = await page.request.get("/api/health?readiness=probe");
   expect(health.ok()).toBe(true);
   const capability = (await health.json()).data;
   expect(capability).toMatchObject({
