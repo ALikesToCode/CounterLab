@@ -5940,3 +5940,74 @@ The public Sample and Replay paths are qualified at this checkpoint. The
 release remains **NO-GO for a complete Live notebook claim** until the analyst
 credential/endpoint accepts a real Responses request and the full source tip is
 rebuilt, redeployed, and requalified.
+
+## Exact current-source deployment attempt — 2026-07-27T07:47:00Z
+
+### Qualified tuple and completed gates
+
+- Runner source `c78c4bc7521688000c625ac21557896c0c78148e` and evidence
+  commit `719f65b79ed48b368672a2769fcb1ada4eb1e4da` passed the complete
+  release gate.
+- The promoted Container image is
+  `registry.cloudflare.com/9b0a1524e478000ec9b3ff2da6104d81/counterlab-runner`
+  at digest
+  `sha256:f1a924f0eaf4b8378f3e7fb379349a196debfe77b669f5b23ab70dfe5ffc51f1`.
+- Exact-image deterministic scientific verification passed. The full gate
+  reported root Vitest **858 passed, 2 skipped**, web Vitest **766 passed**,
+  kernel Pytest **346 passed**, repository/web/Worker TypeScript passed, the
+  production Worker/client build passed, and the release CloakBrowser suite
+  reported **32 passed, 8 intentionally skipped**. Mutation, held-out,
+  secret, formatting, and source/image binding gates passed.
+- D1 reported no pending migrations. Cloudflare Container application
+  `a037636c-0c63-420b-af14-3497c2c8b6a3` is version **37**, configured for
+  the exact promoted digest, and reports no application-level health errors.
+
+### Failed final readiness and safe recovery
+
+- The guarded deployment created final Worker
+  `01f8ccf8-c030-4d80-a7d5-2fd54c80e550`. All **24/24** bounded `/ready`
+  probes returned HTTP 503 with only `checks.runner` false. Admission,
+  analyst configuration, persistence, private R2, release identity, and
+  signing were true.
+- The deploy script restored maintenance Worker
+  `bd82e08d-83b3-4a1d-8a5b-28367885feec` at 100% traffic. Bound D1, R2,
+  Durable Object, and Container resources were not rolled back.
+- The obsolete `OPENAI_MODEL` secret conflict was removed through the
+  versioned-secret workflow; the final Worker now carries the frozen plain
+  value `gpt-5.6-sol`.
+- `CODEX_AUTH_JSON` was validated locally as the required JSON object with a
+  non-empty `tokens.access_token`, then updated without printing or persisting
+  its value. Version `8dbfb084-955a-4873-ae18-d105e4677d39` contains the
+  exact final Worker plus that secret update.
+- Two bounded public readiness requests made during Cloudflare version
+  propagation both returned the prior maintenance Worker identity, not
+  `8dbfb084-955a-4873-ae18-d105e4677d39`. They therefore do not prove or
+  disprove the refreshed secret version's Container readiness.
+- Read-only version inspection confirmed the `RUNNER` Container binding, all
+  four exact release-identity values, and the required secret bindings. No
+  stale `COUNTERLAB_RUNNER_BASE_URL` is present. Worker real-time logs show
+  the named Container `startAndWaitForPorts` call but do not include the
+  Container process's startup message.
+
+### Current release truth
+
+- Production remains intentionally in maintenance mode on
+  `bd82e08d-83b3-4a1d-8a5b-28367885feec`. The current-source UI is uploaded,
+  but live notebook authority is not enabled or claimed.
+- The remaining discriminating action is a newly approved, propagation-stable
+  activation of `8dbfb084-955a-4873-ae18-d105e4677d39`: wait until the
+  public non-deep identity consistently reports that exact version, issue one
+  cache-busted `/ready` probe, and restore maintenance immediately if any
+  readiness field is false.
+- If that exact probe still reports `checks.runner: false`, inspect the
+  Cloudflare Container log for instance
+  `3e29a3be5cb0ed523651870a678f4d2bdc1f3c677d6b9911eb65c1974218fed0`
+  before changing source or rebuilding. Do not repeat the same deployment
+  without a discriminating runtime finding.
+- Current production browser qualification and the supported live notebook
+  journey remain pending. Devpost publication, submission receipt, learner
+  outcome, and `main` merge remain unclaimed.
+
+The release remains **NO-GO for Live**. Sample and Replay remain available only
+under their existing labelled authority while maintenance mode protects the
+unqualified live path.

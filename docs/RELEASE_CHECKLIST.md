@@ -455,3 +455,38 @@ after the final source freeze.
       were verified, and the feature branch was pushed without merging `main`.
 - [ ] Publish Devpost and record the submission receipt. No learner-impact
       result or `main` merge is claimed.
+
+## Exact current-source deployment gate — 2026-07-27
+
+- [x] Freeze runner source
+      `c78c4bc7521688000c625ac21557896c0c78148e` and evidence commit
+      `719f65b79ed48b368672a2769fcb1ada4eb1e4da`.
+- [x] Promote the exact Container image at registry digest
+      `sha256:f1a924f0eaf4b8378f3e7fb379349a196debfe77b669f5b23ab70dfe5ffc51f1`.
+- [x] Pass the exact-image release gate: root Vitest 858 passed and 2 skipped;
+      web Vitest 766 passed; kernel Pytest 346 passed; TypeScript, build,
+      release CloakBrowser, mutation, held-out, secret, formatting, and
+      source/image checks passed.
+- [x] Apply the guarded Cloudflare release sequence with no pending D1
+      migrations and automatic maintenance recovery.
+- [ ] Final hosted runner readiness. Worker
+      `01f8ccf8-c030-4d80-a7d5-2fd54c80e550` returned HTTP 503 for all 24
+      probes with only `checks.runner` false; the release script restored
+      maintenance Worker `bd82e08d-83b3-4a1d-8a5b-28367885feec`.
+- [x] Remove the obsolete remote `OPENAI_MODEL` secret conflict while
+      preserving the frozen plain value `gpt-5.6-sol`.
+- [x] Validate and version-bind `CODEX_AUTH_JSON` without exposing its value.
+      Version `8dbfb084-955a-4873-ae18-d105e4677d39` contains the exact final
+      Worker plus the refreshed secret.
+- [ ] Probe the refreshed-secret version only after its exact public identity
+      is stable. The two bounded requests attempted during propagation were
+      served by the old maintenance version and are not evidence about
+      `8dbfb084-955a-4873-ae18-d105e4677d39`.
+- [ ] If the exact refreshed-secret probe remains red, obtain the Container
+      startup log for instance
+      `3e29a3be5cb0ed523651870a678f4d2bdc1f3c677d6b9911eb65c1974218fed0`
+      before another source or image change.
+- [ ] Run current production CloakBrowser journeys and one untouched supported
+      live notebook flow only after `/ready` reports all eight checks true.
+- [ ] Keep production maintenance enabled and do not claim current Live
+      authority until the runner, browser, and production-smoke gates pass.
