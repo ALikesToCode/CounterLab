@@ -6,6 +6,7 @@ import {
   chmodSync,
   existsSync,
   lstatSync,
+  readlinkSync,
   readFileSync,
   readdirSync,
   realpathSync,
@@ -861,6 +862,9 @@ const runnerRootfsPermissionContract = Object.freeze([
   { path: "/usr/local", kind: "directory", mode: 0o755 },
   { path: "/usr/local/bin", kind: "directory", mode: 0o755 },
   { path: "/usr/local/bin/node", kind: "file", mode: 0o555 },
+  { path: "/usr/local/bin/python", kind: "symlink", mode: 0o777 },
+  { path: "/usr/local/bin/python3", kind: "symlink", mode: 0o777 },
+  { path: "/usr/local/bin/python3.13", kind: "file", mode: 0o755 },
   { path: "/usr/bin", kind: "directory", mode: 0o755 },
   { path: "/usr/bin/setpriv", kind: "file", mode: 0o555 },
   { path: "/usr/bin/bash", kind: "file", mode: 0o555 },
@@ -908,8 +912,8 @@ const runnerRootfsPermissionContract = Object.freeze([
   },
   {
     path: "/opt/counterlab-venv/bin/python",
-    kind: "file",
-    mode: 0o550,
+    kind: "symlink",
+    mode: 0o777,
     gid: 10001,
   },
   { path: "/opt/codex", kind: "directory", mode: 0o550, gid: 10002 },
@@ -944,6 +948,12 @@ const runnerRootfsPermissionContract = Object.freeze([
   { path: "/dev/mqueue", kind: "directory", mode: 0o755 },
   { path: "/sys/fs/cgroup", kind: "directory", mode: 0o755 },
   { path: "/counterlab-runtime", kind: "directory", mode: 0o755 },
+]);
+
+const runnerRootfsSymlinkContract = new Map([
+  ["/usr/local/bin/python", "python3"],
+  ["/usr/local/bin/python3", "python3.13"],
+  ["/opt/counterlab-venv/bin/python", "/usr/local/bin/python"],
 ]);
 
 export function validateContainedRunnerRootfsPermissions(entries) {
@@ -988,18 +998,31 @@ function verifyContainedRunnerRootfsPermissions(plan, imageRootfsPath) {
   if (!plan.image.startsWith("counterlab-runner:git-")) return;
   validateContainedRunnerRootfsPermissions(
     runnerRootfsPermissionContract.map((expected) => {
-      const metadata = statSync(
+      const path =
         expected.path === "/"
           ? imageRootfsPath
-          : resolve(imageRootfsPath, expected.path.slice(1)),
-      );
+          : resolve(imageRootfsPath, expected.path.slice(1));
+      const metadata = lstatSync(path);
+      const expectedLinkTarget = runnerRootfsSymlinkContract.get(expected.path);
+      if (
+        (expectedLinkTarget === undefined && metadata.isSymbolicLink()) ||
+        (expectedLinkTarget !== undefined &&
+          (!metadata.isSymbolicLink() ||
+            readlinkSync(path) !== expectedLinkTarget))
+      ) {
+        throw new Error(
+          `contained runner rootfs symlink changed at ${expected.path}`,
+        );
+      }
       return {
         path: expected.path,
         kind: metadata.isDirectory()
           ? "directory"
           : metadata.isFile()
             ? "file"
-            : "other",
+            : metadata.isSymbolicLink()
+              ? "symlink"
+              : "other",
         mode: metadata.mode & 0o777,
         uid: metadata.uid,
         gid: metadata.gid,
