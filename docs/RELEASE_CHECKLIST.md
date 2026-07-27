@@ -490,3 +490,27 @@ after the final source freeze.
       live notebook flow only after `/ready` reports all eight checks true.
 - [ ] Keep production maintenance enabled and do not claim current Live
       authority until the runner, browser, and production-smoke gates pass.
+
+## Exact zero-traffic runner diagnostic — 2026-07-27
+
+- [x] Upload maintenance-only diagnostic Worker
+      `f45eb94d-9bde-4d22-8b01-e6810ae638ae` without modifying the qualified
+      Container image or production routes.
+- [x] Verify the diagnostic version carries the exact qualified runner
+      source/image identity, required bindings and secret names, and
+      `COUNTERLAB_MAINTENANCE_MODE=true`.
+- [x] Keep maintenance Worker
+      `bd82e08d-83b3-4a1d-8a5b-28367885feec` at 100%, attach the diagnostic
+      version at 0%, and prove exact execution through version-filtered tail
+      events.
+- [x] Issue one cache-busted readiness request. HTTP 503 and the sanitized
+      Worker log identify `container-start` failure:
+      `The container is not running, consider calling start()`.
+- [x] Confirm the readiness Container instance became inactive before port
+      8080 was ready, then restore the single maintenance Worker at 100%.
+- [ ] Add bounded hosted-runner startup failure observability that releases no
+      job or result and exposes only a fixed sanitized reason code.
+- [ ] Build and qualify a new exact Container/source/evidence tuple after that
+      observability change; do not reuse the current receipt.
+- [ ] Resolve the reported startup reason, rerun the complete exact-image
+      release gate, and enable Live only after all readiness checks are true.

@@ -6011,3 +6011,43 @@ rebuilt, redeployed, and requalified.
 The release remains **NO-GO for Live**. Sample and Replay remain available only
 under their existing labelled authority while maintenance mode protects the
 unqualified live path.
+
+## Exact zero-traffic runner diagnostic — 2026-07-27T08:37:14Z
+
+### Completed
+
+- Uploaded unqualified, maintenance-only diagnostic Worker
+  `f45eb94d-9bde-4d22-8b01-e6810ae638ae` from source `9776a39` without
+  changing the qualified Container image or normal production traffic.
+- Read-only version inspection confirmed `COUNTERLAB_MAINTENANCE_MODE=true`,
+  the expected D1, R2, Durable Object, and secret-name bindings, runner source
+  `c78c4bc7521688000c625ac21557896c0c78148e`, and runner image digest
+  `sha256:f1a924f0eaf4b8378f3e7fb379349a196debfe77b669f5b23ab70dfe5ffc51f1`.
+- Attached the diagnostic Worker at 0% while maintenance Worker
+  `bd82e08d-83b3-4a1d-8a5b-28367885feec` remained at 100%. Exact-version
+  tail events proved the override requests executed only
+  `f45eb94d-9bde-4d22-8b01-e6810ae638ae`.
+- Issued one cache-busted `/ready` request. It returned HTTP 503. The sanitized
+  exact-version log isolated the failure to `container-start` with
+  `The container is not running, consider calling start()`. The created named
+  readiness instance is inactive, which proves that the process exited before
+  port 8080 became ready.
+- Restored the single qualified maintenance Worker at 100% and stopped the
+  diagnostic tail. Normal production traffic never reached the diagnostic
+  Worker.
+
+### Current release truth
+
+- The refreshed Codex credential is no longer the unresolved readiness
+  variable. The Worker acquires the exact Container instance, but the hosted
+  runner process exits during startup.
+- The Container application remains version 37 on the qualified image and
+  reports ready capacity; this does not mean the named runner process passed
+  its startup checks.
+- Production remains intentionally in maintenance mode. Live authority,
+  production browser qualification, and a supported live notebook journey
+  remain unclaimed.
+- The next source slice is bounded startup observability: preserve the
+  fail-closed result while returning a sanitized startup reason through the
+  internal runner `/ready` response. Rebuild and requalify the exact Container
+  before any attempt to enable Live.
