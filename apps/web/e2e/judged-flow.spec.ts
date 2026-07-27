@@ -2650,7 +2650,9 @@ test("a configured hosted runner completes an untouched leakage notebook", async
       name: /Does your current explanation capture what you mean/i,
     }),
   ).toBeVisible({ timeout: 210_000 });
-  const hypotheses = page.getByRole("region", { name: "Model duel" });
+  const hypotheses = page.getByRole("region", {
+    name: /Does your current explanation capture what you mean/i,
+  });
   await expect(
     hypotheses.getByRole("article", { name: "Your current explanation" }),
   ).toBeVisible();
