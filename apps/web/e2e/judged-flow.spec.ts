@@ -1316,9 +1316,9 @@ test.describe("production release transport", () => {
         JSON.stringify(
           exactPublicAssets.map(({ path, publicPath, sha256, size }) => ({
             path,
-            publicPath,
             sha256,
             size,
+            publicPath,
           })),
         ),
       ),
