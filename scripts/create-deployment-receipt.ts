@@ -124,19 +124,29 @@ export function assertFrozenDryRunProjection(input: {
   }
 }
 
+type DryRunDirectoryEntry = {
+  name: string;
+  isFile: () => boolean;
+  isSymbolicLink: () => boolean;
+};
+
+export function hasExpectedDryRunShape(
+  entries: readonly DryRunDirectoryEntry[],
+): boolean {
+  const names = entries.map((entry) => entry.name).sort();
+  return (
+    JSON.stringify(names) === JSON.stringify(["README.md", "index.js"]) &&
+    entries.every((entry) => entry.isFile() && !entry.isSymbolicLink())
+  );
+}
+
 function dryRunWorkerHash(
   root: string,
   directory: string,
   expectedWorkerSha256: string,
 ) {
-  const entries = readdirSync(directory, { withFileTypes: true }).sort(
-    (left, right) => left.name.localeCompare(right.name),
-  );
-  if (
-    JSON.stringify(entries.map((entry) => entry.name)) !==
-      JSON.stringify(["README.md", "index.js"]) ||
-    entries.some((entry) => !entry.isFile() || entry.isSymbolicLink())
-  ) {
+  const entries = readdirSync(directory, { withFileTypes: true });
+  if (!hasExpectedDryRunShape(entries)) {
     throw new Error("Wrangler dry-run output has an unexpected shape");
   }
   const workerPath = resolve(directory, "index.js");

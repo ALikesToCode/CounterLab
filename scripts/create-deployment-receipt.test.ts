@@ -6,6 +6,7 @@ import {
   assertActiveWorkerReleaseBindings,
   assertDeploymentReceiptBindings,
   assertFrozenDryRunProjection,
+  hasExpectedDryRunShape,
   qualifiedContainerImage,
   selectQualifiedContainer,
 } from "./create-deployment-receipt";
@@ -42,6 +43,11 @@ const generationIsolationProbeSha256 =
 
 describe("deployment receipt frozen dry-run projection", () => {
   const workerBundleSha256 = "a".repeat(64);
+  const file = (name: string) => ({
+    name,
+    isFile: () => true,
+    isSymbolicLink: () => false,
+  });
 
   it("accepts exactly one byte-identical Worker bundle", () => {
     expect(() =>
@@ -51,6 +57,32 @@ describe("deployment receipt frozen dry-run projection", () => {
         dryRunFileCount: 1,
       }),
     ).not.toThrow();
+  });
+
+  it("accepts the exact Wrangler files independent of directory order", () => {
+    const readme = file("README.md");
+    const worker = file("index.js");
+
+    expect(hasExpectedDryRunShape([readme, worker])).toBe(true);
+    expect(hasExpectedDryRunShape([worker, readme])).toBe(true);
+  });
+
+  it("rejects extra, non-file, and symbolic-link entries", () => {
+    const readme = file("README.md");
+    const worker = file("index.js");
+
+    expect(
+      hasExpectedDryRunShape([readme, worker, file("metadata.json")]),
+    ).toBe(false);
+    expect(
+      hasExpectedDryRunShape([readme, { ...worker, isFile: () => false }]),
+    ).toBe(false);
+    expect(
+      hasExpectedDryRunShape([
+        readme,
+        { ...worker, isSymbolicLink: () => true },
+      ]),
+    ).toBe(false);
   });
 
   it("rejects changed Worker bytes and every non-singleton projection", () => {
