@@ -32,6 +32,7 @@ export type PrivsepCodexLaunchBoundaryOptions = {
   runnerNodeExecutable: string;
   clientBundle: string;
   socketPath?: string;
+  connect?: typeof connect;
   uid?: number;
   gid?: number;
 };
@@ -75,13 +76,14 @@ function requestFor(
 async function brokerRequest(
   socketPath: string,
   request: PrivsepRequest,
+  connectSocket: typeof connect = connect,
 ): Promise<ReturnType<typeof PrivsepResponseSchema.parse>> {
-  const socket = connect({ path: socketPath });
+  const socket = connectSocket({ path: socketPath });
   await new Promise<void>((resolveConnect, rejectConnect) => {
     socket.once("connect", resolveConnect);
     socket.once("error", rejectConnect);
   });
-  socket.end(`${JSON.stringify(request)}\n`);
+  socket.write(`${JSON.stringify(request)}\n`);
   return new Promise((resolveResponse, rejectResponse) => {
     let bytes = Buffer.alloc(0);
     socket.on("data", (chunk: Buffer) => {
@@ -117,6 +119,10 @@ export class PrivsepCodexLaunchBoundary implements AppServerLaunchBoundary {
     this.socketPath = options.socketPath ?? PRIVSEP_SOCKET_PATH;
     this.uid = options.uid ?? PRIVSEP_RUNNER_UID;
     this.gid = options.gid ?? PRIVSEP_RUNNER_GID;
+  }
+
+  private request(request: PrivsepRequest) {
+    return brokerRequest(this.socketPath, request, this.options.connect);
   }
 
   async health(): Promise<AppServerLaunchBoundaryHealth> {
@@ -170,10 +176,7 @@ export class PrivsepCodexLaunchBoundary implements AppServerLaunchBoundary {
         access(runnerNode, constants.X_OK),
         access(clientBundle, constants.R_OK),
       ]);
-      const response = await brokerRequest(
-        this.socketPath,
-        requestFor("health"),
-      );
+      const response = await this.request(requestFor("health"));
       if (response.status !== "ok" || response.operation !== "health") {
         return {
           available: false,
@@ -191,7 +194,7 @@ export class PrivsepCodexLaunchBoundary implements AppServerLaunchBoundary {
   }
 
   async probe(): Promise<PrivsepProbePayload> {
-    const response = await brokerRequest(this.socketPath, requestFor("probe"));
+    const response = await this.request(requestFor("probe"));
     if (response.status !== "ok" || response.operation !== "probe") {
       throw isolationError("Privilege broker isolation probe was rejected.");
     }
@@ -234,8 +237,7 @@ export class PrivsepCodexLaunchBoundary implements AppServerLaunchBoundary {
         );
       }
       await assertWorkspaceEntriesBounded(workspace);
-      const prepared = await brokerRequest(
-        this.socketPath,
+      const prepared = await this.request(
         requestFor("prepare", {
           workspace,
           appServerArgs: ["app-server", "--stdio"],
@@ -250,6 +252,7 @@ export class PrivsepCodexLaunchBoundary implements AppServerLaunchBoundary {
       }
       const launchId = prepared.launchId;
       const socketPath = this.socketPath;
+      const connectSocket = this.options.connect;
       let revoked = false;
       let disposed = false;
       return {
@@ -266,6 +269,7 @@ export class PrivsepCodexLaunchBoundary implements AppServerLaunchBoundary {
           const response = await brokerRequest(
             socketPath,
             requestFor("revoke", { launchId }),
+            connectSocket,
           );
           if (response.status !== "ok" || response.operation !== "revoke") {
             throw isolationError(
@@ -279,6 +283,7 @@ export class PrivsepCodexLaunchBoundary implements AppServerLaunchBoundary {
           const response = await brokerRequest(
             socketPath,
             requestFor("dispose", { launchId }),
+            connectSocket,
           );
           if (response.status !== "ok" || response.operation !== "dispose") {
             throw isolationError(
