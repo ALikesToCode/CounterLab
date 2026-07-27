@@ -1676,15 +1676,16 @@ export function sanitizeContainedRootlessSpec({
     throw new Error("contained rootless OCI runtime user is invalid");
   }
   // The broker profile maps container root to the already-rootless runtime
-  // owner and reserves adjacent subordinate IDs for the fixed runner and
-  // generator. Other profiles map only their fixed non-root process identity
-  // to the runtime owner so read-only bind inputs remain readable without
-  // widening host permissions.
+  // owner and preserves the fixed image IDs for the runner and generator.
+  // The outer RootlessKit namespace maps those IDs into its subordinate range,
+  // so image group ownership remains readable without granting host authority.
+  // Other profiles map only their fixed non-root process identity to the
+  // runtime owner so read-only bind inputs remain readable.
   linux.namespaces.push({ type: "user" });
   linux.uidMappings = privilegeBroker
     ? [
         { containerID: 0, hostID: 0, size: 1 },
-        { containerID: 10001, hostID: 1, size: 2 },
+        { containerID: 10001, hostID: 10001, size: 2 },
       ]
     : [
         { containerID: 0, hostID: 1, size: 1 },
@@ -1693,8 +1694,8 @@ export function sanitizeContainedRootlessSpec({
   linux.gidMappings = privilegeBroker
     ? [
         { containerID: 0, hostID: 0, size: 1 },
-        { containerID: devptsGid, hostID: 1, size: 1 },
-        { containerID: 10001, hostID: 2, size: 2 },
+        { containerID: devptsGid, hostID: devptsGid, size: 1 },
+        { containerID: 10001, hostID: 10001, size: 2 },
       ]
     : [
         { containerID: 0, hostID: 1, size: 1 },

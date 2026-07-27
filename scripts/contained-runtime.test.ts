@@ -2250,12 +2250,12 @@ describe("contained runtime command policy", () => {
     expect(sanitized.linux.namespaces).toContainEqual({ type: "user" });
     expect(sanitized.linux.uidMappings).toEqual([
       { containerID: 0, hostID: 0, size: 1 },
-      { containerID: 10001, hostID: 1, size: 2 },
+      { containerID: 10001, hostID: 10001, size: 2 },
     ]);
     expect(sanitized.linux.gidMappings).toEqual([
       { containerID: 0, hostID: 0, size: 1 },
-      { containerID: 5, hostID: 1, size: 1 },
-      { containerID: 10001, hostID: 2, size: 2 },
+      { containerID: 5, hostID: 5, size: 1 },
+      { containerID: 10001, hostID: 10001, size: 2 },
     ]);
     expect(sanitized.linux.resources).toEqual({
       ...original.linux.resources,
