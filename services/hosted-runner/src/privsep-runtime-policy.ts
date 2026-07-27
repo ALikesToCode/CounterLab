@@ -41,7 +41,7 @@ export async function enforcePrivsepScratchPolicy(
     after.isSymbolicLink() ||
     after.uid !== 0 ||
     after.gid !== 0 ||
-    (after.mode & 0o777) !== 0o555
+    (after.mode & 0o7777) !== 0o555
   ) {
     throw new Error(
       "CounterLab privilege broker scratch policy did not reach root:root 0555",

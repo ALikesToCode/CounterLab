@@ -99,7 +99,7 @@ describe("privsep scratch policy", () => {
   it("fails closed when the runtime does not preserve the enforced policy", async () => {
     const fs = operations([
       metadata({ uid: 1000, gid: 1000, mode: 0o1777 }),
-      metadata({ uid: 0, gid: 0, mode: 0o755 }),
+      metadata({ uid: 0, gid: 0, mode: 0o1555 }),
     ]);
 
     await expect(enforcePrivsepScratchPolicy(fs)).rejects.toThrow(
