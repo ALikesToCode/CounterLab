@@ -9,6 +9,40 @@ export const PRIVSEP_RUNNER_UID = 10_001;
 export const PRIVSEP_RUNNER_GID = 10_001;
 export const PRIVSEP_GENERATOR_UID = 10_002;
 export const PRIVSEP_GENERATOR_GID = 10_002;
+export const PRIVSEP_PROBE_FAILURES = [
+  "uid",
+  "gid",
+  "groups",
+  "capabilities",
+  "no-new-privs",
+  "workspace-read",
+  "workspace-write",
+  "credential-read",
+  "credential-write-denied",
+  "pid1-env-denied",
+  "runner-env-denied",
+  "app-read-denied",
+  "repo-read-denied",
+  "venv-read-denied",
+  "wheelhouse-read-denied",
+  "fixed-kernel-denied",
+  "app-write-denied",
+  "repo-write-denied",
+  "tmp-write-denied",
+  "probe-execution-failed",
+] as const;
+export const PrivsepProbeFailureSchema = z.enum(PRIVSEP_PROBE_FAILURES);
+export type PrivsepProbeFailure = z.infer<typeof PrivsepProbeFailureSchema>;
+
+export class PrivsepProbeFailureError extends Error {
+  readonly probeFailure: PrivsepProbeFailure;
+
+  constructor(probeFailure: PrivsepProbeFailure) {
+    super("Privilege broker isolation probe was rejected.");
+    this.name = "PrivsepProbeFailureError";
+    this.probeFailure = probeFailure;
+  }
+}
 
 const RequestIdSchema = z.string().uuid();
 const LaunchIdSchema = z.string().uuid();
@@ -83,6 +117,7 @@ export const PrivsepResponseSchema = z.discriminatedUnion("status", [
       "LAUNCH_LIMIT_REACHED",
       "BROKER_FAILURE",
     ]),
+    probeFailure: PrivsepProbeFailureSchema.optional(),
   }).strict(),
 ]);
 

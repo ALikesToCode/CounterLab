@@ -21,6 +21,7 @@ import {
   createHostedRunnerBootstrapServer,
   hostedRunnerStartupFailureDiagnostic,
   hostedRunnerStartupFailureReason,
+  hostedRunnerStartupProbeFailure,
   HostedRunnerStartupError,
   runHostedRunnerStartupStage,
 } from "./startup-failure.js";
@@ -432,10 +433,12 @@ async function startProductionServer(): Promise<void> {
     console.info("CounterLab hosted runner ready", { port });
   } catch (error) {
     const reason = hostedRunnerStartupFailureReason(error);
-    bootstrap.fail(reason);
+    const probeFailure = hostedRunnerStartupProbeFailure(error);
+    bootstrap.fail(reason, probeFailure);
     console.error("CounterLab hosted runner failed to start", {
       name: error instanceof Error ? error.name : "UnknownError",
       reason,
+      ...(probeFailure === undefined ? {} : { probeFailure }),
       ...hostedRunnerStartupFailureDiagnostic(error),
     });
     console.error("CounterLab hosted runner remains fail-closed", {

@@ -15,6 +15,7 @@ import {
 import {
   isPathContained,
   PRIVSEP_PROTOCOL_VERSION,
+  PrivsepProbeFailureError,
   PrivsepProbePayloadSchema,
   PrivsepResponseSchema,
   PRIVSEP_RUNNER_GID,
@@ -196,6 +197,13 @@ export class PrivsepCodexLaunchBoundary implements AppServerLaunchBoundary {
   async probe(): Promise<PrivsepProbePayload> {
     const response = await this.request(requestFor("probe"));
     if (response.status !== "ok" || response.operation !== "probe") {
+      if (
+        response.status === "error" &&
+        response.code === "BROKER_FAILURE" &&
+        response.probeFailure !== undefined
+      ) {
+        throw new PrivsepProbeFailureError(response.probeFailure);
+      }
       throw isolationError("Privilege broker isolation probe was rejected.");
     }
     return PrivsepProbePayloadSchema.parse(response.payload);

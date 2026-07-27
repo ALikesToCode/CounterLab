@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   isPathContained,
   PRIVSEP_PROTOCOL_VERSION,
+  PrivsepProbeFailureSchema,
   PrivsepProbePayloadSchema,
   PrivsepRequestSchema,
+  PrivsepResponseSchema,
 } from "./privsep-protocol.js";
 
 describe("privilege-separation protocol", () => {
@@ -71,5 +73,31 @@ describe("privilege-separation protocol", () => {
     expect(isPathContained("/work/jobs", "/work/jobs")).toBe(false);
     expect(isPathContained("/work/jobs", "/work/jobs/../repo")).toBe(false);
     expect(isPathContained("/work/jobs", "/repo")).toBe(false);
+  });
+
+  it("accepts only allowlisted probe failure diagnostics", () => {
+    const response = {
+      protocolVersion: PRIVSEP_PROTOCOL_VERSION,
+      requestId: "5fa4d3f1-62ee-43f4-8a39-9022738ece04",
+      status: "error",
+      code: "BROKER_FAILURE",
+      probeFailure: "no-new-privs",
+    } as const;
+    expect(PrivsepResponseSchema.parse(response)).toEqual(response);
+    expect(PrivsepProbeFailureSchema.parse(response.probeFailure)).toBe(
+      "no-new-privs",
+    );
+    expect(() =>
+      PrivsepResponseSchema.parse({
+        ...response,
+        probeFailure: "Bearer private-token",
+      }),
+    ).toThrow();
+    expect(() =>
+      PrivsepResponseSchema.parse({
+        ...response,
+        detail: "private process output",
+      }),
+    ).toThrow();
   });
 });

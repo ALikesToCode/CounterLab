@@ -282,6 +282,78 @@ describe("HttpRunnerDispatcher", () => {
     expect(JSON.stringify(report.mock.calls)).not.toContain("private-value");
   });
 
+  it("reports only an allowlisted privsep probe failure stage", async () => {
+    const report = vi.spyOn(console, "error").mockImplementation(() => {});
+    const dispatcher = new CloudflareContainerRunnerDispatcher(
+      {
+        getByName: () => ({
+          startAndWaitForPorts: vi.fn(async () => undefined),
+          fetch: vi.fn(
+            async () =>
+              new Response(
+                JSON.stringify({
+                  status: "not-ready",
+                  service: "counterlab-hosted-runner",
+                  reason: "PRIVSEP_PROBE_FAILED",
+                  probeFailure: "no-new-privs",
+                }),
+                { status: 503 },
+              ),
+          ),
+        }),
+      },
+      {},
+      runnerReleaseIdentity,
+    );
+
+    await expect(dispatcher.ready()).resolves.toBe(false);
+    expect(report).toHaveBeenCalledWith(
+      "CounterLab Container runner readiness failed",
+      expect.objectContaining({
+        message:
+          "Runner readiness response failed: http-status-503:PRIVSEP_PROBE_FAILED:no-new-privs",
+        phase: "container-response",
+      }),
+    );
+  });
+
+  it("rejects an unrecognized privsep probe failure stage", async () => {
+    const report = vi.spyOn(console, "error").mockImplementation(() => {});
+    const dispatcher = new CloudflareContainerRunnerDispatcher(
+      {
+        getByName: () => ({
+          startAndWaitForPorts: vi.fn(async () => undefined),
+          fetch: vi.fn(
+            async () =>
+              new Response(
+                JSON.stringify({
+                  status: "not-ready",
+                  service: "counterlab-hosted-runner",
+                  reason: "PRIVSEP_PROBE_FAILED",
+                  probeFailure: "private-token-value",
+                }),
+                { status: 503 },
+              ),
+          ),
+        }),
+      },
+      {},
+      runnerReleaseIdentity,
+    );
+
+    await expect(dispatcher.ready()).resolves.toBe(false);
+    expect(report).toHaveBeenCalledWith(
+      "CounterLab Container runner readiness failed",
+      expect.objectContaining({
+        message: "Runner readiness response failed: http-status-503",
+        phase: "container-response",
+      }),
+    );
+    expect(JSON.stringify(report.mock.calls)).not.toContain(
+      "private-token-value",
+    );
+  });
+
   it.each([
     [
       "invalid source commit",

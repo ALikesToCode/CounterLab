@@ -6,9 +6,11 @@ import {
   createHostedRunnerBootstrapServer,
   hostedRunnerStartupFailureDiagnostic,
   hostedRunnerStartupFailureReason,
+  hostedRunnerStartupProbeFailure,
   HostedRunnerStartupError,
   runHostedRunnerStartupStage,
 } from "./startup-failure.js";
+import { PrivsepProbeFailureError } from "./privsep-protocol.js";
 
 const servers: Array<
   ReturnType<typeof createHostedRunnerBootstrapServer>["server"]
@@ -144,5 +146,33 @@ describe("hosted runner startup failure boundary", () => {
         }),
       ),
     ).toEqual({ causeName: "UnknownError" });
+  });
+
+  it("exposes only a fixed probe failure code on fail-closed readiness", async () => {
+    const bootstrap = createHostedRunnerBootstrapServer();
+    servers.push(bootstrap.server);
+    bootstrap.server.listen(0, "127.0.0.1");
+    await once(bootstrap.server, "listening");
+    const address = bootstrap.server.address();
+    if (address === null || typeof address === "string") {
+      throw new Error("startup bootstrap server did not bind a TCP port");
+    }
+    const failure = new HostedRunnerStartupError("PRIVSEP_PROBE_FAILED", {
+      cause: new PrivsepProbeFailureError("no-new-privs"),
+    });
+
+    bootstrap.fail(
+      hostedRunnerStartupFailureReason(failure),
+      hostedRunnerStartupProbeFailure(failure),
+    );
+    const response = await fetch(`http://127.0.0.1:${address.port}/ready`);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      status: "not-ready",
+      service: "counterlab-hosted-runner",
+      reason: "PRIVSEP_PROBE_FAILED",
+      probeFailure: "no-new-privs",
+    });
   });
 });

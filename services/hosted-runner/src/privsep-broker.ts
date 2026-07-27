@@ -22,6 +22,7 @@ import {
   PRIVSEP_GENERATOR_GID,
   PRIVSEP_GENERATOR_UID,
   PRIVSEP_MAX_GENERATION_LAUNCHES,
+  PrivsepProbeFailureSchema,
   PrivsepProbePayloadSchema,
   PrivsepRequestSchema,
   type PrivsepRequest,
@@ -561,20 +562,31 @@ async function handleControl(
       }
     }
   } catch (error) {
+    const probeFailure =
+      request.operation === "probe" && error instanceof Error
+        ? PrivsepProbeFailureSchema.safeParse(
+            error.message.match(/probeFailure=([a-z0-9-]{2,48})/u)?.[1],
+          ).data
+        : undefined;
     if (request.operation === "probe") {
-      const failure =
-        error instanceof Error
-          ? error.message.match(/probeFailure=([a-z0-9-]{2,48})/u)?.[1]
-          : undefined;
       console.error("CounterLab privilege broker probe failed", {
-        reason: failure ?? "probe-execution-failed",
+        reason: probeFailure ?? "probe-execution-failed",
       });
     }
     const code =
       error instanceof Error && error.message === "LAUNCH_LIMIT_REACHED"
         ? "LAUNCH_LIMIT_REACHED"
         : "BROKER_FAILURE";
-    writeResponse(socket, response(request, { status: "error", code }));
+    writeResponse(
+      socket,
+      response(request, {
+        status: "error",
+        code,
+        ...(request.operation === "probe"
+          ? { probeFailure: probeFailure ?? "probe-execution-failed" }
+          : {}),
+      }),
+    );
   }
   socket.end();
 }

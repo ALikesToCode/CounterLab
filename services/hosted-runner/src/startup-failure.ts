@@ -1,5 +1,10 @@
 import { createServer, type RequestListener } from "node:http";
 
+import {
+  PrivsepProbeFailureError,
+  type PrivsepProbeFailure,
+} from "./privsep-protocol.js";
+
 export const HOSTED_RUNNER_STARTUP_FAILURE_REASONS = [
   "STARTING",
   "STARTUP_PROBE_FAILED",
@@ -54,6 +59,16 @@ export function hostedRunnerStartupFailureReason(
   return error instanceof HostedRunnerStartupError
     ? error.reason
     : "RUNNER_STARTUP_FAILED";
+}
+
+export function hostedRunnerStartupProbeFailure(
+  error: unknown,
+): PrivsepProbeFailure | undefined {
+  return error instanceof HostedRunnerStartupError &&
+    error.reason === "PRIVSEP_PROBE_FAILED" &&
+    error.cause instanceof PrivsepProbeFailureError
+    ? error.cause.probeFailure
+    : undefined;
 }
 
 const SAFE_CAUSE_NAMES = new Set([
@@ -111,9 +126,13 @@ function respondJson(
 export function createHostedRunnerBootstrapServer(): {
   server: ReturnType<typeof createServer>;
   activate(listener: RequestListener): void;
-  fail(reason: HostedRunnerStartupFailureReason): void;
+  fail(
+    reason: HostedRunnerStartupFailureReason,
+    probeFailure?: PrivsepProbeFailure,
+  ): void;
 } {
   let reason: HostedRunnerStartupFailureReason = "STARTING";
+  let probeFailure: PrivsepProbeFailure | undefined;
   let activeListener: RequestListener | undefined;
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://runner.internal");
@@ -132,15 +151,21 @@ export function createHostedRunnerBootstrapServer(): {
       status: "not-ready",
       service: "counterlab-hosted-runner",
       reason,
+      ...(reason === "PRIVSEP_PROBE_FAILED" && probeFailure !== undefined
+        ? { probeFailure }
+        : {}),
     });
   });
   return {
     server,
     activate(listener) {
       activeListener = listener;
+      probeFailure = undefined;
     },
-    fail(nextReason) {
+    fail(nextReason, nextProbeFailure) {
       reason = nextReason;
+      probeFailure =
+        nextReason === "PRIVSEP_PROBE_FAILED" ? nextProbeFailure : undefined;
       activeListener = undefined;
     },
   };

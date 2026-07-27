@@ -159,6 +159,28 @@ const RUNNER_STARTUP_FAILURE_REASONS = new Set([
   "ISOLATION_BOUNDARY_FAILED",
   "RUNNER_STARTUP_FAILED",
 ]);
+const RUNNER_PRIVSEP_PROBE_FAILURES = new Set([
+  "uid",
+  "gid",
+  "groups",
+  "capabilities",
+  "no-new-privs",
+  "workspace-read",
+  "workspace-write",
+  "credential-read",
+  "credential-write-denied",
+  "pid1-env-denied",
+  "runner-env-denied",
+  "app-read-denied",
+  "repo-read-denied",
+  "venv-read-denied",
+  "wheelhouse-read-denied",
+  "fixed-kernel-denied",
+  "app-write-denied",
+  "repo-write-denied",
+  "tmp-write-denied",
+  "probe-execution-failed",
+]);
 
 async function assessRunnerReadiness(
   response: Response,
@@ -178,16 +200,28 @@ async function assessRunnerReadiness(
         !Array.isArray(payload)
       ) {
         const record = payload as Record<string, unknown>;
+        const keys = Object.keys(record).sort();
+        const hasBaseKeys =
+          JSON.stringify(keys) ===
+          JSON.stringify(["reason", "service", "status"]);
+        const hasProbeFailureKeys =
+          JSON.stringify(keys) ===
+          JSON.stringify(["probeFailure", "reason", "service", "status"]);
         if (
           response.status === 503 &&
-          JSON.stringify(Object.keys(record).sort()) ===
-            JSON.stringify(["reason", "service", "status"]) &&
+          (hasBaseKeys || hasProbeFailureKeys) &&
           record.status === "not-ready" &&
           record.service === "counterlab-hosted-runner" &&
           typeof record.reason === "string" &&
-          RUNNER_STARTUP_FAILURE_REASONS.has(record.reason)
+          RUNNER_STARTUP_FAILURE_REASONS.has(record.reason) &&
+          (hasBaseKeys ||
+            (record.reason === "PRIVSEP_PROBE_FAILED" &&
+              typeof record.probeFailure === "string" &&
+              RUNNER_PRIVSEP_PROBE_FAILURES.has(record.probeFailure)))
         ) {
-          startupReason = record.reason;
+          startupReason = `${record.reason}${
+            hasProbeFailureKeys ? `:${String(record.probeFailure)}` : ""
+          }`;
         }
       }
     } catch {
