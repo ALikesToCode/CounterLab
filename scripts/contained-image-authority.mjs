@@ -940,28 +940,20 @@ function expectedProcess(args, config) {
     gid === 0 &&
     JSON.stringify(requestedEnvironment) ===
       JSON.stringify(["COUNTERLAB_RUNNER_STARTUP_PROBE=1"]);
-  if (
-    userMatch === null ||
-    (!privilegeBroker && (uid === 0 || gid === 0))
-  ) {
+  if (userMatch === null || (!privilegeBroker && (uid === 0 || gid === 0))) {
     throw new Error("contained image authority user is invalid");
   }
   if (typeof cwd !== "string" || !cwd.startsWith("/")) {
     throw new Error("contained image authority working directory is invalid");
   }
   const imageEnvironment = stringArray(config.Env ?? [], "image environment");
-  const environment = mergeEnvironment(
-    imageEnvironment,
-    requestedEnvironment,
-  );
+  const environment = mergeEnvironment(imageEnvironment, requestedEnvironment);
   return {
     args: processArgs,
     cwd,
     env: environment,
     gid,
-    ...(privilegeBroker
-      ? { profile: "counterlab-root-broker-v1" }
-      : {}),
+    ...(privilegeBroker ? { profile: "counterlab-root-broker-v1" } : {}),
     uid,
   };
 }
