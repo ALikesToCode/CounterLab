@@ -6098,3 +6098,56 @@ unqualified live path.
 - Live remains **NO-GO** until the exact Container returns the full verified
   readiness identity, production smoke passes, and the supported live notebook
   journey completes through CloakBrowser.
+
+## Exact hosted-kernel diagnosis — 2026-07-27T10:38:00Z
+
+### Completed
+
+- Committed and pushed `c9433e7` (`fix(runner): classify hosted startup
+  failures`) and evidence-only commit `6f1ff68` on
+  `feat/learner-ux-v6.1`.
+- Built source `c9433e70f31ef50df7537b6d7edd3ec4b9de9425` into runner
+  config digest
+  `sha256:99d2c309fea6136de5ad3c9900f45abd21555ae06091e16c1dd4da0b32261f36`
+  and OCI manifest
+  `sha256:8b7decb802fe771fed1b8952db92f0e10c5940e13e08aeffb6813be9ad031925`.
+- The real 30-second containment sentinel passed: aggregate cgroup evidence
+  was captured, every cleanup check was true, and `resultReleased` was false.
+- Refreshed and verified the exact-image SBOM, VEX, vulnerability, health,
+  scientific-engine, and deterministic golden evidence. The scientific
+  authority hash is
+  `f5655a27af2c8d2bafc2e23f91fe8a50c19d5ebc143f5532c194dac1b4a447c8`.
+- The complete release gate passed: root Vitest **862 passed, 2 skipped**; web
+  Vitest **769 passed**; Pytest **346 passed**; CloakBrowser release QA
+  **32 passed, 8 explicitly skipped by admission mode**; leakage mutations
+  **14/14 detected**; imbalance mutations **19/19 detected**; TypeScript,
+  formatting, build, held-out, exact-image, and the **1,492-file** secret scan
+  passed.
+- Cloudflare accepted the exact Container manifest. Remote D1 had no pending
+  migrations. Final Worker `24036159-6549-4e63-96f8-14d00bc0868e` was
+  activated only inside the guarded readiness window.
+- The fixed internal readiness response isolated the hosted failure to
+  `LANDLOCK_ABI_UNAVAILABLE`. This proves the blocker is the Cloudflare
+  Container kernel's Landlock surface, not the OpenAI model binding, Codex
+  credential shape, Worker routing, D1, R2, or the exact release identity.
+- The guarded deploy restored maintenance Worker
+  `48ccf3a5-66ae-4426-9c4a-10263881ac04` at 100% traffic. No unready final
+  Worker remains active.
+
+### Remaining
+
+- Live notebook authority remains **NO-GO** because the hosted kernel cannot
+  satisfy the currently required Landlock ABI check.
+- Implement and independently verify a second OS-enforced generation
+  filesystem boundary that works inside Cloudflare Containers, or keep Live
+  disabled. It must preserve separate process identity, inaccessible runner
+  and verifier files, private credential staging and revocation, bounded
+  writable roots, ptrace protection, and the existing no-result-on-failure
+  contract. It must not be labelled Landlock when Landlock did not run.
+- Rebuild and requalify a new exact source/image/evidence tuple after that
+  boundary is implemented, then repeat the guarded deployment, production
+  CloakBrowser matrix, one untouched supported live notebook flow, reconnect,
+  patch download, and Proof Capsule export.
+- Production Sample and Replay remain maintenance-protected during this
+  repair. A public Live claim, production browser qualification, submission
+  receipt, learner outcome, and `main` merge remain unclaimed.
