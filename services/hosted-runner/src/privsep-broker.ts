@@ -47,6 +47,7 @@ const PROTECTED_PATHS = [
   "/opt/counterlab-venv",
   "/opt/counterlab-wheelhouse",
 ] as const;
+export const PRIVSEP_CREDENTIAL_READ_PROBE = String.raw`probe_require credential-read sh -c 'bytes="$(wc -c < "$1")" && test "$bytes" -gt 0' probe "$credential"`;
 const CodexAuthSchema = z
   .object({
     tokens: z
@@ -414,7 +415,7 @@ probe_require no-new-privs test "$(awk '$1 == "NoNewPrivs:" {print $2}' /proc/se
 probe_require workspace-read test "$(cat "$workspace/approved.txt")" = "approved"
 printf 'bounded output\n' > "$workspace/probe-output.txt" || probe_fail workspace-write
 probe_require workspace-write test "$(cat "$workspace/probe-output.txt")" = "bounded output"
-probe_require credential-read test -r "$credential"
+${PRIVSEP_CREDENTIAL_READ_PROBE}
 if sh -c 'printf denied > "$1"' probe "$credential" 2>/dev/null; then
   probe_fail credential-write-denied
 fi
