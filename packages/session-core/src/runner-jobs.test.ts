@@ -183,6 +183,26 @@ class StartRaceRunnerJobRepository extends MemoryRunnerJobRepository {
   }
 }
 
+class CancelRaceRunnerJobRepository extends MemoryRunnerJobRepository {
+  private injectEventUpdate = true;
+
+  override async save(job: RunnerJob, expectedVersion: number): Promise<void> {
+    if (this.injectEventUpdate && job.status === "CANCELLED") {
+      this.injectEventUpdate = false;
+      const current = this.jobs.get(job.jobId);
+      if (current === undefined) throw new Error("runner job disappeared");
+      this.jobs.set(job.jobId, {
+        ...current,
+        eventCursor: current.eventCursor + 1,
+        jobVersion: current.jobVersion + 1,
+        updatedAt: "2026-07-15T00:00:02.000Z",
+      });
+      throw new ConcurrentRunnerJobUpdateError(job.jobId);
+    }
+    await super.save(job, expectedVersion);
+  }
+}
+
 const HASH_A = "a".repeat(64);
 const HASH_B = "b".repeat(64);
 const HASH_C = "c".repeat(64);
@@ -332,6 +352,29 @@ describe("RunnerJobService", () => {
     await expect(harness.service.cancelJob(starting.jobId)).resolves.toEqual(
       cancelled,
     );
+  });
+
+  it("retries cancellation after a concurrent active job update", async () => {
+    const harness = service(new CancelRaceRunnerJobRepository());
+    const queued = await harness.service.createJob(jobInput());
+    const starting = await harness.service.transition(
+      queued.jobId,
+      queued.jobVersion,
+      "STARTING",
+      { runnerIdentity: "runner-container-test" },
+    );
+
+    const cancelled = await harness.service.cancelJob(starting.jobId);
+
+    expect(cancelled).toMatchObject({
+      status: "CANCELLED",
+      eventCursor: 1,
+      jobVersion: 4,
+      error: {
+        code: "RUNNER_JOB_CANCELLED",
+        retryable: true,
+      },
+    });
   });
 
   it("expires a stalled non-terminal job from its start deadline", async () => {

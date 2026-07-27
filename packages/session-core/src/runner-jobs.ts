@@ -195,6 +195,7 @@ const REUSABLE_STARTED_JOB_STATUSES = new Set<RunnerJobStatus>([
   "REPAIRING",
 ]);
 const START_CONFLICT_RETRY_LIMIT = 3;
+const CANCEL_CONFLICT_RETRY_LIMIT = 3;
 const CALLBACK_SETTLEMENT_GRACE_MS = 60_000;
 
 function jobDeadline(job: RunnerJob): number {
@@ -358,34 +359,37 @@ export class RunnerJobService {
   }
 
   async cancelJob(jobId: string): Promise<RunnerJob> {
-    const current = await this.getJob(jobId);
-    if (current.status === "CANCELLED") return current;
-    if (TERMINAL_JOB_STATUSES.has(current.status)) {
-      throw new RunnerCallbackStateError(
-        `Runner job ${jobId} is already terminal with status ${current.status}`,
-      );
-    }
-    try {
-      return await this.transition(
-        current.jobId,
-        current.jobVersion,
-        "CANCELLED",
-        {
-          runnerIdentity:
-            current.runnerIdentity ?? "counterlab-control-plane-cancel",
-          error: {
-            code: "RUNNER_JOB_CANCELLED",
-            message: "The learner cancelled this runner job.",
-            retryable: true,
+    let current = await this.getJob(jobId);
+    let lastConflict: ConcurrentRunnerJobUpdateError | undefined;
+    for (let attempt = 0; attempt < CANCEL_CONFLICT_RETRY_LIMIT; attempt += 1) {
+      if (current.status === "CANCELLED") return current;
+      if (TERMINAL_JOB_STATUSES.has(current.status)) {
+        throw new RunnerCallbackStateError(
+          `Runner job ${jobId} is already terminal with status ${current.status}`,
+        );
+      }
+      try {
+        return await this.transition(
+          current.jobId,
+          current.jobVersion,
+          "CANCELLED",
+          {
+            runnerIdentity:
+              current.runnerIdentity ?? "counterlab-control-plane-cancel",
+            error: {
+              code: "RUNNER_JOB_CANCELLED",
+              message: "The learner cancelled this runner job.",
+              retryable: true,
+            },
           },
-        },
-      );
-    } catch (error) {
-      if (!(error instanceof ConcurrentRunnerJobUpdateError)) throw error;
-      const updated = await this.getJob(jobId);
-      if (updated.status === "CANCELLED") return updated;
-      throw error;
+        );
+      } catch (error) {
+        if (!(error instanceof ConcurrentRunnerJobUpdateError)) throw error;
+        lastConflict = error;
+        current = await this.getJob(jobId);
+      }
     }
+    throw lastConflict ?? new ConcurrentRunnerJobUpdateError(jobId);
   }
 
   async expireIfTimedOut(jobId: string): Promise<RunnerJob> {
