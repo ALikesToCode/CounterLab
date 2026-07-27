@@ -1,6 +1,7 @@
 import {
   createServer,
   type IncomingMessage,
+  type RequestListener,
   type ServerResponse,
 } from "node:http";
 import { mkdir } from "node:fs/promises";
@@ -16,6 +17,12 @@ import { HostedRunnerJobProcessor } from "./job-processor.js";
 import { ContainerCodexLaunchBoundary } from "./launch-boundary.js";
 import { PythonFixedKernelExecutor } from "./fixed-kernel.js";
 import { PythonFixedPatchExecutor } from "./fixed-patch.js";
+import {
+  createHostedRunnerBootstrapServer,
+  hostedRunnerStartupFailureReason,
+  HostedRunnerStartupError,
+  runHostedRunnerStartupStage,
+} from "./startup-failure.js";
 import { runHostedRunnerStartupProbe } from "./startup-probe.js";
 
 const MAX_REQUEST_BYTES = 16_384;
@@ -124,11 +131,20 @@ function token(request: IncomingMessage): string | undefined {
   return value.length === 0 ? undefined : value;
 }
 
-export function createHostedRunnerServer(options: HostedRunnerServerOptions) {
+function createHostedRunnerRequestListener(
+  options: HostedRunnerServerOptions,
+): RequestListener {
   const activeJobs = new Map<string, ActiveJob>();
   const cancelledJobs = new Set<string>();
-  const server = createServer(async (request, response) => {
+  return async (request, response) => {
     const url = new URL(request.url ?? "/", "http://runner.internal");
+    if (request.method === "GET" && url.pathname === "/live") {
+      respond(response, 200, {
+        status: "live",
+        service: "counterlab-hosted-runner",
+      });
+      return;
+    }
     if (request.method === "GET" && url.pathname === "/ready") {
       respond(response, 200, {
         status: "ready",
@@ -240,8 +256,11 @@ export function createHostedRunnerServer(options: HostedRunnerServerOptions) {
       }
       respond(response, 400, { error: "INVALID_RUNNER_REQUEST" });
     }
-  });
-  return server;
+  };
+}
+
+export function createHostedRunnerServer(options: HostedRunnerServerOptions) {
+  return createServer(createHostedRunnerRequestListener(options));
 }
 
 async function startProductionServer(): Promise<void> {
@@ -250,7 +269,6 @@ async function startProductionServer(): Promise<void> {
     console.log(JSON.stringify(await runHostedRunnerStartupProbe()));
     return;
   }
-  const startupProbe = await runHostedRunnerStartupProbe();
   const authJson = process.env.CODEX_AUTH_JSON;
   const runnerVerifyingPublicKey =
     process.env.COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY;
@@ -264,147 +282,188 @@ async function startProductionServer(): Promise<void> {
     process.env.COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256?.trim() ?? "";
   delete process.env.CODEX_AUTH_JSON;
   delete process.env.COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY;
-  if (authJson === undefined || authJson.trim().length === 0) {
-    throw new Error("CODEX_AUTH_JSON is required by the hosted runner");
-  }
-  if (
-    runnerVerifyingPublicKey === undefined ||
-    runnerVerifyingPublicKey.length === 0
-  ) {
-    throw new Error(
-      "COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY is required by the hosted runner",
-    );
-  }
-  const releaseIdentity = verifiedHostedRunnerReleaseIdentity(
-    {
-      runnerSourceCommit,
-      runnerImageDigest,
-      generationIsolationEvidenceSha256,
-      generationIsolationProbeSha256,
-    },
-    startupProbe.generationIsolationProbeSha256,
-  );
-  const workspaceRoot = process.env.COUNTERLAB_RUNNER_WORK_ROOT ?? "/work/jobs";
-  const codexHomeRoot =
-    process.env.COUNTERLAB_CODEX_HOME_ROOT ?? "/run/counterlab-codex";
-  const codexExecutable =
-    process.env.COUNTERLAB_CODEX_EXECUTABLE ?? "/usr/local/bin/codex";
-  const codexRoot = process.env.COUNTERLAB_CODEX_ROOT ?? "/opt/codex";
-  const landlockLauncher =
-    process.env.COUNTERLAB_LANDLOCK_LAUNCHER ??
-    "/opt/counterlab/landlock_launcher.py";
-  const pythonExecutable =
-    process.env.COUNTERLAB_PYTHON_EXECUTABLE ??
-    "/opt/counterlab-venv/bin/python";
-  const setprivExecutable =
-    process.env.COUNTERLAB_SETPRIV_EXECUTABLE ?? "/usr/bin/setpriv";
-  const uid = Number(process.env.COUNTERLAB_CODEX_UID ?? "10001");
-  const gid = Number(process.env.COUNTERLAB_CODEX_GID ?? "10001");
-  await Promise.all([
-    mkdir(workspaceRoot, { recursive: true, mode: 0o700 }),
-    mkdir(codexHomeRoot, { recursive: true, mode: 0o700 }),
-  ]);
-  const boundary = new ContainerCodexLaunchBoundary({
-    authJson,
-    workspaceRoot: resolve(workspaceRoot),
-    codexHomeRoot: resolve(codexHomeRoot),
-    codexRoot: resolve(codexRoot),
-    codexExecutable: resolve(codexExecutable),
-    landlockLauncher: resolve(landlockLauncher),
-    pythonExecutable: resolve(pythonExecutable),
-    setprivExecutable: resolve(setprivExecutable),
-    uid,
-    gid,
+  const configuredPort = Number(process.env.PORT ?? "8080");
+  const port =
+    Number.isInteger(configuredPort) &&
+    configuredPort > 0 &&
+    configuredPort <= 65_535
+      ? configuredPort
+      : 8080;
+  const bootstrap = createHostedRunnerBootstrapServer();
+  await new Promise<void>((resolveListen, rejectListen) => {
+    bootstrap.server.once("error", rejectListen);
+    bootstrap.server.listen(port, "0.0.0.0", () => {
+      bootstrap.server.off("error", rejectListen);
+      resolveListen();
+    });
   });
-  const boundaryHealth = await boundary.health();
-  if (!boundaryHealth.available) throw new Error(boundaryHealth.reason);
+  console.info("CounterLab hosted runner liveness available", { port });
 
-  const oneShot = process.env.COUNTERLAB_RUNNER_ONE_SHOT === "1";
-  const serverRef: {
-    current?: ReturnType<typeof createHostedRunnerServer>;
-  } = {};
-  const server = createHostedRunnerServer({
-    generationFilesystemReadIsolation:
-      startupProbe.generationFilesystemReadIsolation,
-    ...(releaseIdentity === undefined ? {} : { releaseIdentity }),
-    async authorizeToken(scopedToken, jobId, purpose, controlPlaneOrigin) {
-      try {
-        await verifyRunnerJobToken(scopedToken, runnerVerifyingPublicKey, {
-          nowEpochSeconds: Math.floor(Date.now() / 1_000),
-          jobId,
-          purpose,
-          ...(controlPlaneOrigin === undefined ? {} : { controlPlaneOrigin }),
-        });
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    async processJob({ jobId, token, controlPlaneUrl, signal }) {
-      const controlPlane = new HttpRunnerControlPlane({
-        controlPlaneUrl,
-        jobId,
-        token,
-      });
-      const compiler = new AppServerCodexCompiler({
-        command: codexExecutable,
-        commandArgs: ["app-server", "--stdio"],
-        healthCommand: codexExecutable,
-        healthArgs: ["--version"],
-        model: process.env.CODEX_MODEL?.trim() || undefined,
-        timeoutMs: CODEX_ATTEMPT_TIMEOUT_MS,
-        environment: { PATH: process.env.PATH, LANG: "C.UTF-8" },
-        launchBoundary: boundary,
-      });
-      const processor = new HostedRunnerJobProcessor({
-        workspaceRoot,
-        compiler,
-        scientificCompiler: compiler,
-        fixedKernel: new PythonFixedKernelExecutor({
-          pythonExecutable:
-            process.env.COUNTERLAB_PYTHON_EXECUTABLE ??
-            "/opt/counterlab-venv/bin/python",
-        }),
-        fixedPatch: new PythonFixedPatchExecutor({
-          pythonExecutable:
-            process.env.COUNTERLAB_PYTHON_EXECUTABLE ??
-            "/opt/counterlab-venv/bin/python",
-          leakageFixturePath:
-            process.env.COUNTERLAB_LEAKAGE_FIXTURE_PATH ??
-            "/app/fixtures/public/customer_churn.csv",
-          imbalanceFixturePath:
-            process.env.COUNTERLAB_IMBALANCE_FIXTURE_PATH ??
-            "/app/fixtures/public/fraud_rare_event.csv",
-        }),
-        controlPlane,
-      });
-      await processor.run(jobId, signal);
-    },
-    ...(oneShot
-      ? {
-          async onJobSettled({ jobId }: { jobId: string }) {
-            const activeServer = serverRef.current;
-            if (activeServer === undefined) {
-              throw new Error(
-                "Hosted runner server is unavailable for cleanup",
-              );
-            }
-            console.info("CounterLab hosted runner job settled", { jobId });
-            await new Promise<void>((resolveClose, rejectClose) => {
-              activeServer.close((error) =>
-                error === undefined ? resolveClose() : rejectClose(error),
-              );
-            });
-            process.exit(0);
+  try {
+    const startupProbe = await runHostedRunnerStartupStage(
+      "STARTUP_PROBE_FAILED",
+      () => runHostedRunnerStartupProbe(),
+    );
+    if (authJson === undefined || authJson.trim().length === 0) {
+      throw new HostedRunnerStartupError("CODEX_AUTH_MISSING");
+    }
+    if (
+      runnerVerifyingPublicKey === undefined ||
+      runnerVerifyingPublicKey.length === 0
+    ) {
+      throw new HostedRunnerStartupError("VERIFYING_KEY_MISSING");
+    }
+    const releaseIdentity = await runHostedRunnerStartupStage(
+      "RELEASE_IDENTITY_INVALID",
+      async () =>
+        verifiedHostedRunnerReleaseIdentity(
+          {
+            runnerSourceCommit,
+            runnerImageDigest,
+            generationIsolationEvidenceSha256,
+            generationIsolationProbeSha256,
           },
+          startupProbe.generationIsolationProbeSha256,
+        ),
+    );
+    const workspaceRoot =
+      process.env.COUNTERLAB_RUNNER_WORK_ROOT ?? "/work/jobs";
+    const codexHomeRoot =
+      process.env.COUNTERLAB_CODEX_HOME_ROOT ?? "/run/counterlab-codex";
+    const codexExecutable =
+      process.env.COUNTERLAB_CODEX_EXECUTABLE ?? "/usr/local/bin/codex";
+    const codexRoot = process.env.COUNTERLAB_CODEX_ROOT ?? "/opt/codex";
+    const landlockLauncher =
+      process.env.COUNTERLAB_LANDLOCK_LAUNCHER ??
+      "/opt/counterlab/landlock_launcher.py";
+    const pythonExecutable =
+      process.env.COUNTERLAB_PYTHON_EXECUTABLE ??
+      "/opt/counterlab-venv/bin/python";
+    const setprivExecutable =
+      process.env.COUNTERLAB_SETPRIV_EXECUTABLE ?? "/usr/bin/setpriv";
+    const uid = Number(process.env.COUNTERLAB_CODEX_UID ?? "10001");
+    const gid = Number(process.env.COUNTERLAB_CODEX_GID ?? "10001");
+    const boundary = await runHostedRunnerStartupStage(
+      "ISOLATION_BOUNDARY_FAILED",
+      async () => {
+        await Promise.all([
+          mkdir(workspaceRoot, { recursive: true, mode: 0o700 }),
+          mkdir(codexHomeRoot, { recursive: true, mode: 0o700 }),
+        ]);
+        const candidate = new ContainerCodexLaunchBoundary({
+          authJson,
+          workspaceRoot: resolve(workspaceRoot),
+          codexHomeRoot: resolve(codexHomeRoot),
+          codexRoot: resolve(codexRoot),
+          codexExecutable: resolve(codexExecutable),
+          landlockLauncher: resolve(landlockLauncher),
+          pythonExecutable: resolve(pythonExecutable),
+          setprivExecutable: resolve(setprivExecutable),
+          uid,
+          gid,
+        });
+        const boundaryHealth = await candidate.health();
+        if (!boundaryHealth.available) throw new Error(boundaryHealth.reason);
+        return candidate;
+      },
+    );
+
+    const oneShot = process.env.COUNTERLAB_RUNNER_ONE_SHOT === "1";
+    const serverRef: {
+      current?: ReturnType<typeof createHostedRunnerServer>;
+    } = {};
+    const serverOptions: HostedRunnerServerOptions = {
+      generationFilesystemReadIsolation:
+        startupProbe.generationFilesystemReadIsolation,
+      ...(releaseIdentity === undefined ? {} : { releaseIdentity }),
+      async authorizeToken(scopedToken, jobId, purpose, controlPlaneOrigin) {
+        try {
+          await verifyRunnerJobToken(scopedToken, runnerVerifyingPublicKey, {
+            nowEpochSeconds: Math.floor(Date.now() / 1_000),
+            jobId,
+            purpose,
+            ...(controlPlaneOrigin === undefined ? {} : { controlPlaneOrigin }),
+          });
+          return true;
+        } catch {
+          return false;
         }
-      : {}),
-  });
-  serverRef.current = server;
-  const port = Number(process.env.PORT ?? "8080");
-  server.listen(port, "0.0.0.0", () => {
+      },
+      async processJob({ jobId, token, controlPlaneUrl, signal }) {
+        const controlPlane = new HttpRunnerControlPlane({
+          controlPlaneUrl,
+          jobId,
+          token,
+        });
+        const compiler = new AppServerCodexCompiler({
+          command: codexExecutable,
+          commandArgs: ["app-server", "--stdio"],
+          healthCommand: codexExecutable,
+          healthArgs: ["--version"],
+          model: process.env.CODEX_MODEL?.trim() || undefined,
+          timeoutMs: CODEX_ATTEMPT_TIMEOUT_MS,
+          environment: { PATH: process.env.PATH, LANG: "C.UTF-8" },
+          launchBoundary: boundary,
+        });
+        const processor = new HostedRunnerJobProcessor({
+          workspaceRoot,
+          compiler,
+          scientificCompiler: compiler,
+          fixedKernel: new PythonFixedKernelExecutor({
+            pythonExecutable:
+              process.env.COUNTERLAB_PYTHON_EXECUTABLE ??
+              "/opt/counterlab-venv/bin/python",
+          }),
+          fixedPatch: new PythonFixedPatchExecutor({
+            pythonExecutable:
+              process.env.COUNTERLAB_PYTHON_EXECUTABLE ??
+              "/opt/counterlab-venv/bin/python",
+            leakageFixturePath:
+              process.env.COUNTERLAB_LEAKAGE_FIXTURE_PATH ??
+              "/app/fixtures/public/customer_churn.csv",
+            imbalanceFixturePath:
+              process.env.COUNTERLAB_IMBALANCE_FIXTURE_PATH ??
+              "/app/fixtures/public/fraud_rare_event.csv",
+          }),
+          controlPlane,
+        });
+        await processor.run(jobId, signal);
+      },
+      ...(oneShot
+        ? {
+            async onJobSettled({ jobId }: { jobId: string }) {
+              const activeServer = serverRef.current;
+              if (activeServer === undefined) {
+                throw new Error(
+                  "Hosted runner server is unavailable for cleanup",
+                );
+              }
+              console.info("CounterLab hosted runner job settled", { jobId });
+              await new Promise<void>((resolveClose, rejectClose) => {
+                activeServer.close((error) =>
+                  error === undefined ? resolveClose() : rejectClose(error),
+                );
+              });
+              process.exit(0);
+            },
+          }
+        : {}),
+    };
+    serverRef.current = bootstrap.server;
+    bootstrap.activate(createHostedRunnerRequestListener(serverOptions));
     console.info("CounterLab hosted runner ready", { port });
-  });
+  } catch (error) {
+    const reason = hostedRunnerStartupFailureReason(error);
+    bootstrap.fail(reason);
+    console.error("CounterLab hosted runner failed to start", {
+      name: error instanceof Error ? error.name : "UnknownError",
+      reason,
+    });
+    console.error("CounterLab hosted runner remains fail-closed", {
+      port,
+      reason,
+    });
+  }
 }
 
 if (
@@ -414,8 +473,7 @@ if (
   void startProductionServer().catch((error: unknown) => {
     console.error("CounterLab hosted runner failed to start", {
       name: error instanceof Error ? error.name : "UnknownError",
-      message:
-        error instanceof Error ? error.message : "Unknown startup failure",
+      reason: hostedRunnerStartupFailureReason(error),
     });
     process.exitCode = 1;
   });

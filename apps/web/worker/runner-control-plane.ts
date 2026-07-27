@@ -140,16 +140,55 @@ function assertExactRunnerReleaseIdentity(
 type RunnerReadinessAssessment =
   { ready: true } | { ready: false; reason: string };
 
+const RUNNER_STARTUP_FAILURE_REASONS = new Set([
+  "STARTING",
+  "STARTUP_PROBE_FAILED",
+  "CODEX_AUTH_MISSING",
+  "VERIFYING_KEY_MISSING",
+  "RELEASE_IDENTITY_INVALID",
+  "ISOLATION_BOUNDARY_FAILED",
+  "RUNNER_STARTUP_FAILED",
+]);
+
 async function assessRunnerReadiness(
   response: Response,
   releaseIdentity: RunnerReleaseIdentity,
 ): Promise<RunnerReadinessAssessment> {
   const source = await response.text();
-  if (response.status !== 200) {
-    return { ready: false, reason: `http-status-${response.status}` };
-  }
   if (source.length > 1_024) {
     return { ready: false, reason: "response-too-large" };
+  }
+  if (response.status !== 200) {
+    let startupReason: string | undefined;
+    try {
+      const payload = JSON.parse(source) as unknown;
+      if (
+        typeof payload === "object" &&
+        payload !== null &&
+        !Array.isArray(payload)
+      ) {
+        const record = payload as Record<string, unknown>;
+        if (
+          response.status === 503 &&
+          JSON.stringify(Object.keys(record).sort()) ===
+            JSON.stringify(["reason", "service", "status"]) &&
+          record.status === "not-ready" &&
+          record.service === "counterlab-hosted-runner" &&
+          typeof record.reason === "string" &&
+          RUNNER_STARTUP_FAILURE_REASONS.has(record.reason)
+        ) {
+          startupReason = record.reason;
+        }
+      }
+    } catch {
+      startupReason = undefined;
+    }
+    return {
+      ready: false,
+      reason: `http-status-${response.status}${
+        startupReason === undefined ? "" : `:${startupReason}`
+      }`,
+    };
   }
   let payload: unknown;
   try {

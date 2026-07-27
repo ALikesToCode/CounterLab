@@ -119,6 +119,12 @@ describe("hosted runner HTTP service", () => {
     });
 
     const ready = await fetch(`${baseUrl}/ready`);
+    const live = await fetch(`${baseUrl}/live`);
+    expect(live.status).toBe(200);
+    await expect(live.json()).resolves.toEqual({
+      status: "live",
+      service: "counterlab-hosted-runner",
+    });
     expect(ready.status).toBe(200);
     await expect(ready.json()).resolves.toEqual({
       status: "ready",

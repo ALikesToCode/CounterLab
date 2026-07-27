@@ -56,6 +56,7 @@ describe("runner Container environment", () => {
     expect(source).toContain(
       "envVars = createRunnerContainerEnvVars(workerEnv as RunnerContainerEnv);",
     );
+    expect(source).toContain('pingEndpoint = "live";');
     expect(source).not.toContain("constructor(ctx:");
   });
 });

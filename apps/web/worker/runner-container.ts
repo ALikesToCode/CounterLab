@@ -13,6 +13,6 @@ export class CounterLabRunner extends Container<RunnerContainerEnv> {
   requiredPorts = [8080];
   sleepAfter = "5m";
   enableInternet = true;
-  pingEndpoint = "ready";
+  pingEndpoint = "live";
   envVars = createRunnerContainerEnvVars(workerEnv as RunnerContainerEnv);
 }
