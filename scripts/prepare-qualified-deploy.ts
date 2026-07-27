@@ -504,8 +504,10 @@ export async function collectRunnerReleaseEvidence(input: {
   if (!/^sha256:[a-f0-9]{64}$/.test(localImageDigest)) {
     throw new Error("runtime adapter returned an invalid local image digest");
   }
-  if (localImageUser !== "10001:10001") {
-    throw new Error("qualified local image must run as 10001:10001");
+  if (localImageUser !== "0:0") {
+    throw new Error(
+      "qualified local image must start the fixed root broker as 0:0",
+    );
   }
   if (!/^sha256:[a-f0-9]{64}$/.test(adapterImageDigest)) {
     throw new Error("runtime adapter returned an invalid adapter image digest");
@@ -551,8 +553,10 @@ export async function collectRunnerReleaseEvidence(input: {
     expectedConfigDigest: localImageDigest,
     expectedManifestDigest: input.expectedRegistryDigest,
   });
-  if (registry.user !== "10001:10001") {
-    throw new Error("qualified registry image must run as 10001:10001");
+  if (registry.user !== "0:0") {
+    throw new Error(
+      "qualified registry image must start the fixed root broker as 0:0",
+    );
   }
   const registryRevision =
     registry.labels["org.opencontainers.image.revision"] ?? "";

@@ -662,23 +662,26 @@ describe("Cloudflare static asset routing", () => {
     );
 
     expect(dockerfile).toContain(
-      'ENTRYPOINT ["/usr/local/bin/node", "/app/runner.mjs"]',
+      'ENTRYPOINT ["/usr/local/bin/node", "/app/privsep.mjs"]',
     );
     expect(dockerfile).not.toContain('CMD ["node", "/app/runner.mjs"]');
   });
 
-  it("keeps immutable application files readable by the declared non-root user", () => {
+  it("separates the root broker, non-root runner, and non-root generator paths", () => {
     const dockerfile = readFileSync(
       resolve(process.cwd(), "../../Dockerfile.runner"),
       "utf8",
     );
 
-    expect(dockerfile).toContain("chown -R root:root /app");
-    expect(dockerfile).toContain("chmod -R a=rX /app");
-    expect(dockerfile).toContain("chmod 555 /app/runner.mjs");
+    expect(dockerfile).toContain("chown -R root:counterlab-runner /app");
+    expect(dockerfile).toContain("chmod -R u=rX,g=rX,o= /app");
+    expect(dockerfile).toContain("chmod 0500 /app/privsep.mjs");
+    expect(dockerfile).toContain(
+      "chmod 0440 /app/runner.mjs /app/privsep-client.mjs",
+    );
     expect(dockerfile).toContain("/repo/fixtures/notebooks");
     expect(dockerfile).toContain("/repo/requirements.runner.lock.txt");
-    expect(dockerfile).toContain("chmod -R a=rX /repo");
+    expect(dockerfile).toContain("chmod -R u=rX,g=rX,o= /repo");
     expect(dockerfile).toContain("chmod 0555 /usr/local/bin/node");
     expect(dockerfile).toContain(
       "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
@@ -702,16 +705,13 @@ describe("Cloudflare static asset routing", () => {
     expect(dockerfile).toContain(
       "chmod 0555 /usr/local/bin/node /opt/counterlab/landlock_launcher.py",
     );
-    expect(
-      dockerfile.indexOf("/opt/counterlab/landlock_launcher.py"),
-    ).toBeLessThan(dockerfile.indexOf("USER 10001:10001"));
-    expect(dockerfile.indexOf("chmod 0555 /usr/local/bin/node")).toBeLessThan(
-      dockerfile.indexOf("USER 10001:10001"),
+    expect(dockerfile).toContain("groupadd --gid 10002 counterlab-generator");
+    expect(dockerfile).toContain(
+      "chown -R root:counterlab-generator /opt/codex",
     );
-    expect(dockerfile).not.toContain(
-      "chown -R counterlab-codex:counterlab-codex /app",
-    );
-    expect(dockerfile).toContain("USER 10001:10001");
+    expect(dockerfile).toContain("chown 10001:10002 /work/jobs");
+    expect(dockerfile).toContain("chmod 0555 /tmp");
+    expect(dockerfile).toContain("USER 0:0");
   });
 
   it("executes the real image entrypoint as its declared user before qualification", () => {

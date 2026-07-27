@@ -181,8 +181,8 @@ if [[ ! "${SOURCE_TREE_SHA256}" =~ ^[a-f0-9]{64}$ ]]; then
   echo "Runner image has an unbound or invalid OCI source-tree hash." >&2
   exit 1
 fi
-if [[ "${IMAGE_USER}" != "10001:10001" ]]; then
-  echo "Runner image must declare the non-root user 10001:10001; observed '${IMAGE_USER}'." >&2
+if [[ "${IMAGE_USER}" != "0:0" ]]; then
+  echo "Runner image must declare the fixed root privilege broker 0:0; observed '${IMAGE_USER}'." >&2
   exit 1
 fi
 if [[ -n "${RUNTIME_REPORT}" ]]; then
@@ -208,6 +208,10 @@ STARTUP_PROBE_OUTPUT="$("${DOCKER_COMMAND[@]}" run --rm --name "${STARTUP_CONTAI
   --network none \
   --read-only \
   --cap-drop=ALL \
+  --cap-add=CHOWN \
+  --cap-add=FOWNER \
+  --cap-add=SETGID \
+  --cap-add=SETUID \
   --security-opt=no-new-privileges=true \
   --ipc=private \
   --pids-limit=32 \
@@ -218,11 +222,10 @@ STARTUP_PROBE_OUTPUT="$("${DOCKER_COMMAND[@]}" run --rm --name "${STARTUP_CONTAI
   --ulimit=as=17179869184:17179869184 \
   --ulimit=fsize=1048576:1048576 \
   --ulimit=nofile=64:64 \
-  --tmpfs /counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700 \
-  -e TMPDIR=/counterlab-runtime \
+  --tmpfs /work/jobs:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10002,mode=2710 \
+  --tmpfs /run/counterlab-codex:rw,noexec,nosuid,nodev,size=32m,uid=0,gid=10002,mode=0710 \
+  --tmpfs /run/counterlab-privsep:rw,noexec,nosuid,nodev,size=4m,uid=0,gid=10001,mode=0750 \
   -e COUNTERLAB_RUNNER_STARTUP_PROBE=1 \
-  -e COUNTERLAB_RUNNER_WORK_ROOT=/counterlab-runtime/jobs \
-  -e COUNTERLAB_CODEX_HOME_ROOT=/counterlab-runtime/codex \
   "${IMAGE}")"
 node -e '
   const value = JSON.parse(process.argv[1]);
@@ -232,7 +235,7 @@ node -e '
     value.probe !== "non-root-startup" ||
     value.generationFilesystemReadIsolation !== "OS_ENFORCED" ||
     JSON.stringify(value.checks) !==
-      JSON.stringify(["entrypoint", "non-root-user", "immutable-paths", "codex", "python", "landlock", "landlock-read-isolation", "setpriv", "writable-roots"])
+      JSON.stringify(["entrypoint", "non-root-user", "immutable-paths", "python", "setpriv", "privsep-broker", "posix-dac-process-identity", "writable-roots"])
   ) {
     throw new Error("Runner non-root startup probe returned an invalid sentinel");
   }
@@ -251,11 +254,11 @@ if [[ -n "${GENERATION_ISOLATION_REPORT}" ]]; then
     --output "${GENERATION_ISOLATION_REPORT}"
 fi
 
-# The preceding probe executes the real OCI entrypoint as Config.User. This
-# second run adopts the host identity only so the exact-image verifier can read
-# the repository evidence mounted read-only.
+# The preceding probe executes the real privileged entrypoint and proves the
+# broker, runner, and generator identities. This second run adopts the fixed
+# runner identity to verify the scientific runtime without broker privileges.
 RUNTIME_VERIFICATION_OUTPUT="$("${DOCKER_COMMAND[@]}" run --rm --name "${RUNTIME_CONTAINER}" \
-  --user "${HOST_UID}:${HOST_GID}" \
+  --user "10001:10001" \
   --pull=never \
   --network none \
   --read-only \
@@ -270,7 +273,7 @@ RUNTIME_VERIFICATION_OUTPUT="$("${DOCKER_COMMAND[@]}" run --rm --name "${RUNTIME
   --ulimit=as=17179869184:17179869184 \
   --ulimit=fsize=1048576:1048576 \
   --ulimit=nofile=64:64 \
-  --tmpfs "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=${HOST_UID},gid=${HOST_GID},mode=0700" \
+  --tmpfs "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700" \
   -e TMPDIR=/counterlab-runtime \
   --mount "type=bind,src=${ROOT_DIR}/scripts/verify_scientific_runtime.py,dst=/repo/scripts/verify_scientific_runtime.py,readonly" \
   --mount "type=bind,src=${ROOT_DIR}/requirements.runner.lock.txt,dst=/repo/requirements.runner.lock.txt,readonly" \

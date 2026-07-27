@@ -6,72 +6,63 @@ import {
   runHostedRunnerStartupProbe,
 } from "./startup-probe.js";
 
-const LANDLOCK_OUTPUT = {
-  forbiddenHostPathsUnreadable: true,
-  forbiddenHostWritesDenied: true,
-  crossTreeReferDenied: true,
-  execInheritanceEnforced: true,
+const PROCESS_IDENTITY_OUTPUT = {
+  brokerUid: 0,
+  brokerGid: 0,
+  runnerUid: 10_001,
+  runnerGid: 10_001,
+  generatorUid: 10_002,
+  generatorGid: 10_002,
+  generatorSupplementaryGroupsCleared: true,
+  generatorCapabilitiesEmpty: true,
+  generatorNoNewPrivileges: true,
+  protectedPathsUnreadable: true,
+  protectedPathsUnwritable: true,
   parentEnvironmentUnreadable: true,
+  brokerEnvironmentUnreadable: true,
   workspaceVisible: true,
   workspaceWritable: true,
+  outsideWorkspaceWritesDenied: true,
+  fixedKernelUnavailable: true,
+  credentialReadOnlyDuringInitialization: true,
+  credentialRevocationSupported: true,
+  boundedLaunchesEnforced: true,
+  maximumLaunches: 3,
 } as const;
 
 describe("hosted runner startup probe", () => {
-  it("checks the real runtime chain without propagating credentials", async () => {
+  it("binds the real broker process-identity probe without credentials", async () => {
     const access = vi.fn(async (_path: string, _mode?: number) => undefined);
     const mkdir = vi.fn(
       async (_path: string, _options: { recursive: true; mode: number }) =>
         undefined,
     );
-    const execute = vi.fn(
-      async (
-        _executable: string,
-        _args: string[],
-        _options: { env: NodeJS.ProcessEnv; timeout: number },
-      ) =>
-        _executable === "/runtime/python" && _args[1] === "--print-abi"
-          ? {
-              stdout:
-                '{"landlockAbi":9,"policyVersion":"counterlab-landlock-path-policy-v1"}\n',
-            }
-          : _executable === "/runtime/python" &&
-              _args[0] === "/runtime/landlock.py"
-            ? { stdout: `${JSON.stringify(LANDLOCK_OUTPUT)}\n` }
-            : { stdout: "" },
-    );
-    const writeFile = vi.fn(async () => undefined);
     const stat = vi.fn(async (path: string) => ({
-      uid: 10_001,
+      uid: 0,
       gid: 10_001,
-      mode: 0o555,
+      mode: path === "/runtime/app" ? 0o550 : 0o440,
       isDirectory: () => path === "/runtime/app",
       isFile: () => path === "/runtime/runner.mjs",
     }));
+    const isolationProbe = vi.fn(async () => PROCESS_IDENTITY_OUTPUT);
 
     const result = await runHostedRunnerStartupProbe({
       environment: {
-        PATH: "/runtime/bin",
-        CODEX_AUTH_JSON: "must-not-propagate",
-        OPENAI_API_KEY: "must-not-propagate",
         COUNTERLAB_RUNNER_WORK_ROOT: "/runtime/jobs",
-        COUNTERLAB_CODEX_HOME_ROOT: "/runtime/codex",
-        COUNTERLAB_CODEX_EXECUTABLE: "/runtime/codex-bin",
-        COUNTERLAB_CODEX_ROOT: "/runtime/codex-package",
-        COUNTERLAB_LANDLOCK_LAUNCHER: "/runtime/landlock.py",
+        COUNTERLAB_CODEX_EXECUTABLE: "/runtime/codex/bin/codex",
         COUNTERLAB_SETPRIV_EXECUTABLE: "/runtime/setpriv",
         COUNTERLAB_PYTHON_EXECUTABLE: "/runtime/python",
       },
       nodeExecutable: "/runtime/node",
       bundlePath: "/runtime/runner.mjs",
+      clientBundlePath: "/runtime/privsep-client.mjs",
       appRoot: "/runtime/app",
       access: access as unknown as typeof import("node:fs/promises").access,
       mkdir: mkdir as unknown as typeof import("node:fs/promises").mkdir,
       stat: stat as unknown as typeof import("node:fs/promises").stat,
-      writeFile:
-        writeFile as unknown as typeof import("node:fs/promises").writeFile,
-      getUid: () => 10001,
-      getGid: () => 10001,
-      execute,
+      getUid: () => 10_001,
+      getGid: () => 10_001,
+      isolationProbe,
     });
 
     expect(result).toEqual({
@@ -82,141 +73,65 @@ describe("hosted runner startup probe", () => {
         "entrypoint",
         "non-root-user",
         "immutable-paths",
-        "codex",
         "python",
-        "landlock",
-        "landlock-read-isolation",
         "setpriv",
+        "privsep-broker",
+        "posix-dac-process-identity",
         "writable-roots",
       ],
       generationFilesystemReadIsolation: "OS_ENFORCED",
       generationIsolationProbe: {
-        schemaVersion: "2",
-        probeVersion: "counterlab-generation-isolation-v2",
+        schemaVersion: "3",
+        probeVersion: "counterlab-generation-isolation-v3",
         service: "counterlab-hosted-runner",
         probe: "non-root-startup",
         checks: [
           "entrypoint",
           "non-root-user",
           "immutable-paths",
-          "codex",
           "python",
-          "landlock",
-          "landlock-read-isolation",
           "setpriv",
+          "privsep-broker",
+          "posix-dac-process-identity",
           "writable-roots",
         ],
         generationFilesystemReadIsolation: "OS_ENFORCED",
-        mechanism: "landlock",
-        landlockAbi: 9,
-        landlock: LANDLOCK_OUTPUT,
+        mechanism: "posix-dac-process-identity",
+        brokerIdentity: "0:0",
+        runnerIdentity: "10001:10001",
+        generatorIdentity: "10002:10002",
+        policyVersion: "counterlab-posix-dac-process-policy-v1",
+        processIdentity: PROCESS_IDENTITY_OUTPUT,
       },
       generationIsolationProbeSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
     });
     expect(result.generationIsolationProbeSha256).toBe(
       hashGenerationIsolationProbe(result.generationIsolationProbe),
     );
-    expect(result.generationIsolationProbeSha256).toMatch(/^[a-f0-9]{64}$/u);
-    expect(stat.mock.calls.map(([path]) => path)).toEqual([
-      "/runtime/app",
-      "/runtime/runner.mjs",
-    ]);
     expect(access.mock.calls.map(([path]) => path)).toEqual([
       "/runtime/node",
       "/runtime/runner.mjs",
-      "/runtime/codex-bin",
-      "/runtime/codex-package",
-      "/runtime/landlock.py",
+      "/runtime/privsep-client.mjs",
       "/runtime/setpriv",
       "/runtime/python",
     ]);
     expect(mkdir).toHaveBeenCalledWith("/runtime/jobs", {
       recursive: true,
-      mode: 0o700,
+      mode: 0o710,
     });
-    expect(mkdir).toHaveBeenCalledWith("/runtime/codex", {
-      recursive: true,
-      mode: 0o700,
-    });
-    expect(mkdir).toHaveBeenCalledWith("/runtime/jobs/.isolation-probe", {
-      recursive: true,
-      mode: 0o700,
-    });
-    expect(mkdir).toHaveBeenCalledWith(
-      "/runtime/jobs/.isolation-probe/.counterlab-codex",
-      { recursive: true, mode: 0o700 },
-    );
-    expect(writeFile).toHaveBeenCalledWith(
-      "/runtime/jobs/.isolation-probe/approved.txt",
-      "approved\n",
-      { encoding: "utf8", flag: "w", mode: 0o600 },
-    );
-    expect(execute).toHaveBeenCalledTimes(5);
-    for (const [, , options] of execute.mock.calls) {
-      expect(options.env).not.toHaveProperty("CODEX_AUTH_JSON");
-      expect(options.env).not.toHaveProperty("OPENAI_API_KEY");
-    }
-    expect(execute.mock.calls[3]?.slice(0, 2)).toEqual([
-      "/runtime/python",
-      ["/runtime/landlock.py", "--print-abi"],
-    ]);
-    const [probeExecutable, probeArgs, probeOptions] =
-      execute.mock.calls[4] ?? [];
-    expect(probeExecutable).toBe("/runtime/python");
-    expect(probeArgs).toContain("/runtime/landlock.py");
-    expect(probeArgs).toContain("--ro-exec");
-    expect(probeArgs).toContain("--rw");
-    expect(probeArgs).toContain("/runtime/setpriv");
-    expect(probeArgs).toContain("/runtime/codex-package");
-    expect(probeArgs).toContain("/runtime/jobs/.isolation-probe");
-    expect(probeArgs).not.toContain("/runtime/jobs");
-    expect(probeOptions?.env).toEqual({
-      CODEX_HOME: "/runtime/jobs/.isolation-probe/.counterlab-codex",
-      HOME: "/runtime/jobs/.isolation-probe/.counterlab-codex",
-      LANG: "C.UTF-8",
-      PATH: "/usr/local/bin:/usr/bin",
-      TMPDIR: "/runtime/jobs/.isolation-probe/.counterlab-codex",
-    });
+    expect(isolationProbe).toHaveBeenCalledOnce();
   });
 
-  it("fails closed when a runtime executable cannot be launched", async () => {
+  it("fails closed when immutable path ownership or modes drift", async () => {
     await expect(
       runHostedRunnerStartupProbe({
         bundlePath: "/app/runner.mjs",
-        access: async () => undefined,
-        mkdir: async () => undefined as never,
-        writeFile: async () => undefined,
+        clientBundlePath: "/app/privsep-client.mjs",
         stat: (async (
           path: Parameters<typeof import("node:fs/promises").stat>[0],
         ) => ({
           uid: 0,
           gid: 0,
-          mode: 0o555,
-          isDirectory: () => path === "/app",
-          isFile: () => path === "/app/runner.mjs",
-        })) as unknown as typeof import("node:fs/promises").stat,
-        getUid: () => 10001,
-        getGid: () => 10001,
-        execute: async () => {
-          throw new Error("not executable");
-        },
-      }),
-    ).rejects.toMatchObject({
-      message: "Hosted runner startup failed",
-      reason: "CODEX_UNAVAILABLE",
-      cause: expect.objectContaining({ message: "not executable" }),
-    });
-  });
-
-  it("reports exact immutable-path evidence when namespace mapping changes it", async () => {
-    await expect(
-      runHostedRunnerStartupProbe({
-        bundlePath: "/app/runner.mjs",
-        stat: (async (
-          path: Parameters<typeof import("node:fs/promises").stat>[0],
-        ) => ({
-          uid: 65_534,
-          gid: 65_534,
           mode: 0o555,
           isDirectory: () => path === "/app",
           isFile: () => path === "/app/runner.mjs",
@@ -227,122 +142,58 @@ describe("hosted runner startup probe", () => {
     ).rejects.toMatchObject({
       reason: "IMMUTABLE_PATHS_INVALID",
       cause: expect.objectContaining({
-        message: expect.stringContaining(
-          "0555 runtime-root policy; app=directory 65534:65534 555; bundle=file 65534:65534 555",
-        ),
+        message: expect.stringContaining("root-owned runner-group policy"),
       }),
     });
   });
 
   it.each([
-    {
-      app: { uid: 0, gid: 0, mode: 0o555 },
-      bundle: { uid: 10_001, gid: 10_001, mode: 0o555 },
-      label: "mixed root and runtime ownership",
-    },
-    {
-      app: { uid: 10_001, gid: 10_001, mode: 0o755 },
-      bundle: { uid: 10_001, gid: 10_001, mode: 0o555 },
-      label: "a writable application mode",
-    },
-    {
-      app: { uid: 10_001, gid: 0, mode: 0o555 },
-      bundle: { uid: 10_001, gid: 0, mode: 0o555 },
-      label: "split uid and gid ownership",
-    },
-  ])("rejects $label", async ({ app, bundle }) => {
-    await expect(
-      runHostedRunnerStartupProbe({
-        bundlePath: "/app/runner.mjs",
-        stat: (async (
-          path: Parameters<typeof import("node:fs/promises").stat>[0],
-        ) => {
-          const metadata = path === "/app" ? app : bundle;
-          return {
-            ...metadata,
-            isDirectory: () => path === "/app",
-            isFile: () => path === "/app/runner.mjs",
-          };
-        }) as unknown as typeof import("node:fs/promises").stat,
-        getUid: () => 10_001,
-        getGid: () => 10_001,
-      }),
-    ).rejects.toMatchObject({
-      reason: "IMMUTABLE_PATHS_INVALID",
-      cause: expect.objectContaining({
-        message: expect.stringContaining(
-          "Hosted runner immutable application paths do not match the 0555 runtime-root policy",
-        ),
-      }),
-    });
-  });
-
-  it.each([
-    ["missing stdout", undefined],
-    ["invalid JSON", { stdout: "not-json" }],
+    ["retained capabilities", { generatorCapabilitiesEmpty: false }],
+    ["missing no-new-privileges", { generatorNoNewPrivileges: false }],
     [
-      "a false isolation check",
-      {
-        stdout: JSON.stringify({
-          ...LANDLOCK_OUTPUT,
-          parentEnvironmentUnreadable: false,
-        }),
-      },
+      "generator membership in the runner group",
+      { generatorSupplementaryGroupsCleared: false },
     ],
-    [
-      "an unknown isolation field",
-      {
-        stdout: JSON.stringify({
-          ...LANDLOCK_OUTPUT,
-          unverifiedClaim: true,
-        }),
-      },
-    ],
-  ])("fails closed when Landlock returns %s", async (_label, probeResult) => {
-    let invocation = 0;
-    await expect(
-      runHostedRunnerStartupProbe({
-        bundlePath: "/app/runner.mjs",
-        access: async () => undefined,
-        mkdir: async () => undefined as never,
-        writeFile: async () => undefined,
-        stat: (async (
-          path: Parameters<typeof import("node:fs/promises").stat>[0],
-        ) => ({
-          uid: 0,
-          gid: 0,
-          mode: 0o555,
-          isDirectory: () => path === "/app",
-          isFile: () => path === "/app/runner.mjs",
-        })) as unknown as typeof import("node:fs/promises").stat,
-        getUid: () => 10001,
-        getGid: () => 10001,
-        execute: async () => {
-          invocation += 1;
-          if (invocation === 4) {
-            return {
-              stdout:
-                '{"landlockAbi":9,"policyVersion":"counterlab-landlock-path-policy-v1"}',
-            };
-          }
-          return invocation === 5 ? probeResult : { stdout: "" };
-        },
-      }),
-    ).rejects.toMatchObject({
-      reason: "LANDLOCK_PROBE_FAILED",
-    });
-  });
-
-  it("rejects an unavailable Landlock ABI", () => {
+    ["readable fixed paths", { protectedPathsUnreadable: false }],
+    ["writable outside path", { outsideWorkspaceWritesDenied: false }],
+  ])("rejects %s", async (_label, mutation) => {
     expect(() =>
-      createGenerationIsolationProbePayload(LANDLOCK_OUTPUT, {
-        landlockAbi: 2,
-        policyVersion: "counterlab-landlock-path-policy-v1",
+      createGenerationIsolationProbePayload({
+        ...PROCESS_IDENTITY_OUTPUT,
+        ...mutation,
       }),
     ).toThrow();
   });
 
-  it("fails closed when PID 1 is not the declared non-root identity", async () => {
+  it("fails closed when the broker probe fails", async () => {
+    await expect(
+      runHostedRunnerStartupProbe({
+        bundlePath: "/app/runner.mjs",
+        clientBundlePath: "/app/privsep-client.mjs",
+        access: async () => undefined,
+        mkdir: async () => undefined as never,
+        stat: (async (
+          path: Parameters<typeof import("node:fs/promises").stat>[0],
+        ) => ({
+          uid: 0,
+          gid: 10_001,
+          mode: path === "/app" ? 0o550 : 0o440,
+          isDirectory: () => path === "/app",
+          isFile: () => path === "/app/runner.mjs",
+        })) as unknown as typeof import("node:fs/promises").stat,
+        getUid: () => 10_001,
+        getGid: () => 10_001,
+        isolationProbe: async () => {
+          throw new Error("broker rejected probe");
+        },
+      }),
+    ).rejects.toMatchObject({
+      reason: "PRIVSEP_PROBE_FAILED",
+      cause: expect.objectContaining({ message: "broker rejected probe" }),
+    });
+  });
+
+  it("fails closed when the runner is not the declared non-root identity", async () => {
     await expect(
       runHostedRunnerStartupProbe({
         getUid: () => 0,

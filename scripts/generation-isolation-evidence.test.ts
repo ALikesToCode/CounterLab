@@ -66,6 +66,94 @@ function createEvidence() {
 }
 
 describe("generation-isolation evidence", () => {
+  it("binds the privilege-separated v3 identities and policy", () => {
+    const processIdentity = {
+      brokerUid: 0,
+      brokerGid: 0,
+      runnerUid: 10_001,
+      runnerGid: 10_001,
+      generatorUid: 10_002,
+      generatorGid: 10_002,
+      generatorSupplementaryGroupsCleared: true,
+      generatorCapabilitiesEmpty: true,
+      generatorNoNewPrivileges: true,
+      protectedPathsUnreadable: true,
+      protectedPathsUnwritable: true,
+      parentEnvironmentUnreadable: true,
+      brokerEnvironmentUnreadable: true,
+      workspaceVisible: true,
+      workspaceWritable: true,
+      outsideWorkspaceWritesDenied: true,
+      fixedKernelUnavailable: true,
+      credentialReadOnlyDuringInitialization: true,
+      credentialRevocationSupported: true,
+      boundedLaunchesEnforced: true,
+      maximumLaunches: 3,
+    } as const;
+    const v3Probe = {
+      schemaVersion: "3",
+      probeVersion: "counterlab-generation-isolation-v3",
+      service: "counterlab-hosted-runner",
+      probe: "non-root-startup",
+      checks: [
+        "entrypoint",
+        "non-root-user",
+        "immutable-paths",
+        "python",
+        "setpriv",
+        "privsep-broker",
+        "posix-dac-process-identity",
+        "writable-roots",
+      ],
+      generationFilesystemReadIsolation: "OS_ENFORCED",
+      mechanism: "posix-dac-process-identity",
+      brokerIdentity: "0:0",
+      runnerIdentity: "10001:10001",
+      generatorIdentity: "10002:10002",
+      policyVersion: "counterlab-posix-dac-process-policy-v1",
+      processIdentity,
+    } as const;
+    const generationIsolationProbeSha256 =
+      hashGenerationIsolationProbe(v3Probe);
+    const result = createGenerationIsolationEvidence({
+      sourceCommit,
+      sourceTreeSha256,
+      localImageTag,
+      localImageDigest,
+      imageUser: "0:0",
+      startupProbe: {
+        status: "ready",
+        service: "counterlab-hosted-runner",
+        probe: "non-root-startup",
+        checks: v3Probe.checks,
+        generationFilesystemReadIsolation: "OS_ENFORCED",
+        generationIsolationProbe: v3Probe,
+        generationIsolationProbeSha256,
+      },
+      verifiedAt: "2026-07-27T10:30:00.000Z",
+    });
+    expect(result.evidence).toMatchObject({
+      schemaVersion: "3",
+      imageUser: "0:0",
+      policyVersion: "counterlab-posix-dac-process-policy-v1",
+      probePayload: v3Probe,
+    });
+    expect(
+      verifyGenerationIsolationEvidence({
+        evidence: result.evidence,
+        evidenceSha256: result.evidenceSha256,
+        expected: {
+          sourceCommit,
+          sourceTreeSha256,
+          localImageTag,
+          localImageDigest,
+          imageUser: "0:0",
+          probeSha256: generationIsolationProbeSha256,
+        },
+      }),
+    ).toEqual(result);
+  });
+
   it("binds canonical exact-image probe evidence to source and image", () => {
     const result = createEvidence();
     expect(result.probeSha256).toBe(probeSha256);

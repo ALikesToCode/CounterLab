@@ -53,8 +53,16 @@ def _fixture_layer() -> bytes:
                 ("repo/fixtures/public/sample.csv", tarfile.REGTYPE, b"sample"),
                 ("app/", tarfile.DIRTYPE, b""),
                 ("app/runner.mjs", tarfile.REGTYPE, b"runner"),
+                ("app/privsep.mjs", tarfile.REGTYPE, b"broker"),
+                ("app/privsep-client.mjs", tarfile.REGTYPE, b"client"),
                 ("app/config.json", tarfile.REGTYPE, b"{}"),
                 ("opt/", tarfile.DIRTYPE, b""),
+                ("opt/codex/", tarfile.DIRTYPE, b""),
+                ("opt/codex/bin/", tarfile.DIRTYPE, b""),
+                ("opt/codex/bin/codex", tarfile.REGTYPE, b"codex"),
+                ("opt/counterlab-venv/", tarfile.DIRTYPE, b""),
+                ("opt/counterlab-venv/bin/", tarfile.DIRTYPE, b""),
+                ("opt/counterlab-venv/bin/python", tarfile.REGTYPE, b"python"),
                 ("opt/counterlab/", tarfile.DIRTYPE, b""),
                 (
                     "opt/counterlab/landlock_launcher.py",
@@ -65,6 +73,8 @@ def _fixture_layer() -> bytes:
                 ("work/jobs/", tarfile.DIRTYPE, b""),
                 ("run/", tarfile.DIRTYPE, b""),
                 ("run/counterlab-codex/", tarfile.DIRTYPE, b""),
+                ("run/counterlab-privsep/", tarfile.DIRTYPE, b""),
+                ("tmp/", tarfile.DIRTYPE, b""),
                 ("unrelated", tarfile.REGTYPE, b"evidence"),
             ):
                 member = tarfile.TarInfo(name)
@@ -86,7 +96,7 @@ def test_rewrites_only_reviewed_runtime_metadata() -> None:
     normalized, report = rewrite_layer_bytes(_fixture_layer())
     members = _members(normalized)
 
-    assert report.changed_entries == 44
+    assert report.changed_entries == 54
     assert members["usr"].mode == 0o755
     assert members["usr/local/bin/node"].mode == 0o555
     assert members["usr/local/bin/node"].uid == 0
@@ -105,8 +115,10 @@ def test_rewrites_only_reviewed_runtime_metadata() -> None:
     assert members["usr/share/data.txt"].mode == 0o444
     assert members["opt/counterlab"].mode == 0o555
     assert members["opt/counterlab/landlock_launcher.py"].mode == 0o555
-    assert members["repo"].mode == 0o555
-    assert members["repo/scripts/verify.py"].mode == 0o444
+    assert members["repo"].mode == 0o550
+    assert members["repo"].gid == 10001
+    assert members["repo/scripts/verify.py"].mode == 0o440
+    assert members["repo/scripts/verify.py"].gid == 10001
     for mount_target in (
         "dev/pts",
         "dev/shm",
@@ -123,18 +135,33 @@ def test_rewrites_only_reviewed_runtime_metadata() -> None:
     assert members["etc/ssl"].mode == 0o555
     assert members["etc/ssl/cert.pem"].mode == 0o444
     assert members["etc/shadow"].mode == 0o700
-    assert members["app"].mode == 0o555
+    assert members["app"].mode == 0o550
     assert members["app"].uid == 0
-    assert members["app/runner.mjs"].mode == 0o555
+    assert members["app"].gid == 10001
+    assert members["app/runner.mjs"].mode == 0o440
     assert members["app/runner.mjs"].uid == 0
-    assert members["app/config.json"].mode == 0o444
+    assert members["app/runner.mjs"].gid == 10001
+    assert members["app/privsep.mjs"].mode == 0o500
+    assert members["app/privsep.mjs"].gid == 0
+    assert members["app/privsep-client.mjs"].mode == 0o440
+    assert members["app/privsep-client.mjs"].gid == 10001
+    assert members["app/config.json"].mode == 0o440
     assert members["app/config.json"].uid == 0
-    assert members["work/jobs"].mode == 0o700
+    assert members["work/jobs"].mode == 0o2710
     assert members["work/jobs"].uid == 10001
-    assert members["work/jobs"].gid == 10001
-    assert members["run/counterlab-codex"].mode == 0o700
-    assert members["run/counterlab-codex"].uid == 10001
-    assert members["run/counterlab-codex"].gid == 10001
+    assert members["work/jobs"].gid == 10002
+    assert members["run/counterlab-codex"].mode == 0o710
+    assert members["run/counterlab-codex"].uid == 0
+    assert members["run/counterlab-codex"].gid == 10002
+    assert members["run/counterlab-privsep"].mode == 0o750
+    assert members["run/counterlab-privsep"].gid == 10001
+    assert members["opt/codex"].mode == 0o550
+    assert members["opt/codex"].gid == 10002
+    assert members["opt/codex/bin/codex"].mode == 0o550
+    assert members["opt/counterlab-venv"].mode == 0o550
+    assert members["opt/counterlab-venv"].gid == 10001
+    assert members["opt/counterlab-venv/bin/python"].mode == 0o550
+    assert members["tmp"].mode == 0o555
     assert members["unrelated"].mode == 0o700
     assert members["unrelated"].uid == 0
 

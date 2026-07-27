@@ -25,6 +25,7 @@ import {
   DeploymentReceiptV7Schema,
   GenerationIsolationEvidenceV1Schema,
   GenerationIsolationEvidenceV2Schema,
+  GenerationIsolationEvidenceV3Schema,
   QualifiedRunnerReleaseV2Schema,
   QualifiedRunnerReleaseV3Schema,
   QualifiedRunnerReleaseV4Schema,
@@ -89,6 +90,19 @@ const schemas = [
       resolve(
         root,
         "scientific-engines/schemas/generation-isolation-evidence-v2.schema.json",
+      ),
+    ],
+  },
+  {
+    fileName: "generation-isolation-evidence-v3.schema.json",
+    id: "https://counterlab.dev/schemas/generation-isolation-evidence-v3.schema.json",
+    title: "CounterLab generation isolation evidence v3",
+    schema: GenerationIsolationEvidenceV3Schema,
+    closeTupleArrays: true,
+    destinations: [
+      resolve(
+        root,
+        "scientific-engines/schemas/generation-isolation-evidence-v3.schema.json",
       ),
     ],
   },

@@ -12,8 +12,10 @@ import {
   GenerationIsolationEvidenceSchema,
   GenerationIsolationEvidenceV1Schema,
   GenerationIsolationEvidenceV2Schema,
+  GenerationIsolationEvidenceV3Schema,
   GenerationIsolationProbePayloadSchema,
   GenerationIsolationProbePayloadV2Schema,
+  GenerationIsolationProbePayloadV3Schema,
   ScientificEngineDescriptorSchema,
   ScientificEngineEvidenceCatalogSchema,
   ScientificEngineEvidenceKindSchema,
@@ -62,11 +64,17 @@ export type GenerationIsolationEvidenceV1 = z.infer<
 export type GenerationIsolationEvidenceV2 = z.infer<
   typeof GenerationIsolationEvidenceV2Schema
 >;
+export type GenerationIsolationEvidenceV3 = z.infer<
+  typeof GenerationIsolationEvidenceV3Schema
+>;
 export type GenerationIsolationProbePayload = z.infer<
   typeof GenerationIsolationProbePayloadSchema
 >;
 export type GenerationIsolationProbePayloadV2 = z.infer<
   typeof GenerationIsolationProbePayloadV2Schema
+>;
+export type GenerationIsolationProbePayloadV3 = z.infer<
+  typeof GenerationIsolationProbePayloadV3Schema
 >;
 
 export type ScientificEngineRole = z.infer<typeof ScientificEngineRoleSchema>;

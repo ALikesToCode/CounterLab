@@ -497,8 +497,8 @@ node -e '
   const configPath = path.join(layoutPath, "blobs", "sha256", configDigest.slice(7));
   const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
   if (
-    config.config?.User !== "10001:10001" ||
-    JSON.stringify(config.config?.Entrypoint) !== JSON.stringify(["/usr/local/bin/node", "/app/runner.mjs"]) ||
+    config.config?.User !== "0:0" ||
+    JSON.stringify(config.config?.Entrypoint) !== JSON.stringify(["/usr/local/bin/node", "/app/privsep.mjs"]) ||
     config.config?.Labels?.["org.opencontainers.image.revision"] !== sourceCommit ||
     config.config?.Labels?.["io.counterlab.source-tree-sha256"] !== treeHash
   ) {

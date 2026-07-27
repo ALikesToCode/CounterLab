@@ -40,7 +40,23 @@ RUN pnpm install --frozen-lockfile --filter @counterlab/hosted-runner... \
         --format=esm \
         --target=node22 \
         --outfile=/out/runner.mjs \
+    && node_modules/.pnpm/esbuild@0.28.1/node_modules/esbuild/bin/esbuild \
+        services/hosted-runner/src/privsep-broker.ts \
+        --bundle \
+        --platform=node \
+        --format=esm \
+        --target=node22 \
+        --outfile=/out/privsep.mjs \
+    && node_modules/.pnpm/esbuild@0.28.1/node_modules/esbuild/bin/esbuild \
+        services/hosted-runner/src/privsep-client.ts \
+        --bundle \
+        --platform=node \
+        --format=esm \
+        --target=node22 \
+        --outfile=/out/privsep-client.mjs \
     && node --check /out/runner.mjs \
+    && node --check /out/privsep.mjs \
+    && node --check /out/privsep-client.mjs \
     && mkdir -p /out/codex \
     && cp -a /build/node_modules/.pnpm/@openai+codex@0.144.4-linux-x64/node_modules/@openai/codex/vendor/x86_64-unknown-linux-musl/. /out/codex/ \
     && mkdir -p \
@@ -84,8 +100,10 @@ RUN chmod 0555 /usr/local/bin/node /opt/counterlab/landlock_launcher.py \
     && test -x /usr/sbin/groupadd \
     && test -x /usr/sbin/useradd \
     && test -x /usr/bin/setpriv \
-    && groupadd --gid 10001 counterlab-codex \
-    && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin counterlab-codex \
+    && groupadd --gid 10001 counterlab-runner \
+    && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin counterlab-runner \
+    && groupadd --gid 10002 counterlab-generator \
+    && useradd --uid 10002 --gid 10002 --no-create-home --shell /usr/sbin/nologin counterlab-generator \
     && python -m venv /opt/counterlab-venv
 
 WORKDIR /app
@@ -95,6 +113,8 @@ COPY fixtures/public/customer_churn.csv ./fixtures/public/customer_churn.csv
 COPY fixtures/public/fraud_rare_event.csv ./fixtures/public/fraud_rare_event.csv
 COPY --from=python-builder /wheelhouse/ /opt/counterlab-wheelhouse/
 COPY --from=node-builder /out/runner.mjs /app/runner.mjs
+COPY --from=node-builder /out/privsep.mjs /app/privsep.mjs
+COPY --from=node-builder /out/privsep-client.mjs /app/privsep-client.mjs
 COPY --from=node-builder /out/codex/ /opt/codex/
 COPY --from=node-builder /out/runtime-rootfs/ /
 
@@ -110,11 +130,17 @@ RUN chmod -R a+rX /opt/codex \
         /repo/reachability-review.json \
         /repo/scripts/verify_scientific_runtime.py \
         /repo/scripts/probe_cpython_htmlparser_reachability.py \
-    && chown -R root:root /repo \
-    && chmod -R a=rX /repo \
-    && chown -R root:root /app \
-    && chmod -R a=rX /app \
-    && chmod 555 /app/runner.mjs \
+    && chown -R root:counterlab-runner /repo \
+    && chmod -R u=rX,g=rX,o= /repo \
+    && chown -R root:counterlab-runner /opt/counterlab-venv /opt/counterlab-wheelhouse \
+    && chmod -R u=rX,g=rX,o= /opt/counterlab-venv /opt/counterlab-wheelhouse \
+    && chown -R root:counterlab-generator /opt/codex \
+    && chmod -R u=rX,g=rX,o= /opt/codex \
+    && chown -R root:counterlab-runner /app \
+    && chmod -R u=rX,g=rX,o= /app \
+    && chown root:root /app/privsep.mjs \
+    && chmod 0500 /app/privsep.mjs \
+    && chmod 0440 /app/runner.mjs /app/privsep-client.mjs \
     && chown root:root \
         /usr/lib \
         /usr/lib64 \
@@ -133,11 +159,18 @@ RUN chmod -R a+rX /opt/codex \
         /dev/shm \
         /dev/mqueue \
         /counterlab-runtime \
-    && chown -R counterlab-codex:counterlab-codex /work/jobs /run/counterlab-codex \
-    && chmod 700 /work/jobs /run/counterlab-codex
+    && mkdir -p /run/counterlab-privsep \
+    && chown 10001:10002 /work/jobs \
+    && chmod 2710 /work/jobs \
+    && chown root:counterlab-generator /run/counterlab-codex \
+    && chmod 0710 /run/counterlab-codex \
+    && chown root:counterlab-runner /run/counterlab-privsep \
+    && chmod 0750 /run/counterlab-privsep \
+    && chown root:root /tmp \
+    && chmod 0555 /tmp
 
-USER 10001:10001
+USER 0:0
 
 EXPOSE 8080
 
-ENTRYPOINT ["/usr/local/bin/node", "/app/runner.mjs"]
+ENTRYPOINT ["/usr/local/bin/node", "/app/privsep.mjs"]

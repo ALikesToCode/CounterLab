@@ -357,7 +357,7 @@ export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
         },
         startOptions: {
           envVars: this.containerEnvironment,
-          entrypoint: ["/usr/local/bin/node", "/app/runner.mjs"],
+          entrypoint: ["/usr/local/bin/node", "/app/privsep.mjs"],
         },
       });
     } catch (error) {
@@ -406,7 +406,7 @@ export class CloudflareContainerRunnerDispatcher implements RunnerDispatcher {
           },
           startOptions: {
             envVars: this.containerEnvironment,
-            entrypoint: ["/usr/local/bin/node", "/app/runner.mjs"],
+            entrypoint: ["/usr/local/bin/node", "/app/privsep.mjs"],
           },
         });
       } catch (error) {

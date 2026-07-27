@@ -116,7 +116,7 @@ describe("HttpRunnerDispatcher", () => {
       },
       startOptions: {
         envVars: {},
-        entrypoint: ["/usr/local/bin/node", "/app/runner.mjs"],
+        entrypoint: ["/usr/local/bin/node", "/app/privsep.mjs"],
       },
     });
     expect(fetch).toHaveBeenCalledWith("http://runner.internal/ready", {
@@ -436,7 +436,7 @@ describe("HttpRunnerDispatcher", () => {
       },
       startOptions: {
         envVars: environment,
-        entrypoint: ["/usr/local/bin/node", "/app/runner.mjs"],
+        entrypoint: ["/usr/local/bin/node", "/app/privsep.mjs"],
       },
     });
     expect(startAndWaitForPorts.mock.invocationCallOrder[0]).toBeLessThan(

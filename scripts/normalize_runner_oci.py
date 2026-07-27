@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Normalize CounterLab runner OCI metadata for the declared non-root user.
+"""Normalize CounterLab runner OCI metadata for the privilege-separated image.
 
 Some restricted build filesystems preserve file bytes while collapsing locally
 created ownership and modes to root:root 0700. This tool repairs only the
@@ -22,10 +22,12 @@ from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO, Mapping, Sequence
 
 
-POLICY_VERSION = "counterlab-runner-nonroot-v3"
+POLICY_VERSION = "counterlab-runner-privsep-v4"
 ADAPTER_POLICY_VERSION = "counterlab-adapter-nonroot-v1"
 RUNNER_UID = 10001
 RUNNER_GID = 10001
+GENERATOR_UID = 10002
+GENERATOR_GID = 10002
 
 
 @dataclass(frozen=True)
@@ -96,6 +98,14 @@ def _mode_for(member: tarfile.TarInfo, *, directory: int, regular: int) -> int:
     return regular
 
 
+def _protected_mode(member: tarfile.TarInfo) -> int:
+    if member.isdir():
+        return 0o550
+    if member.issym() or member.islnk():
+        return 0o777
+    return 0o550 if member.mode & 0o111 else 0o440
+
+
 def _normalized_identity(
     member: tarfile.TarInfo, *, profile: str = "runner"
 ) -> tuple[int, int, int, str, str] | None:
@@ -117,32 +127,59 @@ def _normalized_identity(
         raise ValueError(f"Unknown OCI normalization profile: {profile}")
 
     if _under(path, "app"):
+        if path == "app/privsep.mjs":
+            return (0, 0, 0o500, "root", "root")
         return (
             0,
-            0,
-            _mode_for(member, directory=0o555, regular=0o444)
-            if path != "app/runner.mjs"
-            else 0o555,
+            RUNNER_GID,
+            _mode_for(member, directory=0o550, regular=0o440),
             "root",
-            "root",
+            "counterlab-runner",
         )
 
-    if _under(path, "work/jobs") or _under(path, "run/counterlab-codex"):
+    if _under(path, "work/jobs"):
         return (
             RUNNER_UID,
-            RUNNER_GID,
-            _mode_for(member, directory=0o700, regular=0o600),
-            "counterlab-codex",
-            "counterlab-codex",
+            GENERATOR_GID,
+            _mode_for(member, directory=0o2710, regular=0o600),
+            "counterlab-runner",
+            "counterlab-generator",
         )
 
-    if _under(path, "opt/codex") or _under(path, "opt/counterlab-venv"):
+    if _under(path, "run/counterlab-codex"):
         return (
             0,
+            GENERATOR_GID,
+            _mode_for(member, directory=0o710, regular=0o440),
+            "root",
+            "counterlab-generator",
+        )
+
+    if _under(path, "run/counterlab-privsep"):
+        return (
             0,
-            _mode_for(member, directory=0o555, regular=0o555),
+            RUNNER_GID,
+            _mode_for(member, directory=0o750, regular=0o660),
             "root",
+            "counterlab-runner",
+        )
+
+    if _under(path, "opt/codex"):
+        return (
+            0,
+            GENERATOR_GID,
+            _protected_mode(member),
             "root",
+            "counterlab-generator",
+        )
+
+    if _under(path, "opt/counterlab-venv"):
+        return (
+            0,
+            RUNNER_GID,
+            _protected_mode(member),
+            "root",
+            "counterlab-runner",
         )
 
     if _under(path, "opt/counterlab"):
@@ -157,10 +194,10 @@ def _normalized_identity(
     if _under(path, "opt/counterlab-wheelhouse"):
         return (
             0,
-            0,
-            _mode_for(member, directory=0o555, regular=0o444),
+            RUNNER_GID,
+            _mode_for(member, directory=0o550, regular=0o440),
             "root",
-            "root",
+            "counterlab-runner",
         )
 
     if path == "usr/local/bin/node":
@@ -190,7 +227,16 @@ def _normalized_identity(
             "root",
         )
 
-    if _under(path, "usr/share") or _under(path, "repo") or _under(path, "etc/ssl"):
+    if _under(path, "repo"):
+        return (
+            0,
+            RUNNER_GID,
+            _mode_for(member, directory=0o550, regular=0o440),
+            "root",
+            "counterlab-runner",
+        )
+
+    if _under(path, "usr/share") or _under(path, "etc/ssl"):
         return (
             0,
             0,
@@ -221,6 +267,9 @@ def _normalized_identity(
 
     if path == "etc/hosts":
         return (0, 0, 0o644, "root", "root")
+
+    if path == "tmp":
+        return (0, 0, 0o555, "root", "root")
 
     if path in {
         "etc/passwd",
@@ -435,7 +484,7 @@ def normalize_layout(
     diff_ids = config.get("rootfs", {}).get("diff_ids")
     if not isinstance(diff_ids, list) or len(diff_ids) != len(layers):
         raise ValueError("Runner OCI rootfs diff_ids do not match its layers")
-    expected_user = "10001:10001" if profile == "runner" else "65532:65532"
+    expected_user = "0:0" if profile == "runner" else "65532:65532"
     if profile not in {"runner", "adapter"}:
         raise ValueError(f"Unknown OCI normalization profile: {profile}")
     if config.get("config", {}).get("User") != expected_user:

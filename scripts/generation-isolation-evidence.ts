@@ -6,11 +6,14 @@ import { fileURLToPath } from "node:url";
 import {
   GENERATION_ISOLATION_MOUNT_POLICY_VERSION,
   GENERATION_ISOLATION_POLICY_VERSION_V2,
+  GENERATION_ISOLATION_POLICY_VERSION_V3,
   GenerationIsolationEvidenceSchema,
   GenerationIsolationEvidenceV1Schema,
   GenerationIsolationEvidenceV2Schema,
+  GenerationIsolationEvidenceV3Schema,
   GenerationIsolationProbePayloadSchema,
   GenerationIsolationProbePayloadV2Schema,
+  GenerationIsolationProbePayloadV3Schema,
   QualifiedRunnerReleaseV6Schema,
   type GenerationIsolationEvidence,
   type QualifiedRunnerReleaseV6,
@@ -23,7 +26,8 @@ const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
 function startupProbeResultSchema(
   probeSchema:
     | typeof GenerationIsolationProbePayloadSchema
-    | typeof GenerationIsolationProbePayloadV2Schema,
+    | typeof GenerationIsolationProbePayloadV2Schema
+    | typeof GenerationIsolationProbePayloadV3Schema,
 ) {
   return z
     .strictObject({
@@ -64,6 +68,7 @@ function startupProbeResultSchema(
 const StartupProbeResultSchema = z.union([
   startupProbeResultSchema(GenerationIsolationProbePayloadSchema),
   startupProbeResultSchema(GenerationIsolationProbePayloadV2Schema),
+  startupProbeResultSchema(GenerationIsolationProbePayloadV3Schema),
 ]);
 
 function sha256Canonical(value: unknown): string {
@@ -108,20 +113,30 @@ export function createGenerationIsolationEvidence(input: {
     probePayloadSha256: probeSha256,
     verifiedAt: input.verifiedAt ?? new Date().toISOString(),
   };
-  const evidence =
-    startupProbe.generationIsolationProbe.schemaVersion === "2"
-      ? GenerationIsolationEvidenceV2Schema.parse({
-          ...common,
-          schemaVersion: "2",
-          policyVersion: GENERATION_ISOLATION_POLICY_VERSION_V2,
-          verifierVersion: "counterlab-generation-isolation-evidence-v2",
-        })
-      : GenerationIsolationEvidenceV1Schema.parse({
-          ...common,
-          schemaVersion: "1",
-          mountPolicyVersion: GENERATION_ISOLATION_MOUNT_POLICY_VERSION,
-          verifierVersion: "counterlab-generation-isolation-evidence-v1",
-        });
+  const evidence = (() => {
+    if (startupProbe.generationIsolationProbe.schemaVersion === "3") {
+      return GenerationIsolationEvidenceV3Schema.parse({
+        ...common,
+        schemaVersion: "3",
+        policyVersion: GENERATION_ISOLATION_POLICY_VERSION_V3,
+        verifierVersion: "counterlab-generation-isolation-evidence-v3",
+      });
+    }
+    if (startupProbe.generationIsolationProbe.schemaVersion === "2") {
+      return GenerationIsolationEvidenceV2Schema.parse({
+        ...common,
+        schemaVersion: "2",
+        policyVersion: GENERATION_ISOLATION_POLICY_VERSION_V2,
+        verifierVersion: "counterlab-generation-isolation-evidence-v2",
+      });
+    }
+    return GenerationIsolationEvidenceV1Schema.parse({
+      ...common,
+      schemaVersion: "1",
+      mountPolicyVersion: GENERATION_ISOLATION_MOUNT_POLICY_VERSION,
+      verifierVersion: "counterlab-generation-isolation-evidence-v1",
+    });
+  })();
   return {
     evidence,
     evidenceSha256: hashGenerationIsolationEvidence(evidence),
@@ -137,7 +152,7 @@ export function verifyGenerationIsolationEvidence(input: {
     sourceTreeSha256: string;
     localImageTag: string;
     localImageDigest: string;
-    imageUser?: "10001:10001";
+    imageUser?: "0:0" | "10001:10001";
     probeSha256?: string;
     verifiedAt?: string;
   };
@@ -170,7 +185,8 @@ export function verifyGenerationIsolationEvidence(input: {
     ],
     [
       "imageUser",
-      input.expected.imageUser ?? "10001:10001",
+      input.expected.imageUser ??
+        (evidence.schemaVersion === "3" ? "0:0" : "10001:10001"),
       evidence.imageUser,
     ],
     [

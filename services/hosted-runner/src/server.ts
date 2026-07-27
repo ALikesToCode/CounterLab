@@ -14,7 +14,7 @@ import { z } from "zod";
 
 import { HttpRunnerControlPlane } from "./control-plane-client.js";
 import { HostedRunnerJobProcessor } from "./job-processor.js";
-import { ContainerCodexLaunchBoundary } from "./launch-boundary.js";
+import { PrivsepCodexLaunchBoundary } from "./privsep-boundary.js";
 import { PythonFixedKernelExecutor } from "./fixed-kernel.js";
 import { PythonFixedPatchExecutor } from "./fixed-patch.js";
 import {
@@ -269,7 +269,6 @@ async function startProductionServer(): Promise<void> {
     console.log(JSON.stringify(await runHostedRunnerStartupProbe()));
     return;
   }
-  const authJson = process.env.CODEX_AUTH_JSON;
   const runnerVerifyingPublicKey =
     process.env.COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY;
   const runnerSourceCommit =
@@ -280,7 +279,6 @@ async function startProductionServer(): Promise<void> {
     process.env.COUNTERLAB_GENERATION_ISOLATION_EVIDENCE_SHA256?.trim() ?? "";
   const generationIsolationProbeSha256 =
     process.env.COUNTERLAB_GENERATION_ISOLATION_PROBE_SHA256?.trim() ?? "";
-  delete process.env.CODEX_AUTH_JSON;
   delete process.env.COUNTERLAB_RUNNER_VERIFYING_PUBLIC_KEY;
   const configuredPort = Number(process.env.PORT ?? "8080");
   const port =
@@ -304,9 +302,6 @@ async function startProductionServer(): Promise<void> {
       "STARTUP_PROBE_FAILED",
       () => runHostedRunnerStartupProbe(),
     );
-    if (authJson === undefined || authJson.trim().length === 0) {
-      throw new HostedRunnerStartupError("CODEX_AUTH_MISSING");
-    }
     if (
       runnerVerifyingPublicKey === undefined ||
       runnerVerifyingPublicKey.length === 0
@@ -328,39 +323,21 @@ async function startProductionServer(): Promise<void> {
     );
     const workspaceRoot =
       process.env.COUNTERLAB_RUNNER_WORK_ROOT ?? "/work/jobs";
-    const codexHomeRoot =
-      process.env.COUNTERLAB_CODEX_HOME_ROOT ?? "/run/counterlab-codex";
     const codexExecutable =
-      process.env.COUNTERLAB_CODEX_EXECUTABLE ?? "/usr/local/bin/codex";
-    const codexRoot = process.env.COUNTERLAB_CODEX_ROOT ?? "/opt/codex";
-    const landlockLauncher =
-      process.env.COUNTERLAB_LANDLOCK_LAUNCHER ??
-      "/opt/counterlab/landlock_launcher.py";
-    const pythonExecutable =
-      process.env.COUNTERLAB_PYTHON_EXECUTABLE ??
-      "/opt/counterlab-venv/bin/python";
-    const setprivExecutable =
-      process.env.COUNTERLAB_SETPRIV_EXECUTABLE ?? "/usr/bin/setpriv";
-    const uid = Number(process.env.COUNTERLAB_CODEX_UID ?? "10001");
-    const gid = Number(process.env.COUNTERLAB_CODEX_GID ?? "10001");
+      process.env.COUNTERLAB_CODEX_EXECUTABLE ?? "/opt/codex/bin/codex";
+    const runnerNodeExecutable =
+      process.env.COUNTERLAB_RUNNER_NODE_EXECUTABLE ?? "/usr/local/bin/node";
+    const privsepClientBundle =
+      process.env.COUNTERLAB_PRIVSEP_CLIENT_BUNDLE ?? "/app/privsep-client.mjs";
     const boundary = await runHostedRunnerStartupStage(
       "ISOLATION_BOUNDARY_FAILED",
       async () => {
-        await Promise.all([
-          mkdir(workspaceRoot, { recursive: true, mode: 0o700 }),
-          mkdir(codexHomeRoot, { recursive: true, mode: 0o700 }),
-        ]);
-        const candidate = new ContainerCodexLaunchBoundary({
-          authJson,
+        await mkdir(workspaceRoot, { recursive: true, mode: 0o710 });
+        const candidate = new PrivsepCodexLaunchBoundary({
           workspaceRoot: resolve(workspaceRoot),
-          codexHomeRoot: resolve(codexHomeRoot),
-          codexRoot: resolve(codexRoot),
           codexExecutable: resolve(codexExecutable),
-          landlockLauncher: resolve(landlockLauncher),
-          pythonExecutable: resolve(pythonExecutable),
-          setprivExecutable: resolve(setprivExecutable),
-          uid,
-          gid,
+          runnerNodeExecutable: resolve(runnerNodeExecutable),
+          clientBundle: resolve(privsepClientBundle),
         });
         const boundaryHealth = await candidate.health();
         if (!boundaryHealth.available) throw new Error(boundaryHealth.reason);

@@ -854,8 +854,8 @@ function validateMountedImageRootfs(
 
 const runnerRootfsPermissionContract = Object.freeze([
   // The session parent remains private. The mounted root itself must be
-  // traversable by the image's non-root process, while all image-owned
-  // descendants retain their exact OCI ownership and executable modes.
+  // traversable by the privilege broker, while protected descendants retain
+  // the exact runner/generator ownership and executable modes.
   { path: "/", kind: "directory", mode: 0o755 },
   { path: "/usr", kind: "directory", mode: 0o755 },
   { path: "/usr/local", kind: "directory", mode: 0o755 },
@@ -872,8 +872,15 @@ const runnerRootfsPermissionContract = Object.freeze([
     kind: "file",
     mode: 0o755,
   },
-  { path: "/app", kind: "directory", mode: 0o555 },
-  { path: "/app/runner.mjs", kind: "file", mode: 0o555 },
+  { path: "/app", kind: "directory", mode: 0o550, gid: 10001 },
+  { path: "/app/privsep.mjs", kind: "file", mode: 0o500 },
+  {
+    path: "/app/privsep-client.mjs",
+    kind: "file",
+    mode: 0o440,
+    gid: 10001,
+  },
+  { path: "/app/runner.mjs", kind: "file", mode: 0o440, gid: 10001 },
   { path: "/opt", kind: "directory", mode: 0o755 },
   { path: "/opt/counterlab", kind: "directory", mode: 0o555 },
   {
@@ -885,13 +892,53 @@ const runnerRootfsPermissionContract = Object.freeze([
   { path: "/etc/passwd", kind: "file", mode: 0o444 },
   { path: "/etc/group", kind: "file", mode: 0o444 },
   { path: "/etc/hosts", kind: "file", mode: 0o644 },
-  { path: "/repo", kind: "directory", mode: 0o555 },
-  { path: "/repo/scripts", kind: "directory", mode: 0o555 },
+  { path: "/repo", kind: "directory", mode: 0o550, gid: 10001 },
+  { path: "/repo/scripts", kind: "directory", mode: 0o550, gid: 10001 },
   {
     path: "/repo/scripts/verify_scientific_runtime.py",
     kind: "file",
-    mode: 0o444,
+    mode: 0o440,
+    gid: 10001,
   },
+  {
+    path: "/opt/counterlab-venv",
+    kind: "directory",
+    mode: 0o550,
+    gid: 10001,
+  },
+  {
+    path: "/opt/counterlab-venv/bin/python",
+    kind: "file",
+    mode: 0o550,
+    gid: 10001,
+  },
+  { path: "/opt/codex", kind: "directory", mode: 0o550, gid: 10002 },
+  {
+    path: "/opt/codex/bin/codex",
+    kind: "file",
+    mode: 0o550,
+    gid: 10002,
+  },
+  {
+    path: "/work/jobs",
+    kind: "directory",
+    mode: 0o710,
+    uid: 10001,
+    gid: 10002,
+  },
+  {
+    path: "/run/counterlab-codex",
+    kind: "directory",
+    mode: 0o710,
+    gid: 10002,
+  },
+  {
+    path: "/run/counterlab-privsep",
+    kind: "directory",
+    mode: 0o750,
+    gid: 10001,
+  },
+  { path: "/tmp", kind: "directory", mode: 0o555 },
   { path: "/dev/pts", kind: "directory", mode: 0o755 },
   { path: "/dev/shm", kind: "directory", mode: 0o755 },
   { path: "/dev/mqueue", kind: "directory", mode: 0o755 },
@@ -926,11 +973,11 @@ export function validateContainedRunnerRootfsPermissions(entries) {
       observed.path !== expected.path ||
       observed.kind !== expected.kind ||
       observed.mode !== expected.mode ||
-      observed.uid !== 0 ||
-      observed.gid !== 0
+      observed.uid !== (expected.uid ?? 0) ||
+      observed.gid !== (expected.gid ?? 0)
     ) {
       throw new Error(
-        `contained runner rootfs permissions are unsafe at ${expected.path}: expected ${expected.kind} ${expected.mode.toString(8)} 0:0, observed ${observed.kind} ${Number.isSafeInteger(observed.mode) ? observed.mode.toString(8) : "invalid"} ${Number.isSafeInteger(observed.uid) ? observed.uid : "invalid"}:${Number.isSafeInteger(observed.gid) ? observed.gid : "invalid"}`,
+        `contained runner rootfs permissions are unsafe at ${expected.path}: expected ${expected.kind} ${expected.mode.toString(8)} ${expected.uid ?? 0}:${expected.gid ?? 0}, observed ${observed.kind} ${Number.isSafeInteger(observed.mode) ? observed.mode.toString(8) : "invalid"} ${Number.isSafeInteger(observed.uid) ? observed.uid : "invalid"}:${Number.isSafeInteger(observed.gid) ? observed.gid : "invalid"}`,
       );
     }
   }
