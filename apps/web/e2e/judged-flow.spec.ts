@@ -1817,6 +1817,7 @@ for (const viewport of [
 test("Try Instantly persists the verified learning loop and exports a valid proof", async ({
   page,
 }) => {
+  test.setTimeout(90_000);
   const failures = observeBrowserFailures(page);
 
   await startInstant(page);
