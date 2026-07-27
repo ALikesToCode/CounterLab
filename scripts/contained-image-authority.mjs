@@ -885,11 +885,23 @@ function requestedTmpfs(args, end) {
   return entries;
 }
 
+export function isContainedPrivilegeBrokerProcess(process) {
+  return (
+    process?.profile === "counterlab-root-broker-v1" &&
+    process?.uid === 0 &&
+    process?.gid === 0 &&
+    process?.cwd === "/app" &&
+    JSON.stringify(process?.args) ===
+      JSON.stringify(["/usr/local/bin/node", "/app/privsep.mjs"])
+  );
+}
+
 function expectedProcess(args, config) {
   const index = args.findIndex((argument) => imagePattern.test(argument));
   if (index === -1) {
     throw new Error("contained image authority command image is invalid");
   }
+  const image = args[index];
   const imageEntrypoint = stringArray(config.Entrypoint ?? [], "entrypoint");
   const imageCommand = stringArray(config.Cmd ?? [], "command");
   const requestedEntrypoint = oneOptionalOption(args, ["--entrypoint"], index);
@@ -905,32 +917,52 @@ function expectedProcess(args, config) {
   if (processArgs.length === 0) {
     throw new Error("contained image authority process has no command");
   }
-  const requestedUser =
-    oneOptionalOption(args, ["--user"], index) ?? config.User;
+  const requestedUserOption = oneOptionalOption(args, ["--user"], index);
+  const requestedUser = requestedUserOption ?? config.User;
   const userMatch = String(requestedUser ?? "").match(/^(\d{1,6}):(\d{1,6})$/);
+  const uid = userMatch === null ? Number.NaN : Number(userMatch[1]);
+  const gid = userMatch === null ? Number.NaN : Number(userMatch[2]);
+  const requestedWorkdir = oneOptionalOption(args, ["--workdir"], index);
+  const cwd = requestedWorkdir ?? config.WorkingDir;
+  const requestedEnvironment = optionValues(args, ["-e", "--env"], index);
+  const privilegeBroker =
+    /^counterlab-runner:git-[a-f0-9]{40}$/.test(image ?? "") &&
+    config.User === "0:0" &&
+    requestedUserOption === undefined &&
+    requestedEntrypoint === undefined &&
+    requestedWorkdir === undefined &&
+    command.length === 0 &&
+    JSON.stringify(imageEntrypoint) ===
+      JSON.stringify(["/usr/local/bin/node", "/app/privsep.mjs"]) &&
+    imageCommand.length === 0 &&
+    config.WorkingDir === "/app" &&
+    uid === 0 &&
+    gid === 0 &&
+    JSON.stringify(requestedEnvironment) ===
+      JSON.stringify(["COUNTERLAB_RUNNER_STARTUP_PROBE=1"]);
   if (
     userMatch === null ||
-    Number(userMatch[1]) === 0 ||
-    Number(userMatch[2]) === 0
+    (!privilegeBroker && (uid === 0 || gid === 0))
   ) {
     throw new Error("contained image authority user is invalid");
   }
-  const cwd =
-    oneOptionalOption(args, ["--workdir"], index) ?? config.WorkingDir;
   if (typeof cwd !== "string" || !cwd.startsWith("/")) {
     throw new Error("contained image authority working directory is invalid");
   }
   const imageEnvironment = stringArray(config.Env ?? [], "image environment");
   const environment = mergeEnvironment(
     imageEnvironment,
-    optionValues(args, ["-e", "--env"], index),
+    requestedEnvironment,
   );
   return {
     args: processArgs,
     cwd,
     env: environment,
-    gid: Number(userMatch[2]),
-    uid: Number(userMatch[1]),
+    gid,
+    ...(privilegeBroker
+      ? { profile: "counterlab-root-broker-v1" }
+      : {}),
+    uid,
   };
 }
 
@@ -1003,6 +1035,23 @@ export function createContainedImageAuthority({
   const commandImageIndex = args.findIndex((argument) => argument === image);
   const mounts = requestedMounts(args, commandImageIndex);
   const readOnlyMountManifest = verifyContainedReadOnlyMounts(mounts);
+  const tmpfs = requestedTmpfs(args, commandImageIndex);
+  if (
+    isContainedPrivilegeBrokerProcess(process) &&
+    (mounts.length !== 0 ||
+      JSON.stringify(tmpfs.map((entry) => entry.destination).sort()) !==
+        JSON.stringify(
+          [
+            "/work/jobs",
+            "/run/counterlab-codex",
+            "/run/counterlab-privsep",
+          ].sort(),
+        ))
+  ) {
+    throw new Error(
+      "contained image authority privilege broker roots are invalid",
+    );
+  }
   return {
     canonicalImage: target.canonicalImage,
     commandSha256: sha256(canonicalJson(args)),
@@ -1016,7 +1065,7 @@ export function createContainedImageAuthority({
     readOnlyMountManifest,
     readOnlyMountManifestSha256: sha256(canonicalJson(readOnlyMountManifest)),
     requestedMounts: mounts,
-    requestedTmpfs: requestedTmpfs(args, commandImageIndex),
+    requestedTmpfs: tmpfs,
     rootfsChainId: rootfs.rootfsChainId,
     sourceCommit: match[1],
     sourceTreeSha256: labels["io.counterlab.source-tree-sha256"],

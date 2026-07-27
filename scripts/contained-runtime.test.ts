@@ -100,8 +100,12 @@ function startupCommand(): string[] {
     "--read-only",
     "--cap-drop=ALL",
     "--cap-add=CHOWN",
+    "--cap-add=DAC_OVERRIDE",
     "--cap-add=FOWNER",
+    "--cap-add=FSETID",
+    "--cap-add=KILL",
     "--cap-add=SETGID",
+    "--cap-add=SETPCAP",
     "--cap-add=SETUID",
     "--security-opt=no-new-privileges=true",
     "--ipc=private",
@@ -300,11 +304,17 @@ function imageFixture(command: string[]) {
       diff_ids: [`sha256:${"3".repeat(64)}`],
     },
     config: {
-      User: "10001:10001",
+      User: commandImage.includes("counterlab-adapter")
+        ? "65532:65532"
+        : "0:0",
       Env: ["PATH=/usr/local/bin:/usr/bin:/bin"],
-      Entrypoint: ["/usr/local/bin/node", "/app/runner.mjs"],
+      Entrypoint: commandImage.includes("counterlab-adapter")
+        ? ["python", "/opt/counterlab/harness.py"]
+        : ["/usr/local/bin/node", "/app/privsep.mjs"],
       Cmd: [],
-      WorkingDir: "/app",
+      WorkingDir: commandImage.includes("counterlab-adapter")
+        ? "/workspace"
+        : "/app",
       Labels: {
         "io.counterlab.source-tree-sha256": "2".repeat(64),
         "org.opencontainers.image.revision": sourceCommit,
@@ -588,7 +598,43 @@ function rootlessSpec(
       args: authority.process.args,
       env: [...authority.process.env, `HOSTNAME=${containerId.slice(0, 12)}`],
       cwd: authority.process.cwd,
-      capabilities: {},
+      capabilities:
+        authority.process.uid === 0 && authority.process.gid === 0
+          ? {
+              ambient: [],
+              bounding: [
+                "CAP_CHOWN",
+                "CAP_DAC_OVERRIDE",
+                "CAP_FOWNER",
+                "CAP_FSETID",
+                "CAP_KILL",
+                "CAP_SETGID",
+                "CAP_SETPCAP",
+                "CAP_SETUID",
+              ],
+              effective: [
+                "CAP_CHOWN",
+                "CAP_DAC_OVERRIDE",
+                "CAP_FOWNER",
+                "CAP_FSETID",
+                "CAP_KILL",
+                "CAP_SETGID",
+                "CAP_SETPCAP",
+                "CAP_SETUID",
+              ],
+              inheritable: [],
+              permitted: [
+                "CAP_CHOWN",
+                "CAP_DAC_OVERRIDE",
+                "CAP_FOWNER",
+                "CAP_FSETID",
+                "CAP_KILL",
+                "CAP_SETGID",
+                "CAP_SETPCAP",
+                "CAP_SETUID",
+              ],
+            }
+          : {},
       // Model the exact raw nerdctl spec; RLIMIT_AS is injected only after
       // this staging document passes the contained-runtime policy.
       rlimits: expected.rlimits.filter((entry) => entry.type !== "RLIMIT_AS"),
@@ -1576,10 +1622,39 @@ describe("contained runtime command policy", () => {
     expect(validate(...boundedAdapterCommand()).status).toBe(0);
   });
 
-  it("rejects startup probes with altered broker capabilities or writable roots", () => {
-    const missingCapability = startupCommand().filter(
-      (argument) => argument !== "--cap-add=SETUID",
+  it("admits root only for the exact privilege broker image profile", () => {
+    const explicitRoot = scientificRuntimeCommand().map((argument) =>
+      argument === "10001:10001" ? "0:0" : argument,
     );
+    const overriddenEntrypoint = startupCommand();
+    overriddenEntrypoint.splice(
+      overriddenEntrypoint.indexOf(image),
+      0,
+      "--entrypoint=python",
+    );
+    const overriddenWorkdir = startupCommand();
+    overriddenWorkdir.splice(
+      overriddenWorkdir.indexOf(image),
+      0,
+      "--workdir=/app",
+    );
+    const commandTail = [...startupCommand(), "/app/privsep.mjs"];
+    const missingTmpfs = startupCommand();
+    const tmpfsIndex = missingTmpfs.indexOf("--tmpfs");
+    missingTmpfs.splice(tmpfsIndex, 2);
+
+    for (const command of [
+      explicitRoot,
+      overriddenEntrypoint,
+      overriddenWorkdir,
+      commandTail,
+      missingTmpfs,
+    ]) {
+      expect(() => imageFixture(command)).toThrow();
+    }
+  });
+
+  it("rejects startup probes with altered broker capabilities or writable roots", () => {
     const extraCapability = startupCommand();
     extraCapability.splice(
       extraCapability.indexOf(image),
@@ -1598,7 +1673,20 @@ describe("contained runtime command policy", () => {
     );
 
     for (const command of [
-      missingCapability,
+      ...[
+        "CHOWN",
+        "DAC_OVERRIDE",
+        "FOWNER",
+        "FSETID",
+        "KILL",
+        "SETGID",
+        "SETPCAP",
+        "SETUID",
+      ].map((capability) =>
+        startupCommand().filter(
+          (argument) => argument !== `--cap-add=${capability}`,
+        ),
+      ),
       extraCapability,
       alteredWorkspace,
       legacyRuntimeRoot,
@@ -2163,13 +2251,13 @@ describe("contained runtime command policy", () => {
     });
     expect(sanitized.linux.namespaces).toContainEqual({ type: "user" });
     expect(sanitized.linux.uidMappings).toEqual([
-      { containerID: 0, hostID: 1, size: 1 },
-      { containerID: fixture.authority.process.uid, hostID: 0, size: 1 },
+      { containerID: 0, hostID: 0, size: 1 },
+      { containerID: 10001, hostID: 1, size: 2 },
     ]);
     expect(sanitized.linux.gidMappings).toEqual([
-      { containerID: 0, hostID: 1, size: 1 },
-      { containerID: 5, hostID: 2, size: 1 },
-      { containerID: fixture.authority.process.gid, hostID: 0, size: 1 },
+      { containerID: 0, hostID: 0, size: 1 },
+      { containerID: 5, hostID: 1, size: 1 },
+      { containerID: 10001, hostID: 2, size: 2 },
     ]);
     expect(sanitized.linux.resources).toEqual({
       ...original.linux.resources,
@@ -2197,10 +2285,37 @@ describe("contained runtime command policy", () => {
     expect(sanitized.process.env).toEqual(fixture.authority.process.env);
     expect(sanitized.process.capabilities).toEqual({
       ambient: [],
-      bounding: [],
-      effective: [],
+      bounding: [
+        "CAP_CHOWN",
+        "CAP_DAC_OVERRIDE",
+        "CAP_FOWNER",
+        "CAP_FSETID",
+        "CAP_KILL",
+        "CAP_SETGID",
+        "CAP_SETPCAP",
+        "CAP_SETUID",
+      ],
+      effective: [
+        "CAP_CHOWN",
+        "CAP_DAC_OVERRIDE",
+        "CAP_FOWNER",
+        "CAP_FSETID",
+        "CAP_KILL",
+        "CAP_SETGID",
+        "CAP_SETPCAP",
+        "CAP_SETUID",
+      ],
       inheritable: [],
-      permitted: [],
+      permitted: [
+        "CAP_CHOWN",
+        "CAP_DAC_OVERRIDE",
+        "CAP_FOWNER",
+        "CAP_FSETID",
+        "CAP_KILL",
+        "CAP_SETGID",
+        "CAP_SETPCAP",
+        "CAP_SETUID",
+      ],
     });
     expect(sanitized.root.readonly).toBe(true);
     expect(sanitized.root.path).toBe(
@@ -2769,7 +2884,7 @@ describe("contained runtime command policy", () => {
       [
         "supplementary group",
         (value) => {
-          value.process.user.additionalGids = [0];
+          value.process.user.additionalGids = [10001];
         },
       ],
       [
@@ -3011,13 +3126,7 @@ describe("contained runtime command policy", () => {
       root,
       "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
     );
-    const command = startupCommand();
-    command.splice(
-      command.length - 1,
-      0,
-      "-v",
-      `${resolve(root, "fixtures/public")}:/fixtures:ro`,
-    );
+    const command = boundedAdapterCommand();
     const plan = containedRunPlan({
       args: command,
       binRoot: resolve(installRoot, "bin"),
@@ -3043,7 +3152,7 @@ describe("contained runtime command policy", () => {
     for (const option of ["rw", "counterlab-unknown-mode"]) {
       const candidate = structuredClone(valid);
       const requested = candidate.mounts.find(
-        (mount: { destination: string }) => mount.destination === "/fixtures",
+        (mount: { destination: string }) => mount.destination === "/workspace",
       );
       requested.options.push(option);
       expect(
@@ -3123,13 +3232,7 @@ describe("contained runtime command policy", () => {
       root,
       "node_modules/.cache/counterlab-v6.1/rootless-tools/install-v2.3.1",
     );
-    const command = startupCommand();
-    command.splice(
-      command.length - 1,
-      0,
-      "--mount",
-      `type=bind,src=${sandboxRoot},dst=/output`,
-    );
+    const command = boundedAdapterCommand();
     const plan = containedRunPlan({
       args: command,
       binRoot: resolve(installRoot, "bin"),

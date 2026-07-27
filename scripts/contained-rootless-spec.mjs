@@ -16,6 +16,7 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { CONTAINED_RUNTIME_SNAPSHOTTER } from "./contained-containerd-config.mjs";
+import { isContainedPrivilegeBrokerProcess } from "./contained-image-authority.mjs";
 
 const repositoryRoot = realpathSync(
   resolve(fileURLToPath(import.meta.url), "../.."),
@@ -38,6 +39,16 @@ const nerdctlCreateRlimits = new Set([
   "RLIMIT_CPU",
   "RLIMIT_FSIZE",
   "RLIMIT_NOFILE",
+]);
+const privilegeBrokerCapabilities = Object.freeze([
+  "CAP_CHOWN",
+  "CAP_DAC_OVERRIDE",
+  "CAP_FOWNER",
+  "CAP_FSETID",
+  "CAP_KILL",
+  "CAP_SETGID",
+  "CAP_SETPCAP",
+  "CAP_SETUID",
 ]);
 const invocationIdPattern = /^[a-f0-9]{64}$/;
 const maskedPaths = new Set([
@@ -375,6 +386,47 @@ function assertEmptyCapabilities(processSpec) {
     throw new Error(
       `contained rootless OCI spec capability set is unknown: ${observedNames.sort().join(",")}`,
     );
+  }
+}
+
+function assertPrivilegeBrokerCapabilities(processSpec) {
+  const capabilities = object(processSpec.capabilities, "process capabilities");
+  const expectedFields = [
+    "ambient",
+    "bounding",
+    "effective",
+    "inheritable",
+    "permitted",
+  ];
+  assertKnownKeys(
+    capabilities,
+    new Set(expectedFields),
+    "process capability fields",
+  );
+  if (
+    JSON.stringify(Object.keys(capabilities).sort()) !==
+    JSON.stringify(expectedFields)
+  ) {
+    throw new Error(
+      "contained rootless OCI spec privilege broker capability fields changed",
+    );
+  }
+  for (const field of ["bounding", "effective", "permitted"]) {
+    if (!sameStrings(capabilities[field], privilegeBrokerCapabilities)) {
+      throw new Error(
+        `contained rootless OCI spec privilege broker ${field} capabilities changed`,
+      );
+    }
+  }
+  for (const field of ["ambient", "inheritable"]) {
+    if (
+      !Array.isArray(capabilities[field]) ||
+      capabilities[field].length !== 0
+    ) {
+      throw new Error(
+        `contained rootless OCI spec privilege broker ${field} capabilities changed`,
+      );
+    }
   }
 }
 
@@ -1203,7 +1255,11 @@ function assertProcess(processSpec, expected, hostname, expectedRlimits) {
       `contained rootless OCI spec security identity changed: ${identityIssues.join(", ")}`,
     );
   }
-  assertEmptyCapabilities(processSpec);
+  if (isContainedPrivilegeBrokerProcess(expected.imageAuthority.process)) {
+    assertPrivilegeBrokerCapabilities(processSpec);
+  } else {
+    assertEmptyCapabilities(processSpec);
+  }
   assertRlimits(processSpec, expectedRlimits);
 }
 
@@ -1574,13 +1630,24 @@ export function sanitizeContainedRootlessSpec({
     { ...addressSpaceLimit },
   ].sort((left, right) => left.type.localeCompare(right.type));
   assertRlimits(processSpec, expected.rlimits);
-  processSpec.capabilities = {
-    ambient: [],
-    bounding: [],
-    effective: [],
-    inheritable: [],
-    permitted: [],
-  };
+  const privilegeBroker = isContainedPrivilegeBrokerProcess(
+    expected.imageAuthority.process,
+  );
+  processSpec.capabilities = privilegeBroker
+    ? {
+        ambient: [],
+        bounding: [...privilegeBrokerCapabilities],
+        effective: [...privilegeBrokerCapabilities],
+        inheritable: [],
+        permitted: [...privilegeBrokerCapabilities],
+      }
+    : {
+        ambient: [],
+        bounding: [],
+        effective: [],
+        inheritable: [],
+        permitted: [],
+      };
   linux.seccomp.syscalls = linux.seccomp.syscalls.filter(
     (_entry, index) =>
       !linuxNormalization.restrictedSeccompRuleIndexes.includes(index),
@@ -1596,33 +1663,45 @@ export function sanitizeContainedRootlessSpec({
   const runtimeUser = object(processSpec.user, "process user");
   const maximumLinuxId = 4_294_967_295;
   const devptsGid = 5;
-  if (
-    !Number.isSafeInteger(runtimeUser.uid) ||
-    runtimeUser.uid < 1 ||
-    runtimeUser.uid > maximumLinuxId ||
-    !Number.isSafeInteger(runtimeUser.gid) ||
-    runtimeUser.gid < 1 ||
-    runtimeUser.gid > maximumLinuxId ||
-    runtimeUser.gid === devptsGid
-  ) {
+  const validNonRootIdentity =
+    Number.isSafeInteger(runtimeUser.uid) &&
+    runtimeUser.uid >= 1 &&
+    runtimeUser.uid <= maximumLinuxId &&
+    Number.isSafeInteger(runtimeUser.gid) &&
+    runtimeUser.gid >= 1 &&
+    runtimeUser.gid <= maximumLinuxId &&
+    runtimeUser.gid !== devptsGid;
+  const validPrivilegeBrokerIdentity =
+    privilegeBroker && runtimeUser.uid === 0 && runtimeUser.gid === 0;
+  if (!validNonRootIdentity && !validPrivilegeBrokerIdentity) {
     throw new Error("contained rootless OCI runtime user is invalid");
   }
-  // The repository may live on a filesystem that cannot persist POSIX mode
-  // changes. Map the fixed non-root container identity to the already-rootless
-  // runtime owner so read-only bind inputs remain readable without widening
-  // their host permissions. Runc also requires container ID 0 to be mapped to
-  // initialize the namespace; keep that ID isolated on the outer subordinate
-  // identity while the executed process remains the fixed non-root image user.
+  // The broker profile maps container root to the already-rootless runtime
+  // owner and reserves adjacent subordinate IDs for the fixed runner and
+  // generator. Other profiles map only their fixed non-root process identity
+  // to the runtime owner so read-only bind inputs remain readable without
+  // widening host permissions.
   linux.namespaces.push({ type: "user" });
-  linux.uidMappings = [
-    { containerID: 0, hostID: 1, size: 1 },
-    { containerID: runtimeUser.uid, hostID: 0, size: 1 },
-  ];
-  linux.gidMappings = [
-    { containerID: 0, hostID: 1, size: 1 },
-    { containerID: devptsGid, hostID: 2, size: 1 },
-    { containerID: runtimeUser.gid, hostID: 0, size: 1 },
-  ];
+  linux.uidMappings = privilegeBroker
+    ? [
+        { containerID: 0, hostID: 0, size: 1 },
+        { containerID: 10001, hostID: 1, size: 2 },
+      ]
+    : [
+        { containerID: 0, hostID: 1, size: 1 },
+        { containerID: runtimeUser.uid, hostID: 0, size: 1 },
+      ];
+  linux.gidMappings = privilegeBroker
+    ? [
+        { containerID: 0, hostID: 0, size: 1 },
+        { containerID: devptsGid, hostID: 1, size: 1 },
+        { containerID: 10001, hostID: 2, size: 2 },
+      ]
+    : [
+        { containerID: 0, hostID: 1, size: 1 },
+        { containerID: devptsGid, hostID: 2, size: 1 },
+        { containerID: runtimeUser.gid, hostID: 0, size: 1 },
+      ];
   // RootlessKit delegates the cgroup namespace root. Use an absolute leaf so
   // runc and the independent observer resolve the same cgroup regardless of
   // whether the runtime coordinator itself was evacuated to /containerd.

@@ -209,8 +209,12 @@ STARTUP_PROBE_OUTPUT="$("${DOCKER_COMMAND[@]}" run --rm --name "${STARTUP_CONTAI
   --read-only \
   --cap-drop=ALL \
   --cap-add=CHOWN \
+  --cap-add=DAC_OVERRIDE \
   --cap-add=FOWNER \
+  --cap-add=FSETID \
+  --cap-add=KILL \
   --cap-add=SETGID \
+  --cap-add=SETPCAP \
   --cap-add=SETUID \
   --security-opt=no-new-privileges=true \
   --ipc=private \
