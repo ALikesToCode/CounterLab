@@ -6206,3 +6206,57 @@ unqualified live path.
 
 The release remains **NO-GO for Live** until the exact Container returns the
 full verified readiness identity and production browser qualification passes.
+
+## Exact privilege-separation stage diagnosis — 2026-07-27T18:16:00Z
+
+### Completed
+
+- Committed runner diagnostic source
+  `deb4b3abe0cb0fae06f38c56b3cc33fcbf42a16e` and evidence-only commit
+  `ed4fd49ff8875c9876c9a094ff2991510a9639ec`.
+- Built the source into runner config digest
+  `sha256:ea24b080aad07a8552ab8240f389e338b6e769668bcf8afb1080a384f05d8d33`
+  and OCI manifest
+  `sha256:0dff4343163cc0eff9b88cbf6b86690f5bcbaec54e6a80b8b997f423f7fa58ee`.
+- The genuine timeout-containment sentinel passed all eight cleanup checks,
+  released no result, and recorded aggregate evidence hash
+  `0573e548707a3cbad4e54718576899d4dbe19842517fabad2431f2245812776d`.
+- Refreshed and verified 32 source-bound scientific evidence files. The
+  scientific authority hash is
+  `a4b93f994581a80594dbe90407b0cc16c54e4238c5f5f670ee5c78091fa4ce0f`.
+- The complete release gate passed: root Vitest **876 passed, 2 skipped**; web
+  Vitest **772 passed**; Pytest **346 passed**; headless CloakBrowser release
+  QA **32 passed, 8 admission-mode skips**; leakage mutations **14/14
+  detected**; imbalance mutations **19/19 detected**; TypeScript, formatting,
+  build, held-out, exact-image, replay, patch-replay, and the **1,501-file**
+  secret scan passed.
+- Cloudflare accepted the exact Container manifest as application
+  `a037636c-0c63-420b-af14-3497c2c8b6a3`. Remote D1 had no pending
+  migrations. All 24 exact-version readiness checks kept the non-runner
+  identity and authority checks green while `checks.runner` remained false.
+- A version-filtered Worker tail and one cache-busted readiness probe isolated
+  the fail-closed hosted response to
+  `PRIVSEP_PROBE_FAILED:credential-read`. Earlier probe stages for process
+  identity, supplementary groups, capabilities, no-new-privileges, and
+  workspace access all passed.
+- The guarded deployment restored maintenance Worker
+  `58c65d3d-fef3-4644-8f9c-3483e2f14e75` at 100% traffic. Final unready Worker
+  `a91d24e5-497b-4ff2-80aa-e3158fe6c542` is not serving production traffic.
+
+### Current release truth
+
+- The hosted blocker is now limited to generator access to the private staged
+  credential. The exact Cloudflare runtime does not honor the current
+  root-owned, generator-group-readable credential layout as the local
+  contained runtime does.
+- Production remains intentionally in maintenance mode. Live notebook
+  authority, production smoke, and the public supported-live CloakBrowser
+  journey remain unclaimed.
+- Next: replace the group-dependent credential handoff with an independently
+  tested capability-style handoff that remains unreadable to the runner,
+  revocable by the broker, absent from child environments and public events,
+  and fail-closed under path disclosure. Rebuild and qualify a new exact tuple
+  before another guarded deployment.
+
+The release remains **NO-GO for Live** until the exact Container returns the
+full verified readiness identity and production browser qualification passes.
