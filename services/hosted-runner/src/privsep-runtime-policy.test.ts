@@ -67,13 +67,13 @@ describe("privsep scratch policy", () => {
     expect(fs.changeMode).toHaveBeenCalledExactlyOnceWith("/tmp", 0o555);
   });
 
-  it("reasserts the policy when the runtime mount is already hardened", async () => {
-    const fs = operations([metadata(), metadata()]);
+  it("accepts an already hardened read-only runtime mount without mutation", async () => {
+    const fs = operations([metadata()]);
 
     await expect(enforcePrivsepScratchPolicy(fs)).resolves.toBeUndefined();
 
-    expect(fs.changeOwner).toHaveBeenCalledExactlyOnceWith("/tmp", 0, 0);
-    expect(fs.changeMode).toHaveBeenCalledExactlyOnceWith("/tmp", 0o555);
+    expect(fs.changeOwner).not.toHaveBeenCalled();
+    expect(fs.changeMode).not.toHaveBeenCalled();
   });
 
   it("fails before changing a scratch root that is not a direct directory", async () => {

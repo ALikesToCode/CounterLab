@@ -22,6 +22,16 @@ const privsepScratchPolicyOperations: PrivsepScratchPolicyOperations = {
   changeMode: chmod,
 };
 
+function hasPrivsepScratchPolicy(metadata: PrivsepScratchMetadata): boolean {
+  return (
+    metadata.isDirectory() &&
+    !metadata.isSymbolicLink() &&
+    metadata.uid === 0 &&
+    metadata.gid === 0 &&
+    (metadata.mode & 0o7777) === 0o555
+  );
+}
+
 export async function enforcePrivsepScratchPolicy(
   operations: PrivsepScratchPolicyOperations = privsepScratchPolicyOperations,
 ): Promise<void> {
@@ -31,18 +41,13 @@ export async function enforcePrivsepScratchPolicy(
       "CounterLab privilege broker scratch root must be a direct directory",
     );
   }
+  if (hasPrivsepScratchPolicy(before)) return;
 
   await operations.changeOwner(PRIVSEP_SCRATCH_ROOT, 0, 0);
   await operations.changeMode(PRIVSEP_SCRATCH_ROOT, 0o555);
 
   const after = await operations.readMetadata(PRIVSEP_SCRATCH_ROOT);
-  if (
-    !after.isDirectory() ||
-    after.isSymbolicLink() ||
-    after.uid !== 0 ||
-    after.gid !== 0 ||
-    (after.mode & 0o7777) !== 0o555
-  ) {
+  if (!hasPrivsepScratchPolicy(after)) {
     throw new Error(
       "CounterLab privilege broker scratch policy did not reach root:root 0555",
     );
