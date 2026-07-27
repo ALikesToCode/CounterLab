@@ -376,8 +376,6 @@ function validateRun(runArgs) {
       "--workdir": 1,
       "--entrypoint": 1,
     });
-    const uid = requestedUser?.split(":")[0];
-    const gid = requestedUser?.split(":")[1];
     const byDestination = new Map(
       mounts.map((mount) => [mount.destination, mount]),
     );
@@ -400,6 +398,7 @@ function validateRun(runArgs) {
       options.get("--memory")?.[0] !== "1024m" ||
       options.get("--memory-swap")?.[0] !== "1024m" ||
       options.get("--cpus")?.[0] !== "2.0" ||
+      requestedUser !== "10001:10001" ||
       !sameValues(options.get("--ulimit") ?? [], [
         "cpu=300:300",
         "as=17179869184:17179869184",
@@ -407,7 +406,7 @@ function validateRun(runArgs) {
         "nofile=64:64",
       ]) ||
       options.get("--tmpfs")?.[0] !==
-        `/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=${uid},gid=${gid},mode=0700` ||
+        "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700" ||
       !sameValues(environment, ["TMPDIR=/counterlab-runtime"]) ||
       volumes.length !== 0 ||
       byDestination.size !== 3 ||
@@ -463,8 +462,6 @@ function validateRun(runArgs) {
       "--workdir": 1,
       "--entrypoint": 1,
     });
-    const uid = requestedUser?.split(":")[0];
-    const gid = requestedUser?.split(":")[1];
     const byDestination = new Map(
       mounts.map((mount) => [mount.destination, mount]),
     );
@@ -493,6 +490,7 @@ function validateRun(runArgs) {
       options.get("--memory")?.[0] !== "1024m" ||
       options.get("--memory-swap")?.[0] !== "1024m" ||
       options.get("--cpus")?.[0] !== "2.0" ||
+      requestedUser !== "10001:10001" ||
       !sameValues(options.get("--ulimit") ?? [], [
         "cpu=300:300",
         "as=17179869184:17179869184",
@@ -500,7 +498,7 @@ function validateRun(runArgs) {
         "nofile=64:64",
       ]) ||
       options.get("--tmpfs")?.[0] !==
-        `/counterlab-runtime:rw,noexec,nosuid,nodev,size=256m,uid=${uid},gid=${gid},mode=0700` ||
+        "/counterlab-runtime:rw,noexec,nosuid,nodev,size=256m,uid=10001,gid=10001,mode=0700" ||
       !sameValues(environment, ["TMPDIR=/counterlab-runtime"]) ||
       volumes.length !== 0 ||
       byDestination.size !== 4 ||

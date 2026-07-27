@@ -132,7 +132,7 @@ function scientificRuntimeCommand(): string[] {
     "--name",
     "counterlab-runtime-validator",
     "--user",
-    "1000:1000",
+    "10001:10001",
     "--pull=never",
     "--network",
     "none",
@@ -149,7 +149,7 @@ function scientificRuntimeCommand(): string[] {
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
     "--tmpfs",
-    "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=1000,gid=1000,mode=0700",
+    "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700",
     "-e",
     "TMPDIR=/counterlab-runtime",
     "--mount",
@@ -181,7 +181,7 @@ function reachabilityCommand(): string[] {
     "--pull=never",
     "--network=none",
     "--read-only",
-    "--user=1000:1000",
+    "--user=10001:10001",
     "--cap-drop=ALL",
     "--security-opt=no-new-privileges=true",
     "--ipc=private",
@@ -193,7 +193,7 @@ function reachabilityCommand(): string[] {
     "--ulimit=as=17179869184:17179869184",
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
-    "--tmpfs=/counterlab-runtime:rw,noexec,nosuid,nodev,size=256m,uid=1000,gid=1000,mode=0700",
+    "--tmpfs=/counterlab-runtime:rw,noexec,nosuid,nodev,size=256m,uid=10001,gid=10001,mode=0700",
     "--env=TMPDIR=/counterlab-runtime",
     "--mount",
     `type=bind,src=${resolve(root, "scripts/probe_cpython_htmlparser_reachability.py")},dst=/repo/scripts/probe_cpython_htmlparser_reachability.py,readonly`,
@@ -3798,11 +3798,22 @@ describe("contained runtime command policy", () => {
 
   it("rejects root identities for scientific evidence containers", () => {
     const runtime = scientificRuntimeCommand();
-    runtime[runtime.indexOf("1000:1000")] = "0:0";
+    runtime[runtime.indexOf("10001:10001")] = "0:0";
     expect(validate(...runtime).status).not.toBe(0);
 
     const reachability = reachabilityCommand();
-    reachability[reachability.indexOf("--user=1000:1000")] = "--user=0:0";
+    reachability[reachability.indexOf("--user=10001:10001")] = "--user=0:0";
+    expect(validate(...reachability).status).not.toBe(0);
+  });
+
+  it("rejects alternate non-root identities for scientific evidence containers", () => {
+    const runtime = scientificRuntimeCommand();
+    runtime[runtime.indexOf("10001:10001")] = "1000:1000";
+    expect(validate(...runtime).status).not.toBe(0);
+
+    const reachability = reachabilityCommand();
+    reachability[reachability.indexOf("--user=10001:10001")] =
+      "--user=1000:1000";
     expect(validate(...reachability).status).not.toBe(0);
   });
 

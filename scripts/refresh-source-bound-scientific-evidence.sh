@@ -405,19 +405,13 @@ node --import tsx scripts/prepare-source-bound-vex.ts \
   --vex-output "${WORK}/vex.json" \
   --negative-vex-output "${WORK}/negative-vex.json"
 
-HOST_UID="$(id -u)"
-HOST_GID="$(id -g)"
-[[ "${HOST_UID}" != "0" && "${HOST_GID}" != "0" ]] || {
-  echo "Exact-image evidence refuses a root host identity." >&2
-  exit 2
-}
 "${RUNTIME_COMMAND[@]}" run \
   --rm \
   --name "counterlab-reachability-${SOURCE_COMMIT:0:12}-$$" \
   --pull=never \
   --network=none \
   --read-only \
-  --user="${HOST_UID}:${HOST_GID}" \
+  --user=10001:10001 \
   --cap-drop=ALL \
   --security-opt=no-new-privileges=true \
   --ipc=private \
@@ -429,7 +423,7 @@ HOST_GID="$(id -g)"
   --ulimit=as=17179869184:17179869184 \
   --ulimit=fsize=1048576:1048576 \
   --ulimit=nofile=64:64 \
-  --tmpfs="/counterlab-runtime:rw,noexec,nosuid,nodev,size=256m,uid=${HOST_UID},gid=${HOST_GID},mode=0700" \
+  --tmpfs=/counterlab-runtime:rw,noexec,nosuid,nodev,size=256m,uid=10001,gid=10001,mode=0700 \
   --env=TMPDIR=/counterlab-runtime \
   --mount "type=bind,src=${ROOT_DIR}/scripts/probe_cpython_htmlparser_reachability.py,dst=/repo/scripts/probe_cpython_htmlparser_reachability.py,readonly" \
   --mount "type=bind,src=${ROOT_DIR}/fixtures/public,dst=/repo/fixtures/public,readonly" \
