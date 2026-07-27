@@ -115,8 +115,11 @@ def test_rewrites_only_reviewed_runtime_metadata() -> None:
     assert members["usr/share/data.txt"].mode == 0o444
     assert members["opt/counterlab"].mode == 0o555
     assert members["opt/counterlab/landlock_launcher.py"].mode == 0o555
-    assert members["repo"].mode == 0o550
+    assert members["repo"].mode == 0o551
     assert members["repo"].gid == 10001
+    assert members["repo/scripts"].mode == 0o551
+    assert members["repo/fixtures"].mode == 0o551
+    assert members["repo/fixtures/public"].mode == 0o551
     assert members["repo/scripts/verify.py"].mode == 0o440
     assert members["repo/scripts/verify.py"].gid == 10001
     for mount_target in (

@@ -231,7 +231,7 @@ def _normalized_identity(
         return (
             0,
             RUNNER_GID,
-            _mode_for(member, directory=0o550, regular=0o440),
+            _mode_for(member, directory=0o551, regular=0o440),
             "root",
             "counterlab-runner",
         )
