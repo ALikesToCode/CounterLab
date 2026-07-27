@@ -6207,6 +6207,121 @@ unqualified live path.
 The release remains **NO-GO for Live** until the exact Container returns the
 full verified readiness identity and production browser qualification passes.
 
+## Qualified public release and live credential diagnosis — 2026-07-27T21:22:00Z
+
+### Exact active production tuple
+
+- Public origin:
+  `https://counterlab.cserules.workers.dev`.
+- Active Worker version:
+  `edda5283-5cc2-4a3c-ae08-1295d3c242fc`.
+- Worker evidence commit:
+  `c93999dff8b57618cef61a57ed94ccfff6296f75`.
+- Runner source commit:
+  `486a446e6587cd4e36d92af56f5f8eaca014dd0d`.
+- Container application:
+  `a037636c-0c63-420b-af14-3497c2c8b6a3`, version 45.
+- Container image digest:
+  `sha256:c61ad465ac203d43008229caf98791423b6ad7c2fae8d197cd3ed4241e02c469`.
+- Deployment receipt:
+  `node_modules/.cache/counterlab-v6.1/releases/worker-c93999dff8b57618cef61a57ed94ccfff6296f75-runner-486a446e6587-20260727T202015Z-1131277/deployment-receipt.json`.
+
+This exact tuple is active at 100% traffic. Five consecutive `/ready` and
+cache-busted `/api/health?readiness=probe` observations matched the Worker
+version, source commit, maintenance-disabled state, ready capability status,
+and `OS_ENFORCED` generation filesystem isolation.
+
+### Qualification completed before deployment
+
+- Root Vitest: **80 files, 884 passed, 2 skipped**.
+- Web Vitest: **86 files, 772 passed**.
+- Python kernel tests: **346 passed**.
+- Repository, web, and Worker TypeScript: **passed**.
+- Remote D1 migrations: **9/9 applied**.
+- Headless CloakBrowser qualification: **32 passed, 8 expected
+  admission-mode skips**.
+- Entity-leakage mutations: **14/14 detected**.
+- Class-imbalance mutations: **19/19 detected**.
+- Held-out intake/routing: **10/10 passed**.
+- Fixed held-out loops: **7 passed**, followed by the expected
+  runner-enforcement rejection.
+- Production build, fixed scientific isolation, exact-image checks, and the
+  **1,502-file** secret scan: **passed**.
+
+### Direct public browser evidence after activation
+
+- Public asset integrity: **1/1 targeted test passed** after canonicalizing the
+  aggregate manifest key order. Every individual public asset hash, size,
+  security header, and public-secret check matched before that test-only
+  correction.
+- Judge Mode release surface: **1/1 targeted test passed** after the test began
+  asserting the rendered post-probe readiness outcome instead of a stale
+  one-shot request.
+- Verified Sample journey: **1/1 Playwright case passed in 30.2 seconds** with
+  37 assertions, zero console errors, zero unexpected HTTP responses, and zero
+  failed requests.
+- Verified Replay journey: **1/1 Playwright case passed in 4.2 seconds** with
+  10 assertions, zero console errors, zero unexpected HTTP responses, and zero
+  failed requests.
+- The Sample and Replay commands ran as targeted subsets. Their raw
+  qualification reporters correctly recorded `FAILED` because a one-test
+  subset cannot satisfy the exact complete journey registry. The individual
+  Playwright cases passed; these subset runs are not represented as a second
+  full qualification pass.
+- Evidence is under
+  `apps/web/test-results/runtime/production-postdeploy-final/`.
+
+### Live notebook result
+
+- The live readiness probe passed before each run: GPT analyst, Runtime Codex,
+  fixed kernel, signing, D1, R2, release binding, process boundary, and
+  `OS_ENFORCED` filesystem isolation were all configured.
+- The untouched entity-leakage journey reached the real GPT-generated Model
+  Duel, sealed Prediction, and hosted runner. The runner then failed with
+  `CODEX_TURN_FAILED`.
+- The untouched class-imbalance journey reached the hosted runner. Two compile
+  attempts failed with `CODEX_TURN_FAILED`; a third job remained in `STARTING`
+  with no runner event through the browser test's verification window.
+- Read-only remote D1 inspection confirmed the public runner error message:
+  `Codex App Server could not complete the bounded Plan job.` No fixed-kernel
+  result, patch, Proof Capsule, or live replay was released.
+- The entity-leakage cancellation negative control raced with the failed
+  callback and returned HTTP 409 `ILLEGAL_TRANSITION`. Source commit
+  `83fcd7b` adds a bounded retry for active job-version races; **22/22 focused
+  runner tests** and repository TypeScript pass. That repair is pushed but is
+  not part of the active production tuple.
+- The repository `CODEX_AUTH_JSON` bundle used for the hosted credential
+  refresh expired at `2026-07-27T16:47:41Z`. The production failures occurred
+  after that time. A repository-contained Codex API-key login bundle was also
+  tested, but the key is not valid against the direct OpenAI endpoint. No key
+  or token was printed, committed, or added to browser-visible state.
+
+### Post-deployment source-only commits
+
+- `0367157` — canonical public asset evidence.
+- `2f304c4` — rendered Judge readiness assertion.
+- `7860ae5` — explicit live readiness probing in production tests.
+- `f4d32ca` — current Model Duel accessible-name locator.
+- `83fcd7b` — bounded runner cancellation conflict retry.
+
+These commits are pushed on `feat/learner-ux-v6.1`. They do not change the
+active qualified product bytes, whose exact source remains
+`486a446e6587cd4e36d92af56f5f8eaca014dd0d`. `main` remains untouched.
+
+### Current release truth
+
+- Sample, Replay, Judge Mode, public asset integrity, and exact readiness have
+  current public browser evidence.
+- Live notebook authority is **NO-GO** because the deployed Runtime Codex
+  credential path cannot currently complete a Plan turn. Health readiness
+  proves the configured isolation/capability boundary; it does not prove a
+  successful model turn.
+- Learner-outcome evidence remains `NO_DATA`. No result or learner claim is
+  inferred from the technical browser runs.
+- Do not deploy the post-release source commits until a non-expiring,
+  server-side Runtime Codex credential succeeds in a contained compatibility
+  test and the complete exact source/image qualification is regenerated.
+
 ## Exact privilege-separation stage diagnosis — 2026-07-27T18:16:00Z
 
 ### Completed
@@ -6260,3 +6375,10 @@ full verified readiness identity and production browser qualification passes.
 
 The release remains **NO-GO for Live** until the exact Container returns the
 full verified readiness identity and production browser qualification passes.
+
+## Current status pointer — 2026-07-27T21:22:00Z
+
+The qualified public release and live credential diagnosis above supersedes
+the historical maintenance and startup entries. The exact Worker is active,
+Sample and Replay pass, and Live remains **NO-GO** because Runtime Codex Plan
+turns fail after the deployed credential expiry.
