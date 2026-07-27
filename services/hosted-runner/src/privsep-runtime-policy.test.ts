@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   enforcePrivsepScratchPolicy,
+  enforcePrivsepStateRootPolicy,
   type PrivsepScratchPolicyOperations,
+  type PrivsepStateRootPolicyOperations,
 } from "./privsep-runtime-policy.js";
 
 function metadata({
@@ -50,6 +52,20 @@ function operations(
     changeOwner,
     changeMode,
   } satisfies PrivsepScratchPolicyOperations;
+}
+
+function stateRootOperations(
+  observed: ReturnType<typeof metadata>[],
+  calls: string[] = [],
+) {
+  const base = operations(observed, calls);
+  const createDirectory = vi.fn(async () => {
+    calls.push("create");
+  });
+  return {
+    ...base,
+    createDirectory,
+  } satisfies PrivsepStateRootPolicyOperations;
 }
 
 describe("privsep scratch policy", () => {
@@ -104,6 +120,69 @@ describe("privsep scratch policy", () => {
 
     await expect(enforcePrivsepScratchPolicy(fs)).rejects.toThrow(
       "scratch policy did not reach root:root 0555",
+    );
+  });
+});
+
+describe("privsep state-root policy", () => {
+  it("repairs a fresh runtime mount before credential staging", async () => {
+    const calls: string[] = [];
+    const fs = stateRootOperations(
+      [
+        metadata({ uid: 0, gid: 0, mode: 0o710 }),
+        metadata({ uid: 0, gid: 10_002, mode: 0o710 }),
+      ],
+      calls,
+    );
+
+    await expect(enforcePrivsepStateRootPolicy(fs)).resolves.toBeUndefined();
+
+    expect(calls).toEqual(["create", "read", "owner", "mode", "read"]);
+    expect(fs.createDirectory).toHaveBeenCalledExactlyOnceWith(
+      "/run/counterlab-codex",
+      0o710,
+    );
+    expect(fs.changeOwner).toHaveBeenCalledExactlyOnceWith(
+      "/run/counterlab-codex",
+      0,
+      10_002,
+    );
+    expect(fs.changeMode).toHaveBeenCalledExactlyOnceWith(
+      "/run/counterlab-codex",
+      0o710,
+    );
+  });
+
+  it("accepts an existing generator-traversable state root", async () => {
+    const fs = stateRootOperations([
+      metadata({ uid: 0, gid: 10_002, mode: 0o710 }),
+    ]);
+
+    await expect(enforcePrivsepStateRootPolicy(fs)).resolves.toBeUndefined();
+
+    expect(fs.createDirectory).toHaveBeenCalledOnce();
+    expect(fs.changeOwner).not.toHaveBeenCalled();
+    expect(fs.changeMode).not.toHaveBeenCalled();
+  });
+
+  it("fails before changing a state root that is not a direct directory", async () => {
+    const fs = stateRootOperations([metadata({ symlink: true })]);
+
+    await expect(enforcePrivsepStateRootPolicy(fs)).rejects.toThrow(
+      "state root must be a direct directory",
+    );
+    expect(fs.changeOwner).not.toHaveBeenCalled();
+    expect(fs.changeMode).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the runtime does not preserve the state-root policy", async () => {
+    const fs = stateRootOperations([
+      metadata({ uid: 0, gid: 0, mode: 0o710 }),
+      metadata({ uid: 0, gid: 0, mode: 0o710 }),
+    ]);
+
+    await expect(enforcePrivsepStateRootPolicy(fs)).rejects.toThrow(
+      "state root policy did not reach root:counterlab-generator 0710",
     );
   });
 });
