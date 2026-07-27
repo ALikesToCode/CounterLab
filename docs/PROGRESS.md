@@ -6229,7 +6229,9 @@ full verified readiness identity and production browser qualification passes.
 This exact tuple is active at 100% traffic. Five consecutive `/ready` and
 cache-busted `/api/health?readiness=probe` observations matched the Worker
 version, source commit, maintenance-disabled state, ready capability status,
-and `OS_ENFORCED` generation filesystem isolation.
+and `OS_ENFORCED` generation filesystem isolation. A later cold probe returned
+one transient `not-ready/PARTIAL` response; an immediate `/ready` check and
+three consecutive health probes then returned the exact ready tuple again.
 
 ### Qualification completed before deployment
 
