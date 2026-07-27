@@ -208,41 +208,43 @@ describe("HttpRunnerDispatcher", () => {
     );
   });
 
-  it("reports only a bounded startup reason from a failed runner response", async () => {
-    const report = vi.spyOn(console, "error").mockImplementation(() => {});
-    const dispatcher = new CloudflareContainerRunnerDispatcher(
-      {
-        getByName: () => ({
-          startAndWaitForPorts: vi.fn(async () => undefined),
-          fetch: vi.fn(
-            async () =>
-              new Response(
-                JSON.stringify({
-                  status: "not-ready",
-                  service: "counterlab-hosted-runner",
-                  reason: "LANDLOCK_ABI_UNAVAILABLE",
-                }),
-                { status: 503 },
-              ),
-          ),
-        }),
-      },
-      {},
-      runnerReleaseIdentity,
-    );
+  it.each(["LANDLOCK_ABI_UNAVAILABLE", "PRIVSEP_PROBE_FAILED"])(
+    "reports only the bounded %s startup reason from a failed runner response",
+    async (reason) => {
+      const report = vi.spyOn(console, "error").mockImplementation(() => {});
+      const dispatcher = new CloudflareContainerRunnerDispatcher(
+        {
+          getByName: () => ({
+            startAndWaitForPorts: vi.fn(async () => undefined),
+            fetch: vi.fn(
+              async () =>
+                new Response(
+                  JSON.stringify({
+                    status: "not-ready",
+                    service: "counterlab-hosted-runner",
+                    reason,
+                  }),
+                  { status: 503 },
+                ),
+            ),
+          }),
+        },
+        {},
+        runnerReleaseIdentity,
+      );
 
-    await expect(dispatcher.ready()).resolves.toBe(false);
-    expect(report).toHaveBeenCalledWith(
-      "CounterLab Container runner readiness failed",
-      expect.objectContaining({
-        message:
-          "Runner readiness response failed: http-status-503:LANDLOCK_ABI_UNAVAILABLE",
-        phase: "container-response",
-      }),
-    );
-    expect(JSON.stringify(report.mock.calls)).not.toContain("private-token");
-    expect(JSON.stringify(report.mock.calls)).not.toContain("private-value");
-  });
+      await expect(dispatcher.ready()).resolves.toBe(false);
+      expect(report).toHaveBeenCalledWith(
+        "CounterLab Container runner readiness failed",
+        expect.objectContaining({
+          message: `Runner readiness response failed: http-status-503:${reason}`,
+          phase: "container-response",
+        }),
+      );
+      expect(JSON.stringify(report.mock.calls)).not.toContain("private-token");
+      expect(JSON.stringify(report.mock.calls)).not.toContain("private-value");
+    },
+  );
 
   it("rejects additional fields in a failed runner readiness response", async () => {
     const report = vi.spyOn(console, "error").mockImplementation(() => {});
