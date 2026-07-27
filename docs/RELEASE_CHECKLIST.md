@@ -508,8 +508,11 @@ after the final source freeze.
       `The container is not running, consider calling start()`.
 - [x] Confirm the readiness Container instance became inactive before port
       8080 was ready, then restore the single maintenance Worker at 100%.
-- [ ] Add bounded hosted-runner startup failure observability that releases no
+- [x] Add bounded hosted-runner startup failure observability that releases no
       job or result and exposes only a fixed sanitized reason code.
+- [x] Keep Container liveness separate from scientific readiness: `/live`
+      returns only process liveness, while `/ready` and every job route remain
+      fail-closed until the exact startup gates pass.
 - [ ] Build and qualify a new exact Container/source/evidence tuple after that
       observability change; do not reuse the current receipt.
 - [ ] Resolve the reported startup reason, rerun the complete exact-image

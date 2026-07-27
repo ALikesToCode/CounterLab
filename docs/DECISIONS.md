@@ -889,3 +889,20 @@ New sessions receive a separate 256-bit owner key.
 - Revealing the fixed Sample Boundary Map does not count as the learner's
   classification, but it must not make classification impossible. Keep the map
   visible and allow a later verified-cell classification to unlock Apply.
+
+## 2026-07-27 — Separate Container liveness from scientific readiness
+
+- Bind the hosted-runner HTTP listener before lengthy startup verification so
+  Cloudflare can distinguish a live process from a failed process start.
+- Use `/live` only for Container lifecycle health. It never indicates release
+  identity, isolation, model availability, verification, or scientific
+  authority.
+- Keep `/ready`, job dispatch, and cancellation fail-closed until startup
+  probe, bounded credentials, exact release identity, and isolation health all
+  pass.
+- Expose only fixed allowlisted startup reason codes through an exact internal
+  HTTP 503 payload. Do not expose error causes, paths, credential material, or
+  arbitrary runtime messages.
+- Requalify the complete source/image/evidence tuple whenever this boundary
+  changes. A locally passing bootstrap test does not qualify the hosted
+  Container.

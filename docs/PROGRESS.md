@@ -6051,3 +6051,50 @@ unqualified live path.
   fail-closed result while returning a sanitized startup reason through the
   internal runner `/ready` response. Rebuild and requalify the exact Container
   before any attempt to enable Live.
+
+## Fail-closed hosted-runner startup boundary — 2026-07-27T08:54:04Z
+
+### Completed
+
+- Committed and pushed `009b909` (`fix(runner): expose fail-closed startup
+  readiness`) on `feat/learner-ux-v6.1`.
+- The Container now binds one bootstrap listener before lengthy startup checks.
+  `/live` reports process liveness only; `/ready`, job dispatch, and
+  cancellation remain HTTP 503 until startup verification completes.
+- Successful verification activates the existing authenticated request handler
+  on the same listener. A failed startup keeps the listener fail-closed and
+  returns only an allowlisted reason code.
+- The Worker Container health check now uses `/live`. Internal readiness accepts
+  a diagnostic reason only from an exact three-field HTTP 503 response and
+  never turns that response into live authority.
+- The code-review dependency graph identified a wide runner/control-plane blast
+  radius. Verification therefore covered the complete hosted-runner and web
+  suites in addition to the focused failure-boundary tests.
+
+### Exact verification
+
+- Hosted-runner startup/server focus: **11/11 passed**.
+- Complete hosted-runner Vitest: **56 passed, 2 skipped**.
+- Focused Worker runner tests: **33/33 passed**.
+- Complete web Vitest: **86 files, 769/769 passed**.
+- Hosted-runner, Worker, and repository TypeScript checks: **passed**.
+- Production Vite/Worker build: **passed**.
+- Scoped Prettier, Git whitespace, source secret scan, and built Worker/client
+  secret scan: **passed**.
+- Largest changed hand-written source file is 648 lines; no changed source file
+  exceeds 1,000 lines.
+
+### Current release truth and next actions
+
+- Production remains on maintenance Worker
+  `bd82e08d-83b3-4a1d-8a5b-28367885feec`. This source change has not been
+  built into or exercised by a Cloudflare Container and is not a production
+  readiness claim.
+- The previous source/image/evidence tuple is stale because the Container and
+  Worker source changed. It must not be reused.
+- Next: freeze `009b909`, build one exact runner image, regenerate all
+  source/image-bound evidence, pass the genuine containment and release gates,
+  then probe the exact version for the fixed startup reason.
+- Live remains **NO-GO** until the exact Container returns the full verified
+  readiness identity, production smoke passes, and the supported live notebook
+  journey completes through CloakBrowser.
