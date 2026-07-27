@@ -304,9 +304,7 @@ function imageFixture(command: string[]) {
       diff_ids: [`sha256:${"3".repeat(64)}`],
     },
     config: {
-      User: commandImage.includes("counterlab-adapter")
-        ? "65532:65532"
-        : "0:0",
+      User: commandImage.includes("counterlab-adapter") ? "65532:65532" : "0:0",
       Env: ["PATH=/usr/local/bin:/usr/bin:/bin"],
       Entrypoint: commandImage.includes("counterlab-adapter")
         ? ["python", "/opt/counterlab/harness.py"]
@@ -2317,6 +2315,18 @@ describe("contained runtime command policy", () => {
         "CAP_SETUID",
       ],
     });
+    const omittedEmptyCapabilities = structuredClone(original);
+    delete omittedEmptyCapabilities.process.capabilities.ambient;
+    delete omittedEmptyCapabilities.process.capabilities.inheritable;
+    const normalizedOmittedCapabilities = sanitizeContainedRootlessSpec({
+      containerId,
+      expected,
+      metadataSha256: "3".repeat(64),
+      source: JSON.stringify(omittedEmptyCapabilities),
+    });
+    expect(
+      JSON.parse(normalizedOmittedCapabilities.config).process.capabilities,
+    ).toEqual(sanitized.process.capabilities);
     expect(sanitized.root.readonly).toBe(true);
     expect(sanitized.root.path).toBe(
       resolve(sessionRoot, `run/rootless-specs/${invocationId}.image-rootfs`),

@@ -398,15 +398,13 @@ function assertPrivilegeBrokerCapabilities(processSpec) {
     "inheritable",
     "permitted",
   ];
+  const requiredFields = ["bounding", "effective", "permitted"];
   assertKnownKeys(
     capabilities,
     new Set(expectedFields),
     "process capability fields",
   );
-  if (
-    JSON.stringify(Object.keys(capabilities).sort()) !==
-    JSON.stringify(expectedFields)
-  ) {
+  if (requiredFields.some((field) => !Object.hasOwn(capabilities, field))) {
     throw new Error(
       "contained rootless OCI spec privilege broker capability fields changed",
     );
@@ -419,6 +417,7 @@ function assertPrivilegeBrokerCapabilities(processSpec) {
     }
   }
   for (const field of ["ambient", "inheritable"]) {
+    if (!Object.hasOwn(capabilities, field)) continue;
     if (
       !Array.isArray(capabilities[field]) ||
       capabilities[field].length !== 0
