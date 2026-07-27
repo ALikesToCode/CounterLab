@@ -132,6 +132,13 @@ RUN chmod -R a+rX /opt/codex \
         /repo/scripts/probe_cpython_htmlparser_reachability.py \
     && chown -R root:counterlab-runner /repo \
     && chmod -R u=rX,g=rX,o= /repo \
+    && chmod 0551 \
+        /repo \
+        /repo/scripts \
+        /repo/scientific-engines \
+        /repo/fixtures \
+        /repo/fixtures/public \
+        /repo/fixtures/notebooks \
     && chown -R root:counterlab-runner /opt/counterlab-venv /opt/counterlab-wheelhouse \
     && chmod -R u=rX,g=rX,o= /opt/counterlab-venv /opt/counterlab-wheelhouse \
     && chown -R root:counterlab-generator /opt/codex \
