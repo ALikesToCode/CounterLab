@@ -6151,3 +6151,58 @@ unqualified live path.
 - Production Sample and Replay remain maintenance-protected during this
   repair. A public Live claim, production browser qualification, submission
   receipt, learner outcome, and `main` merge remain unclaimed.
+
+## Exact read-only-scratch release and guarded rollback — 2026-07-27T17:16:21Z
+
+### Completed
+
+- Built source `bc916384b404dd1e9af19126d2c5a76c5ff2589f` into runner
+  config digest
+  `sha256:74f9d4d75403dbb05071e8524facd323cf3f77b9ca82e29140e84f5b6686e66e`
+  and OCI manifest
+  `sha256:28d8de5bc3ea78194c743675c7269e8a6987deccdefb3ed1e0651f498c680a47`.
+  Evidence-only commit `cacba60f746cd848df080cdeed1973940600a16f`
+  binds the exact source and image receipts.
+- The genuine timeout-containment sentinel passed all eight cleanup checks,
+  released no result, and recorded aggregate evidence hash
+  `1e58a96c44b9067829620507269338618810c648dd4c98e8bdf34550488cb517`.
+- Refreshed 32 source-bound scientific evidence files. The scientific
+  authority hash is
+  `9c8ec7b77404bf068fc47a1f1dfc93f81bfda6a32e22efd02c6be1fdb50362e5`.
+- The complete release gate passed: root Vitest **873 passed, 2 skipped**; web
+  Vitest **770 passed**; Pytest **346 passed**; headless CloakBrowser release
+  QA **32 passed, 8 admission-mode skips**; leakage mutations **14/14
+  detected**; imbalance mutations **19/19 detected**; TypeScript, formatting,
+  build, held-out, exact-image, replay, patch-replay, and the **1,501-file**
+  secret scan passed.
+- Cloudflare accepted the exact manifest as Container application version 41.
+  Remote D1 had no pending migrations. Final Worker
+  `71c80a14-4c44-4ec9-aa9c-826a1a4cb81f` was activated only inside the
+  guarded readiness window.
+- All 24 exact final-version readiness checks kept model admission, signing,
+  D1, R2, and release identity green but returned `checks.runner: false`.
+  The guarded deploy restored maintenance Worker
+  `8a25614a-7410-4a37-8696-abbc16002314` at 100% traffic.
+- A version-filtered Worker tail and one cache-busted readiness probe isolated
+  the internal Container response to HTTP 503 reason
+  `PRIVSEP_PROBE_FAILED`. Maintenance was restored immediately after the
+  diagnostic probe. No unready final Worker remains active.
+
+### Current release truth
+
+- Production remains intentionally in maintenance mode. The exact current UI
+  and Container manifest are uploaded, but Live notebook authority is not
+  enabled or claimed.
+- `PRIVSEP_PROBE_FAILED` proves the hosted runner reached its separate-process
+  isolation probe and failed closed. It does not identify which allowlisted
+  probe invariant failed.
+- Production smoke and the public supported-live CloakBrowser journey were not
+  run because full readiness never became green. Sample and Replay retain only
+  their explicitly labelled authority.
+- Next: propagate only the probe's strict allowlisted failure stage through the
+  private runner readiness response, reject unknown or free-form diagnostics,
+  test the boundary, build and qualify the resulting exact tuple, and use one
+  guarded deployment to identify and repair the hosted-only invariant.
+
+The release remains **NO-GO for Live** until the exact Container returns the
+full verified readiness identity and production browser qualification passes.
