@@ -2,9 +2,9 @@
   "schemaVersion": "1",
   "environmentId": "counterlab-runner-linux-amd64-v2",
   "environmentKind": "local_candidate",
-  "generatedAt": "2026-07-27T14:27:31.069Z",
-  "authorityHash": "8038b59a96361035cf4244782a04ee9d352b41f3a068cb9274831f2ad92fc2f7",
-  "snapshotFileSha256": "3000b6602f407c41f4d9a185bbb2fc226fa5537e65d55b094b57cff08deabf3e",
-  "registryHash": "45d715041a731ee4367fac83f88a3ec2d9e3d0e4c804182bce5c8459998b6dfc",
+  "generatedAt": "2026-07-27T14:52:21.617Z",
+  "authorityHash": "1b4288d9b0e6fdbba29e01f3a38a086898ff3e2bb5dc5b61e7722c2ad6d51177",
+  "snapshotFileSha256": "2f401c485e4fd0dcda0837e8069a93897d6d5a808eeddb97fa1964bce45a2db7",
+  "registryHash": "40433b60a63b40b53f4e4d0e961d5803745673728e21e448c005d590cadbd497",
   "bindingsHash": "e74179705d2bc3740d9d6c1b7e46caaa3d2bc81776cb41e9be99e86c74d7b76c"
 }
