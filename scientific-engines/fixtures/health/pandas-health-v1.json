@@ -4,7 +4,7 @@
   "kind": "health_report",
   "engineId": "pandas",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:5e22f545566689a686dc2b5f0ff75b15660dfbec9dff32d31bd5c8dbbe768488",
+  "imageDigest": "sha256:ae8ea68ec1e7f17353d051d508020202e1bd055e27f9cff8ee3cc8ca70327b40",
   "observedVersion": "2.3.3",
   "checks": {
     "import": "PASSED",
