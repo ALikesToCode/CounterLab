@@ -220,7 +220,7 @@ describe("HttpRunnerDispatcher", () => {
                 JSON.stringify({
                   status: "not-ready",
                   service: "counterlab-hosted-runner",
-                  reason: "STARTUP_PROBE_FAILED",
+                  reason: "LANDLOCK_ABI_UNAVAILABLE",
                 }),
                 { status: 503 },
               ),
@@ -236,7 +236,7 @@ describe("HttpRunnerDispatcher", () => {
       "CounterLab Container runner readiness failed",
       expect.objectContaining({
         message:
-          "Runner readiness response failed: http-status-503:STARTUP_PROBE_FAILED",
+          "Runner readiness response failed: http-status-503:LANDLOCK_ABI_UNAVAILABLE",
         phase: "container-response",
       }),
     );

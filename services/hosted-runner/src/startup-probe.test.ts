@@ -201,7 +201,11 @@ describe("hosted runner startup probe", () => {
           throw new Error("not executable");
         },
       }),
-    ).rejects.toThrow("not executable");
+    ).rejects.toMatchObject({
+      message: "Hosted runner startup failed",
+      reason: "CODEX_UNAVAILABLE",
+      cause: expect.objectContaining({ message: "not executable" }),
+    });
   });
 
   it("reports exact immutable-path evidence when namespace mapping changes it", async () => {
@@ -220,9 +224,14 @@ describe("hosted runner startup probe", () => {
         getUid: () => 10_001,
         getGid: () => 10_001,
       }),
-    ).rejects.toThrow(
-      "0555 runtime-root policy; app=directory 65534:65534 555; bundle=file 65534:65534 555",
-    );
+    ).rejects.toMatchObject({
+      reason: "IMMUTABLE_PATHS_INVALID",
+      cause: expect.objectContaining({
+        message: expect.stringContaining(
+          "0555 runtime-root policy; app=directory 65534:65534 555; bundle=file 65534:65534 555",
+        ),
+      }),
+    });
   });
 
   it.each([
@@ -258,9 +267,14 @@ describe("hosted runner startup probe", () => {
         getUid: () => 10_001,
         getGid: () => 10_001,
       }),
-    ).rejects.toThrow(
-      "Hosted runner immutable application paths do not match the 0555 runtime-root policy",
-    );
+    ).rejects.toMatchObject({
+      reason: "IMMUTABLE_PATHS_INVALID",
+      cause: expect.objectContaining({
+        message: expect.stringContaining(
+          "Hosted runner immutable application paths do not match the 0555 runtime-root policy",
+        ),
+      }),
+    });
   });
 
   it.each([
@@ -314,7 +328,9 @@ describe("hosted runner startup probe", () => {
           return invocation === 5 ? probeResult : { stdout: "" };
         },
       }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      reason: "LANDLOCK_PROBE_FAILED",
+    });
   });
 
   it("rejects an unavailable Landlock ABI", () => {
@@ -332,8 +348,12 @@ describe("hosted runner startup probe", () => {
         getUid: () => 0,
         getGid: () => 0,
       }),
-    ).rejects.toThrow(
-      "Hosted runner startup probe requires uid/gid 10001:10001; observed 0:0",
-    );
+    ).rejects.toMatchObject({
+      reason: "PROCESS_IDENTITY_INVALID",
+      cause: expect.objectContaining({
+        message:
+          "Hosted runner startup probe requires uid/gid 10001:10001; observed 0:0",
+      }),
+    });
   });
 });

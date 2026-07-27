@@ -9,6 +9,7 @@ import { canonicalJson } from "@counterlab/session-core";
 import { z } from "zod";
 
 import { buildContainerLandlockProbe } from "./launch-boundary.js";
+import { runHostedRunnerStartupStage } from "./startup-failure.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -156,61 +157,71 @@ export async function runHostedRunnerStartupProbe(
     "/opt/counterlab-venv/bin/python";
   const probeWorkspace = join(workspaceRoot, ".isolation-probe");
 
-  if (uid !== 10001 || gid !== 10001) {
-    throw new Error(
-      `Hosted runner startup probe requires uid/gid 10001:10001; observed ${String(uid)}:${String(gid)}`,
-    );
-  }
-  const [appMetadata, bundleMetadata] = await Promise.all([
-    readMetadata(appRoot),
-    readMetadata(bundlePath),
-  ]);
-  const rootOwned =
-    appMetadata.uid === 0 &&
-    appMetadata.gid === 0 &&
-    bundleMetadata.uid === 0 &&
-    bundleMetadata.gid === 0;
-  const runtimeRootOwned =
-    appMetadata.uid === uid &&
-    appMetadata.gid === gid &&
-    bundleMetadata.uid === uid &&
-    bundleMetadata.gid === gid;
-  if (
-    !appMetadata.isDirectory() ||
-    (appMetadata.mode & 0o777) !== 0o555 ||
-    !bundleMetadata.isFile() ||
-    (bundleMetadata.mode & 0o777) !== 0o555 ||
-    (!rootOwned && !runtimeRootOwned)
-  ) {
-    throw new Error(
-      [
-        "Hosted runner immutable application paths do not match the 0555 runtime-root policy",
-        `app=${appMetadata.isDirectory() ? "directory" : "other"} ${appMetadata.uid}:${appMetadata.gid} ${(appMetadata.mode & 0o777).toString(8).padStart(3, "0")}`,
-        `bundle=${bundleMetadata.isFile() ? "file" : "other"} ${bundleMetadata.uid}:${bundleMetadata.gid} ${(bundleMetadata.mode & 0o777).toString(8).padStart(3, "0")}`,
-      ].join("; "),
-    );
-  }
+  await runHostedRunnerStartupStage("PROCESS_IDENTITY_INVALID", async () => {
+    if (uid !== 10001 || gid !== 10001) {
+      throw new Error(
+        `Hosted runner startup probe requires uid/gid 10001:10001; observed ${String(uid)}:${String(gid)}`,
+      );
+    }
+  });
+  await runHostedRunnerStartupStage("IMMUTABLE_PATHS_INVALID", async () => {
+    const [appMetadata, bundleMetadata] = await Promise.all([
+      readMetadata(appRoot),
+      readMetadata(bundlePath),
+    ]);
+    const rootOwned =
+      appMetadata.uid === 0 &&
+      appMetadata.gid === 0 &&
+      bundleMetadata.uid === 0 &&
+      bundleMetadata.gid === 0;
+    const runtimeRootOwned =
+      appMetadata.uid === uid &&
+      appMetadata.gid === gid &&
+      bundleMetadata.uid === uid &&
+      bundleMetadata.gid === gid;
+    if (
+      !appMetadata.isDirectory() ||
+      (appMetadata.mode & 0o777) !== 0o555 ||
+      !bundleMetadata.isFile() ||
+      (bundleMetadata.mode & 0o777) !== 0o555 ||
+      (!rootOwned && !runtimeRootOwned)
+    ) {
+      throw new Error(
+        [
+          "Hosted runner immutable application paths do not match the 0555 runtime-root policy",
+          `app=${appMetadata.isDirectory() ? "directory" : "other"} ${appMetadata.uid}:${appMetadata.gid} ${(appMetadata.mode & 0o777).toString(8).padStart(3, "0")}`,
+          `bundle=${bundleMetadata.isFile() ? "file" : "other"} ${bundleMetadata.uid}:${bundleMetadata.gid} ${(bundleMetadata.mode & 0o777).toString(8).padStart(3, "0")}`,
+        ].join("; "),
+      );
+    }
+  });
 
-  await Promise.all([
-    accessFile(nodeExecutable, constants.X_OK),
-    accessFile(bundlePath, constants.R_OK),
-    accessFile(codexExecutable, constants.X_OK),
-    accessFile(codexRoot, constants.R_OK | constants.X_OK),
-    accessFile(landlockLauncher, constants.R_OK),
-    accessFile(setprivExecutable, constants.X_OK),
-    accessFile(pythonExecutable, constants.X_OK),
-    makeDirectory(workspaceRoot, { recursive: true, mode: 0o700 }),
-    makeDirectory(codexHomeRoot, { recursive: true, mode: 0o700 }),
-    makeDirectory(probeWorkspace, { recursive: true, mode: 0o700 }),
-    makeDirectory(join(probeWorkspace, ".counterlab-codex"), {
-      recursive: true,
-      mode: 0o700,
-    }),
-  ]);
-  await writeProbeFile(join(probeWorkspace, "approved.txt"), "approved\n", {
-    encoding: "utf8",
-    flag: "w",
-    mode: 0o600,
+  await runHostedRunnerStartupStage("RUNTIME_PATHS_INVALID", async () => {
+    await Promise.all([
+      accessFile(nodeExecutable, constants.X_OK),
+      accessFile(bundlePath, constants.R_OK),
+      accessFile(codexExecutable, constants.X_OK),
+      accessFile(codexRoot, constants.R_OK | constants.X_OK),
+      accessFile(landlockLauncher, constants.R_OK),
+      accessFile(setprivExecutable, constants.X_OK),
+      accessFile(pythonExecutable, constants.X_OK),
+    ]);
+  });
+  await runHostedRunnerStartupStage("WRITABLE_ROOTS_INVALID", async () => {
+    await Promise.all([
+      makeDirectory(workspaceRoot, { recursive: true, mode: 0o700 }),
+      makeDirectory(codexHomeRoot, { recursive: true, mode: 0o700 }),
+      makeDirectory(probeWorkspace, { recursive: true, mode: 0o700 }),
+      makeDirectory(join(probeWorkspace, ".counterlab-codex"), {
+        recursive: true,
+        mode: 0o700,
+      }),
+    ]);
+    await writeProbeFile(join(probeWorkspace, "approved.txt"), "approved\n", {
+      encoding: "utf8",
+      flag: "w",
+      mode: 0o600,
+    });
   });
 
   const childEnvironment: NodeJS.ProcessEnv = {
@@ -229,28 +240,40 @@ export async function runHostedRunnerStartupProbe(
     OPENBLAS_NUM_THREADS: "1",
     VECLIB_MAXIMUM_THREADS: "1",
   };
-  await execute(codexExecutable, ["--version"], {
-    env: childEnvironment,
-    timeout: 30_000,
-  });
-  await execute(
-    pythonExecutable,
-    ["-c", "import counterlab_kernel, numpy, pandas, sklearn"],
-    {
+  await runHostedRunnerStartupStage("CODEX_UNAVAILABLE", async () => {
+    await execute(codexExecutable, ["--version"], {
       env: childEnvironment,
       timeout: 30_000,
-    },
-  );
-  await execute(setprivExecutable, ["--version"], {
-    env: childEnvironment,
-    timeout: 30_000,
+    });
   });
-  const landlockStatusExecution = await execute(
-    pythonExecutable,
-    [landlockLauncher, "--print-abi"],
-    {
+  await runHostedRunnerStartupStage("PYTHON_UNAVAILABLE", async () => {
+    await execute(
+      pythonExecutable,
+      ["-c", "import counterlab_kernel, numpy, pandas, sklearn"],
+      {
+        env: childEnvironment,
+        timeout: 30_000,
+      },
+    );
+  });
+  await runHostedRunnerStartupStage("SETPRIV_UNAVAILABLE", async () => {
+    await execute(setprivExecutable, ["--version"], {
       env: childEnvironment,
       timeout: 30_000,
+    });
+  });
+  const landlockStatusOutput = await runHostedRunnerStartupStage(
+    "LANDLOCK_ABI_UNAVAILABLE",
+    async () => {
+      const execution = await execute(
+        pythonExecutable,
+        [landlockLauncher, "--print-abi"],
+        {
+          env: childEnvironment,
+          timeout: 30_000,
+        },
+      );
+      return JSON.parse(readExecutionStdout(execution).trim()) as unknown;
     },
   );
   const isolationProbe = buildContainerLandlockProbe({
@@ -261,32 +284,27 @@ export async function runHostedRunnerStartupProbe(
     setprivExecutable,
     workspace: probeWorkspace,
   });
-  const isolationProbeExecution = await execute(
-    isolationProbe.command,
-    isolationProbe.args,
-    {
-      env: isolationProbe.environment,
-      timeout: 30_000,
+  const landlockOutput = await runHostedRunnerStartupStage(
+    "LANDLOCK_PROBE_FAILED",
+    async () => {
+      const execution = await execute(
+        isolationProbe.command,
+        isolationProbe.args,
+        {
+          env: isolationProbe.environment,
+          timeout: 30_000,
+        },
+      );
+      return JSON.parse(readExecutionStdout(execution).trim()) as unknown;
     },
   );
-  let landlockOutput: unknown;
-  let landlockStatusOutput: unknown;
-  try {
-    landlockOutput = JSON.parse(
-      readExecutionStdout(isolationProbeExecution).trim(),
-    ) as unknown;
-    landlockStatusOutput = JSON.parse(
-      readExecutionStdout(landlockStatusExecution).trim(),
-    ) as unknown;
-  } catch (error) {
-    throw new Error(
-      "Hosted runner Landlock probe returned invalid JSON evidence",
-      { cause: error },
-    );
-  }
-  const generationIsolationProbe = createGenerationIsolationProbePayload(
-    landlockOutput,
-    landlockStatusOutput,
+  const generationIsolationProbe = await runHostedRunnerStartupStage(
+    "LANDLOCK_PROBE_FAILED",
+    async () =>
+      createGenerationIsolationProbePayload(
+        landlockOutput,
+        landlockStatusOutput,
+      ),
   );
 
   return {
