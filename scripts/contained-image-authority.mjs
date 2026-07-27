@@ -806,23 +806,81 @@ function requestedTmpfs(args, end) {
       .slice(separator + 1)
       .split(",")
       .sort();
+    const exactOptions = {
+      "/tmp": [
+        "rw",
+        "noexec",
+        "nosuid",
+        "nodev",
+        "size=16m",
+        "uid=65532",
+        "gid=65532",
+        "mode=0700",
+      ],
+      "/work/jobs": [
+        "rw",
+        "noexec",
+        "nosuid",
+        "nodev",
+        "size=64m",
+        "uid=10001",
+        "gid=10002",
+        "mode=2710",
+      ],
+      "/run/counterlab-codex": [
+        "rw",
+        "noexec",
+        "nosuid",
+        "nodev",
+        "size=32m",
+        "uid=0",
+        "gid=10002",
+        "mode=0710",
+      ],
+      "/run/counterlab-privsep": [
+        "rw",
+        "noexec",
+        "nosuid",
+        "nodev",
+        "size=4m",
+        "uid=0",
+        "gid=10001",
+        "mode=0750",
+      ],
+    };
+    const expected = exactOptions[destination];
+    const runtimeRootOptions =
+      destination === "/counterlab-runtime" &&
+      options.length === 8 &&
+      options.includes("rw") &&
+      options.includes("noexec") &&
+      options.includes("nosuid") &&
+      options.includes("nodev") &&
+      options.some((entry) => /^size=(?:64|256)m$/.test(entry)) &&
+      options.some((entry) => /^uid=\d{1,6}$/.test(entry)) &&
+      options.some((entry) => /^gid=\d{1,6}$/.test(entry)) &&
+      options.includes("mode=0700");
     if (
-      !["/tmp", "/counterlab-runtime"].includes(destination) ||
-      !options.includes("rw") ||
-      !options.includes("noexec") ||
-      !options.includes("nosuid") ||
-      !options.includes("nodev") ||
-      !options.some((entry) => /^size=(?:16|64|256)m$/.test(entry)) ||
-      !options.some((entry) => /^uid=\d{1,6}$/.test(entry)) ||
-      !options.some((entry) => /^gid=\d{1,6}$/.test(entry)) ||
-      !options.includes("mode=0700")
+      new Set(options).size !== options.length ||
+      (!runtimeRootOptions &&
+        (expected === undefined ||
+          JSON.stringify(options) !== JSON.stringify([...expected].sort())))
     ) {
       throw new Error("contained image authority tmpfs policy is invalid");
     }
     return { destination, options };
   });
-  if (entries.length !== 1) {
-    throw new Error("contained image authority requires one tmpfs");
+  const destinations = entries.map((entry) => entry.destination).sort();
+  const singleRoot =
+    destinations.length === 1 &&
+    ["/tmp", "/counterlab-runtime"].includes(destinations[0]);
+  const brokerRoots =
+    JSON.stringify(destinations) ===
+    JSON.stringify(
+      ["/work/jobs", "/run/counterlab-codex", "/run/counterlab-privsep"].sort(),
+    );
+  if (!singleRoot && !brokerRoots) {
+    throw new Error("contained image authority tmpfs set is invalid");
   }
   return entries;
 }

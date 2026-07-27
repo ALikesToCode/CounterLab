@@ -227,6 +227,10 @@ function validateRun(runArgs) {
     "--read-only",
     "--pull=never",
     "--cap-drop=ALL",
+    "--cap-add=CHOWN",
+    "--cap-add=FOWNER",
+    "--cap-add=SETGID",
+    "--cap-add=SETUID",
     "--ipc=private",
   ]);
 
@@ -271,7 +275,9 @@ function validateRun(runArgs) {
       if (option === "-e" || option === "--env") environment.push(value);
       if (
         option === "--tmpfs" &&
-        !/^\/(?:tmp|counterlab-runtime):/.test(value)
+        !/^\/(?:tmp|counterlab-runtime|work\/jobs|run\/counterlab-(?:codex|privsep)):/.test(
+          value,
+        )
       ) {
         fail("tmpfs destination is not approved");
       }
@@ -316,19 +322,17 @@ function validateRun(runArgs) {
       "--memory-swap": 1,
       "--cpus": 1,
       "--ulimit": 4,
-      "--tmpfs": 1,
-      "--env": 4,
+      "--tmpfs": 3,
+      "--env": 1,
     });
     if (
       command.length !== 0 ||
-      !sameValues(environment, [
-        "TMPDIR=/counterlab-runtime",
-        "COUNTERLAB_RUNNER_STARTUP_PROBE=1",
-        "COUNTERLAB_RUNNER_WORK_ROOT=/counterlab-runtime/jobs",
-        "COUNTERLAB_CODEX_HOME_ROOT=/counterlab-runtime/codex",
+      !sameValues(environment, ["COUNTERLAB_RUNNER_STARTUP_PROBE=1"]) ||
+      !sameValues(options.get("--tmpfs") ?? [], [
+        "/work/jobs:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10002,mode=2710",
+        "/run/counterlab-codex:rw,noexec,nosuid,nodev,size=32m,uid=0,gid=10002,mode=0710",
+        "/run/counterlab-privsep:rw,noexec,nosuid,nodev,size=4m,uid=0,gid=10001,mode=0750",
       ]) ||
-      options.get("--tmpfs")?.[0] !==
-        "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700" ||
       options.get("--security-opt")?.[0] !== "no-new-privileges=true" ||
       options.get("--pids-limit")?.[0] !== "32" ||
       options.get("--memory")?.[0] !== "4096m" ||
@@ -345,6 +349,10 @@ function validateRun(runArgs) {
         "--read-only",
         "--pull=never",
         "--cap-drop=ALL",
+        "--cap-add=CHOWN",
+        "--cap-add=FOWNER",
+        "--cap-add=SETGID",
+        "--cap-add=SETUID",
         "--ipc=private",
       ])
     ) {

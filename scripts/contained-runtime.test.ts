@@ -99,6 +99,10 @@ function startupCommand(): string[] {
     "none",
     "--read-only",
     "--cap-drop=ALL",
+    "--cap-add=CHOWN",
+    "--cap-add=FOWNER",
+    "--cap-add=SETGID",
+    "--cap-add=SETUID",
     "--security-opt=no-new-privileges=true",
     "--ipc=private",
     "--pids-limit=32",
@@ -110,15 +114,13 @@ function startupCommand(): string[] {
     "--ulimit=fsize=1048576:1048576",
     "--ulimit=nofile=64:64",
     "--tmpfs",
-    "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700",
-    "-e",
-    "TMPDIR=/counterlab-runtime",
+    "/work/jobs:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10002,mode=2710",
+    "--tmpfs",
+    "/run/counterlab-codex:rw,noexec,nosuid,nodev,size=32m,uid=0,gid=10002,mode=0710",
+    "--tmpfs",
+    "/run/counterlab-privsep:rw,noexec,nosuid,nodev,size=4m,uid=0,gid=10001,mode=0750",
     "-e",
     "COUNTERLAB_RUNNER_STARTUP_PROBE=1",
-    "-e",
-    "COUNTERLAB_RUNNER_WORK_ROOT=/counterlab-runtime/jobs",
-    "-e",
-    "COUNTERLAB_CODEX_HOME_ROOT=/counterlab-runtime/codex",
     image,
   ];
 }
@@ -1572,6 +1574,37 @@ describe("contained runtime command policy", () => {
     expect(validate(...scientificRuntimeCommand()).status).toBe(0);
     expect(validate(...reachabilityCommand()).status).toBe(0);
     expect(validate(...boundedAdapterCommand()).status).toBe(0);
+  });
+
+  it("rejects startup probes with altered broker capabilities or writable roots", () => {
+    const missingCapability = startupCommand().filter(
+      (argument) => argument !== "--cap-add=SETUID",
+    );
+    const extraCapability = startupCommand();
+    extraCapability.splice(
+      extraCapability.indexOf(image),
+      0,
+      "--cap-add=SYS_ADMIN",
+    );
+    const alteredWorkspace = startupCommand().map((argument) =>
+      argument.startsWith("/work/jobs:")
+        ? argument.replace("gid=10002", "gid=10001")
+        : argument,
+    );
+    const legacyRuntimeRoot = startupCommand().map((argument) =>
+      argument.startsWith("/work/jobs:")
+        ? "/counterlab-runtime:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700"
+        : argument,
+    );
+
+    for (const command of [
+      missingCapability,
+      extraCapability,
+      alteredWorkspace,
+      legacyRuntimeRoot,
+    ]) {
+      expect(validate(...command).status).not.toBe(0);
+    }
   });
 
   it("binds every runner profile to the hosted image address-space limit", () => {
