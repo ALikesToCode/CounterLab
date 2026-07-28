@@ -16,7 +16,7 @@
     "apps/web/src/features/boundary/BoundaryStage.test.tsx": "41464594a1759a2c4bb9bdfdfa9db840121e560c3625d4147005c5ad95ecdea9",
     "apps/web/src/features/boundary/sampleBoundaryFixture.test.ts": "fdee3169af0ca4360a50969722fde148c5b78236df9d5d96d7460c3c1d1c098d",
     "apps/web/src/sample.test.ts": "f314527c8042e72b5d1d6a06ec1bc3963154fc1bdcde4c85a50cc78f579726b5",
-    "apps/web/worker/api.test.ts": "91111007dede87d4e00936e339797c2cee8fd94fd47e402fbaaaa8a96238b1e3",
+    "apps/web/worker/api.test.ts": "57053d800bfd7afda673c5239c30e1c99082237a9fd70cd968674b302234285f",
     "packages/boundary-map/src/index.ts": "c11967a0d97da2e56fc2eb7d4fd87dcdfc7051968450d18b1af601ddb80ca5e1",
     "packages/boundary-map/test/verifier.test.ts": "87b12762a01a03f89389f193144f39997ab5075ab70e87c6574b4504486130d0",
     "packages/codex-client/src/prompts.ts": "01a0e5b46f68cd2e1d53e4f99d518e77fd0bc5af7c886521799f9d06d1b1823b",
