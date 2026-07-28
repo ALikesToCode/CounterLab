@@ -16,7 +16,6 @@ import {
   ExperimentIRPolicyError,
   ExperimentIRV5Schema,
   hashExperimentIR,
-  type ExperimentIRPolicyFindingCode,
 } from "@counterlab/experiment-ir";
 import {
   LabSceneDraftV2Schema,
@@ -36,6 +35,14 @@ import {
   buildRepairHostedPatchPlanPrompt,
   buildRepairHostedScientificMethodPrompt,
 } from "./prompts.js";
+import {
+  buildScientificPolicyRepairPrompt,
+  mismatchedScientificFindingPaths,
+  normalizeScientificFindingPaths,
+  ScientificArtifactValidationError,
+  type ScientificArtifactFindingCode,
+  zodScientificFindingPaths,
+} from "./scientific-repair.js";
 import { redactSecrets, sanitizeAppServerMessage } from "./sanitizer.js";
 import {
   CompileLabInputSchema,
@@ -73,27 +80,6 @@ const PUBLIC_RATIONALE_PATH = "public-rationale.md";
 const DISCRIMINATION_CONTRACT_PATH = "discrimination-contract.json";
 const EXPERIMENT_IR_PATH = "experiment-ir.json";
 const LAB_SCENE_PATH = "lab-scene.json";
-
-type ScientificArtifactFindingCode =
-  | ExperimentIRPolicyFindingCode
-  | "OUTPUT_SCHEMA_INVALID"
-  | "IMMUTABLE_LINEAGE_MISMATCH"
-  | "CANDIDATE_REFERENCE_INVALID"
-  | "LAB_SCENE_INVALID";
-
-class ScientificArtifactValidationError extends Error {
-  readonly findingCode: ScientificArtifactFindingCode;
-
-  constructor(
-    findingCode: ScientificArtifactFindingCode,
-    message: string,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-    this.name = "ScientificArtifactValidationError";
-    this.findingCode = findingCode;
-  }
-}
 
 const StructuredHostedOutputSchema = z
   .object({
@@ -371,7 +357,7 @@ async function materializeStructuredScientificOutput(
     throw new ScientificArtifactValidationError(
       "OUTPUT_SCHEMA_INVALID",
       "Codex did not return schema-constrained scientific artifacts.",
-      { cause: error },
+      { cause: error, findingPaths: ["$"] },
     );
   }
 
@@ -380,7 +366,10 @@ async function materializeStructuredScientificOutput(
     throw new ScientificArtifactValidationError(
       "OUTPUT_SCHEMA_INVALID",
       "Codex scientific output did not match the fixed response envelope.",
-      { cause: envelopeResult.error },
+      {
+        cause: envelopeResult.error,
+        findingPaths: zodScientificFindingPaths(envelopeResult.error, "$"),
+      },
     );
   }
   const artifactsResult = z
@@ -399,50 +388,85 @@ async function materializeStructuredScientificOutput(
     throw new ScientificArtifactValidationError(
       "OUTPUT_SCHEMA_INVALID",
       "Codex scientific artifacts did not match the fixed local schemas.",
-      { cause: artifactsResult.error },
+      {
+        cause: artifactsResult.error,
+        findingPaths: zodScientificFindingPaths(
+          artifactsResult.error,
+          "authoritativeArtifact",
+        ),
+      },
     );
   }
   const envelope = envelopeResult.data;
   const artifacts = artifactsResult.data;
   const beliefSpec = BeliefSpecV2Schema.parse(input.approvedBeliefSpec);
-  if (
-    artifacts.experimentIr.selection.status !== "UNSELECTED" ||
-    artifacts.discriminationContract.sessionId !== input.sessionId ||
-    artifacts.experimentIr.sessionId !== input.sessionId ||
-    artifacts.labScene.sessionId !== input.sessionId ||
-    artifacts.discriminationContract.artifactManifestHash !==
-      input.artifactManifestHash ||
-    artifacts.experimentIr.artifactManifestHash !==
-      input.artifactManifestHash ||
-    artifacts.discriminationContract.beliefSpecId !== beliefSpec.id ||
-    artifacts.experimentIr.beliefSpecId !== beliefSpec.id ||
-    artifacts.discriminationContract.beliefSpecHash !== input.beliefSpecHash ||
-    artifacts.experimentIr.beliefSpecHash !== input.beliefSpecHash ||
-    artifacts.discriminationContract.concept !== beliefSpec.concept ||
-    artifacts.experimentIr.concept !== beliefSpec.concept ||
-    artifacts.labScene.concept !== beliefSpec.concept ||
-    artifacts.discriminationContract.conceptPackVersion !==
-      input.conceptPack.version ||
-    artifacts.experimentIr.conceptPackVersion !== input.conceptPack.version ||
-    artifacts.experimentIr.provenance.kind !== "codex" ||
-    artifacts.experimentIr.provenance.generatorId !==
-      input.provenance.generatorId ||
-    artifacts.experimentIr.provenance.promptHash !==
-      input.provenance.promptHash ||
-    JSON.stringify(artifacts.experimentIr.provenance.inputHashes) !==
-      JSON.stringify(input.provenance.inputHashes) ||
-    artifacts.discriminationContract.hypotheses[0].statement !==
-      beliefSpec.hypotheses[0].statement ||
-    artifacts.discriminationContract.hypotheses[1].statement !==
-      beliefSpec.hypotheses[1].statement ||
-    artifacts.experimentIr.hypotheses[0].statement !==
-      beliefSpec.hypotheses[0].statement ||
-    artifacts.experimentIr.hypotheses[1].statement !==
-      beliefSpec.hypotheses[1].statement
-  ) {
+  const immutableLineageFindingPaths = mismatchedScientificFindingPaths([
+    {
+      path: "experimentIr.selection.status",
+      actual: artifacts.experimentIr.selection.status,
+      expected: "UNSELECTED",
+    },
+    ...(
+      [
+        ["discriminationContract", artifacts.discriminationContract],
+        ["experimentIr", artifacts.experimentIr],
+        ["labScene", artifacts.labScene],
+      ] as const
+    ).flatMap(([path, artifact]) => [
+      {
+        path: `${path}.sessionId`,
+        actual: artifact.sessionId,
+        expected: input.sessionId,
+      },
+      {
+        path: `${path}.concept`,
+        actual: artifact.concept,
+        expected: beliefSpec.concept,
+      },
+    ]),
+    ...(
+      [
+        ["discriminationContract", artifacts.discriminationContract],
+        ["experimentIr", artifacts.experimentIr],
+      ] as const
+    ).flatMap(([path, artifact]) => [
+      {
+        path: `${path}.artifactManifestHash`,
+        actual: artifact.artifactManifestHash,
+        expected: input.artifactManifestHash,
+      },
+      {
+        path: `${path}.beliefSpecId`,
+        actual: artifact.beliefSpecId,
+        expected: beliefSpec.id,
+      },
+      {
+        path: `${path}.beliefSpecHash`,
+        actual: artifact.beliefSpecHash,
+        expected: input.beliefSpecHash,
+      },
+      {
+        path: `${path}.conceptPackVersion`,
+        actual: artifact.conceptPackVersion,
+        expected: input.conceptPack.version,
+      },
+      ...beliefSpec.hypotheses.map((hypothesis, index) => ({
+        path: `${path}.hypotheses[${index}].statement`,
+        actual: artifact.hypotheses[index]?.statement,
+        expected: hypothesis.statement,
+      })),
+    ]),
+    {
+      path: "experimentIr.provenance",
+      actual: artifacts.experimentIr.provenance,
+      expected: { kind: "codex", ...input.provenance },
+    },
+  ]);
+  if (immutableLineageFindingPaths.length > 0) {
     throw new ScientificArtifactValidationError(
       "IMMUTABLE_LINEAGE_MISMATCH",
       "Codex scientific artifacts failed immutable lineage or selection policy.",
+      { findingPaths: immutableLineageFindingPaths },
     );
   }
 
@@ -453,21 +477,33 @@ async function materializeStructuredScientificOutput(
   );
   const allowedCandidateIds = new Set(input.conceptPack.candidateExperimentIds);
   const allowedOperationIds = new Set(input.conceptPack.allowedOperations);
-  if (
-    artifacts.discriminationContract.candidateExperimentIds.some(
-      (candidateId) => !candidateIds.has(candidateId),
-    ) ||
-    artifacts.experimentIr.candidateExperiments.some(
-      (candidate) =>
-        !allowedCandidateIds.has(candidate.id) ||
-        candidate.operationIds.some(
-          (operationId) => !allowedOperationIds.has(operationId),
+  const invalidCandidateFindingPaths = normalizeScientificFindingPaths([
+    ...artifacts.discriminationContract.candidateExperimentIds.flatMap(
+      (candidateId, index) =>
+        candidateIds.has(candidateId)
+          ? []
+          : [`discriminationContract.candidateExperimentIds[${index}]`],
+    ),
+    ...artifacts.experimentIr.candidateExperiments.flatMap(
+      (candidate, candidateIndex) => [
+        ...(allowedCandidateIds.has(candidate.id)
+          ? []
+          : [`experimentIr.candidateExperiments[${candidateIndex}].id`]),
+        ...candidate.operationIds.flatMap((operationId, operationIndex) =>
+          allowedOperationIds.has(operationId)
+            ? []
+            : [
+                `experimentIr.candidateExperiments[${candidateIndex}].operationIds[${operationIndex}]`,
+              ],
         ),
-    )
-  ) {
+      ],
+    ),
+  ]);
+  if (invalidCandidateFindingPaths.length > 0) {
     throw new ScientificArtifactValidationError(
       "CANDIDATE_REFERENCE_INVALID",
       "The Discrimination Contract references an unresolved candidate experiment.",
+      { findingPaths: invalidCandidateFindingPaths },
     );
   }
 
@@ -484,7 +520,10 @@ async function materializeStructuredScientificOutput(
     throw new ScientificArtifactValidationError(
       "LAB_SCENE_INVALID",
       "The generated lab scene did not match its fixed verified bindings.",
-      { cause: sceneResult.error },
+      {
+        cause: sceneResult.error,
+        findingPaths: zodScientificFindingPaths(sceneResult.error, "labScene"),
+      },
     );
   }
   const scene = sceneResult.data;
@@ -784,21 +823,6 @@ function scientificArtifactFailure(
     return error.cause;
   }
   return undefined;
-}
-
-function policyRepairPrompt(
-  originalPrompt: string,
-  attempt: 1 | 2,
-  findingCodes: readonly ScientificArtifactFindingCode[],
-): string {
-  return `${originalPrompt}
-
-The previous candidate failed CounterLab's fixed scientific artifact validation before any file was materialized. This is bounded repair attempt ${attempt} of at most 2.
-Return a fresh complete structured candidate. Copy the immutable input lineage exactly, keep selection UNSELECTED, and use only the allowed candidate and operation IDs. Correct every sanitized rejection class below without weakening, omitting, or reinterpreting any fixed schema or policy. Use short plain-language comparisons only; do not use equations, assignment syntax, executable source, commands, SQL, URLs, or raw paths.
-
-Fixed local validation classes:
-${JSON.stringify(findingCodes)}
-`;
 }
 
 function parseInput<T>(schema: z.ZodType<T>, value: unknown): T {
@@ -1333,17 +1357,28 @@ export class AppServerCodexCompiler implements CodexCompiler {
         const findingCodes =
           policyFailure === undefined
             ? [artifactFailure!.findingCode]
-            : ([
+            : [
                 ...new Set(
                   policyFailure.findings.map((finding) => finding.code),
                 ),
-              ].sort() as ExperimentIRPolicyFindingCode[]);
+              ].sort();
+        const findingPaths =
+          policyFailure === undefined
+            ? artifactFailure!.findingPaths
+            : normalizeScientificFindingPaths(
+                policyFailure.findings.map((finding) => finding.path),
+              );
         yield {
           type: "policy_repair",
           attempt,
           findingCodes,
         };
-        prompt = policyRepairPrompt(originalPrompt, attempt, findingCodes);
+        prompt = buildScientificPolicyRepairPrompt(
+          originalPrompt,
+          attempt,
+          findingCodes,
+          findingPaths,
+        );
         phase = "repair";
       }
     }

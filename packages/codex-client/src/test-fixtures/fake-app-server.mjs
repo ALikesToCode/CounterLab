@@ -67,6 +67,9 @@ const structuredScientificFormulaUntilPolicyRepair = process.argv.includes(
 const structuredScientificLineageUntilArtifactRepair = process.argv.includes(
   "--structured-scientific-lineage-until-artifact-repair",
 );
+const structuredScientificSchemaUntilArtifactRepair = process.argv.includes(
+  "--structured-scientific-schema-until-artifact-repair",
+);
 const structuredInvalidOutput = process.argv.includes(
   "--structured-invalid-output",
 );
@@ -84,6 +87,20 @@ const expectedCwdArgument = process.argv.find((argument) =>
   argument.startsWith("--expect-cwd="),
 );
 const expectedCwd = expectedCwdArgument?.slice("--expect-cwd=".length);
+const expectedScientificRepairPathArgument = process.argv.find((argument) =>
+  argument.startsWith("--expect-scientific-repair-path="),
+);
+const expectedScientificRepairPath =
+  expectedScientificRepairPathArgument?.slice(
+    "--expect-scientific-repair-path=".length,
+  );
+const rejectedScientificRepairValueArgument = process.argv.find((argument) =>
+  argument.startsWith("--reject-scientific-repair-value="),
+);
+const rejectedScientificRepairValue =
+  rejectedScientificRepairValueArgument?.slice(
+    "--reject-scientific-repair-value=".length,
+  );
 
 function send(value) {
   process.stdout.write(`${JSON.stringify(value)}\n`);
@@ -404,6 +421,7 @@ function scientificArtifactsForOutput(
   evidenceRefs,
   formulaOutput = structuredScientificFormulaOutput,
   lineageOutput = false,
+  schemaOutput = false,
 ) {
   const artifacts = canonicalScientificArtifacts(evidenceRefs);
   if (structuredScientificSelectedOutput) {
@@ -423,6 +441,9 @@ function scientificArtifactsForOutput(
   }
   if (lineageOutput) {
     artifacts.experimentIr.sessionId = "session_wrong_lineage";
+  }
+  if (schemaOutput) {
+    artifacts.experimentIr.provenance.promptHash = "private_invalid_hash";
   }
   return artifacts;
 }
@@ -486,17 +507,30 @@ lines.on("line", (line) => {
           .map((item) => (typeof item?.text === "string" ? item.text : ""))
           .join("\n")
       : "";
+    const isScientificRepair = turnInputText.includes(
+      "The previous candidate failed CounterLab's fixed scientific artifact validation",
+    );
+    if (
+      isScientificRepair &&
+      expectedScientificRepairPath !== undefined &&
+      !turnInputText.includes(expectedScientificRepairPath)
+    ) {
+      process.exit(12);
+    }
+    if (
+      isScientificRepair &&
+      rejectedScientificRepairValue !== undefined &&
+      turnInputText.includes(rejectedScientificRepairValue)
+    ) {
+      process.exit(13);
+    }
     const formulaOutput =
       structuredScientificFormulaOutput ||
-      (structuredScientificFormulaUntilPolicyRepair &&
-        !turnInputText.includes(
-          "The previous candidate failed CounterLab's fixed scientific artifact validation",
-        ));
+      (structuredScientificFormulaUntilPolicyRepair && !isScientificRepair);
     const lineageOutput =
-      structuredScientificLineageUntilArtifactRepair &&
-      !turnInputText.includes(
-        "The previous candidate failed CounterLab's fixed scientific artifact validation",
-      );
+      structuredScientificLineageUntilArtifactRepair && !isScientificRepair;
+    const schemaOutput =
+      structuredScientificSchemaUntilArtifactRepair && !isScientificRepair;
     const failureMarker = failTurnTwiceFile ?? failTurnOnceFile;
     const failuresBeforeSuccess = failTurnTwiceFile ? 2 : 1;
     const observedFailures =
@@ -595,6 +629,7 @@ lines.on("line", (line) => {
                         evidenceRefs,
                         formulaOutput,
                         lineageOutput,
+                        schemaOutput,
                       )
                     : structuredPatchOutput
                       ? canonicalPatchPlan(evidenceRefs)
