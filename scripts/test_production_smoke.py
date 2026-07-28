@@ -116,8 +116,11 @@ def _control_plane_validator_source(kind: str) -> str:
     script = pathlib.Path(__file__).with_name("production-smoke.sh").read_text(
         encoding="utf-8"
     )
+    response_path = (
+        f'${{WORK_DIR}}/{kind}.json' if kind == "ready" else "${HEALTH_RESPONSE}"
+    )
     marker = (
-        f'python3 - "${{WORK_DIR}}/{kind}.json" "${{WORKER_VERSION_ID}}" '
+        f'python3 - "{response_path}" "${{WORKER_VERSION_ID}}" '
         '"${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" '
         '"${CONTAINER_IMAGE_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" '
         '"${AGGREGATE_LIMIT_EVIDENCE_SHA256}" '
@@ -501,6 +504,29 @@ def test_control_plane_validators_bind_exact_release_and_maintenance_state() -> 
                 path.write_text(json.dumps(expanded), encoding="utf-8")
                 rejected = run_validator(kind, path)
                 assert rejected.returncode != 0
+
+                for field, value, expected_error in (
+                    (
+                        "generationFilesystemReadIsolation",
+                        "PARTIAL",
+                        "generationFilesystemReadIsolation",
+                    ),
+                    (
+                        "readiness",
+                        "not-ready",
+                        "deep readiness probe did not pass",
+                    ),
+                    ("requestId", "", "request ID is unavailable"),
+                ):
+                    rejected_health = json.loads(json.dumps(payload))
+                    rejected_health["data"][field] = value
+                    path.write_text(
+                        json.dumps(rejected_health),
+                        encoding="utf-8",
+                    )
+                    rejected = run_validator(kind, path)
+                    assert rejected.returncode != 0
+                    assert expected_error in rejected.stderr
 
             maintenance = json.loads(json.dumps(payload))
             if kind == "ready":

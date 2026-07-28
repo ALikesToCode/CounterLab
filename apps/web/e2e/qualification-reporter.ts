@@ -114,6 +114,7 @@ interface QualificationReporterOptions {
   baseUrl: string;
   outputFile: string;
   qualificationRequested: boolean;
+  requireCleanTelemetry: boolean;
   releaseBinding: z.infer<typeof PublicationReleaseBindingSchema> | null;
   repositoryRoot: string;
   runtimeRoot: string;
@@ -399,6 +400,65 @@ function exactViewportCoverage(journeys: readonly CapturedJourney[]): boolean {
   );
 }
 
+export function hasCleanAttemptZeroTelemetry(
+  journey: CapturedJourney,
+  expectedAuthority: "CLOAK_CDP_ENDPOINT" | "stock-chromium-design-review",
+): boolean {
+  const expectedHttpErrors =
+    REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID[
+      journey.id as keyof typeof REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID
+    ];
+  const expectedRequestFailures =
+    REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[
+      journey.id as keyof typeof REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID
+    ];
+  return (
+    expectedHttpErrors !== undefined &&
+    expectedRequestFailures !== undefined &&
+    journey.status === "passed" &&
+    journey.expectedStatus === "passed" &&
+    journey.attempt === 0 &&
+    journey.durationMs > 0 &&
+    journey.assertionCount > 0 &&
+    journey.unexpectedConsoleErrors === 0 &&
+    JSON.stringify(journey.expectedHttpErrorResponses) ===
+      JSON.stringify(expectedHttpErrors) &&
+    JSON.stringify(journey.observedHttpErrorResponses) ===
+      JSON.stringify(journey.expectedHttpErrorResponses) &&
+    journey.unexpectedHttpErrorResponses === 0 &&
+    JSON.stringify(journey.expectedRequestFailures) ===
+      JSON.stringify(expectedRequestFailures) &&
+    journey.expectedRequestFailures.length === journey.expectedFailedRequests &&
+    JSON.stringify(journey.observedRequestFailures) ===
+      JSON.stringify(journey.expectedRequestFailures) &&
+    journey.observedFailedRequests === journey.expectedFailedRequests &&
+    journey.unexpectedFailedRequests === 0 &&
+    journey.browserVersion.trim() !== "" &&
+    journey.browserVersion !== "unavailable" &&
+    journey.browserAuthority === expectedAuthority &&
+    journey.telemetryValid
+  );
+}
+
+export function hasCleanProductionLane(input: {
+  authority: RawRunAuthority;
+  journeys: readonly CapturedJourney[];
+  playwrightStatus: FullResult["status"];
+  rootErrors: number;
+}): boolean {
+  return (
+    input.playwrightStatus === "passed" &&
+    input.rootErrors === 0 &&
+    input.journeys.length === 1 &&
+    hasCleanAttemptZeroTelemetry(
+      input.journeys[0]!,
+      input.authority === "CLOAKBROWSER"
+        ? "CLOAK_CDP_ENDPOINT"
+        : "stock-chromium-design-review",
+    )
+  );
+}
+
 export function buildCloakBrowserRawRun(input: BuildRawRunInput) {
   const expectedJourneyAuthority =
     input.authority === "CLOAKBROWSER"
@@ -414,39 +474,8 @@ export function buildCloakBrowserRawRun(input: BuildRawRunInput) {
     (input.rootErrors ?? 0) === 0 &&
     exactJourneyRegistry(input.journeys) &&
     exactViewportCoverage(input.journeys) &&
-    input.journeys.every(
-      (journey) =>
-        journey.status === "passed" &&
-        journey.expectedStatus === "passed" &&
-        journey.attempt === 0 &&
-        journey.durationMs > 0 &&
-        journey.assertionCount > 0 &&
-        journey.unexpectedConsoleErrors === 0 &&
-        JSON.stringify(journey.expectedHttpErrorResponses) ===
-          JSON.stringify(
-            REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID[
-              journey.id as keyof typeof REQUIRED_CLOAK_EXPECTED_HTTP_ERRORS_BY_ID
-            ],
-          ) &&
-        JSON.stringify(journey.observedHttpErrorResponses) ===
-          JSON.stringify(journey.expectedHttpErrorResponses) &&
-        journey.unexpectedHttpErrorResponses === 0 &&
-        JSON.stringify(journey.expectedRequestFailures) ===
-          JSON.stringify(
-            REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID[
-              journey.id as keyof typeof REQUIRED_CLOAK_EXPECTED_REQUEST_FAILURES_BY_ID
-            ],
-          ) &&
-        journey.expectedRequestFailures.length ===
-          journey.expectedFailedRequests &&
-        JSON.stringify(journey.observedRequestFailures) ===
-          JSON.stringify(journey.expectedRequestFailures) &&
-        journey.observedFailedRequests === journey.expectedFailedRequests &&
-        journey.unexpectedFailedRequests === 0 &&
-        journey.browserVersion.trim() !== "" &&
-        journey.browserVersion !== "unavailable" &&
-        journey.browserAuthority === expectedJourneyAuthority &&
-        journey.telemetryValid,
+    input.journeys.every((journey) =>
+      hasCleanAttemptZeroTelemetry(journey, expectedJourneyAuthority),
     ) &&
     new Set(input.journeys.map((journey) => journey.browserVersion)).size === 1;
 
@@ -562,7 +591,8 @@ export default class CounterLabQualificationReporter implements Reporter {
   ): Promise<{ status?: FullResult["status"] } | undefined> {
     if (
       this.capturedJourneys.length === 0 &&
-      !this.options.qualificationRequested
+      !this.options.qualificationRequested &&
+      !this.options.requireCleanTelemetry
     ) {
       return undefined;
     }
@@ -593,7 +623,18 @@ export default class CounterLabQualificationReporter implements Reporter {
         flag: "wx",
         mode: 0o600,
       });
-      if (this.options.qualificationRequested && report.status !== "PASSED") {
+      const cleanTelemetryPassed =
+        !this.options.requireCleanTelemetry ||
+        hasCleanProductionLane({
+          authority: this.options.authority,
+          journeys: this.capturedJourneys,
+          playwrightStatus: result.status,
+          rootErrors: this.rootErrors,
+        });
+      if (
+        (this.options.qualificationRequested && report.status !== "PASSED") ||
+        !cleanTelemetryPassed
+      ) {
         return { status: "failed" };
       }
       return undefined;

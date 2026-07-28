@@ -52,6 +52,14 @@ function assertNoSymlinkTraversal(candidate: string, label: string): void {
   }
 }
 
+function exactBooleanSetting(name: string): boolean {
+  const setting = process.env[name];
+  if (setting !== undefined && setting !== "true" && setting !== "false") {
+    throw new Error(`${name} must be exactly true or false`);
+  }
+  return setting === "true";
+}
+
 if (
   !isContained(repositoryRoot, runtimeRoot, false) ||
   !isContained(runtimeParent, runtimeRoot, false)
@@ -114,17 +122,12 @@ const staticDesignReview =
 const localAdmissionKey =
   process.env.COUNTERLAB_ADMISSION_KEY?.trim() ||
   ["counterlab", "local", "e2e", "admission", "only", "000000"].join("-");
-const qualificationSetting = process.env.COUNTERLAB_BROWSER_QUALIFICATION;
-if (
-  qualificationSetting !== undefined &&
-  qualificationSetting !== "true" &&
-  qualificationSetting !== "false"
-) {
-  throw new Error(
-    "COUNTERLAB_BROWSER_QUALIFICATION must be exactly true or false",
-  );
-}
-const qualificationRequested = qualificationSetting === "true";
+const qualificationRequested = exactBooleanSetting(
+  "COUNTERLAB_BROWSER_QUALIFICATION",
+);
+const requireCleanTelemetry = exactBooleanSetting(
+  "COUNTERLAB_E2E_REQUIRE_CLEAN_TELEMETRY",
+);
 if (
   qualificationRequested &&
   (browserAuthority.kind !== "cloak" ||
@@ -132,6 +135,11 @@ if (
 ) {
   throw new Error(
     "CloakBrowser qualification requires the exact public CounterLab origin",
+  );
+}
+if (requireCleanTelemetry && browserAuthority.kind !== "cloak") {
+  throw new Error(
+    "Clean browser telemetry enforcement requires CloakBrowser authority",
   );
 }
 const deploymentReceiptSetting = process.env.COUNTERLAB_E2E_DEPLOYMENT_RECEIPT;
@@ -201,7 +209,12 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   forbidOnly: true,
-  retries: process.env.CI ? 1 : 0,
+  retries:
+    qualificationRequested || requireCleanTelemetry
+      ? 0
+      : process.env.CI
+        ? 1
+        : 0,
   outputDir,
   reporter: [
     ["line"],
@@ -216,6 +229,7 @@ export default defineConfig({
         baseUrl: baseURL,
         outputFile: qualificationRunFile,
         qualificationRequested,
+        requireCleanTelemetry,
         releaseBinding: qualificationReleaseBinding,
         repositoryRoot,
         runtimeRoot,

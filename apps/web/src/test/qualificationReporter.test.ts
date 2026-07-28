@@ -8,6 +8,8 @@ import {
   classifyExpectedHttpResourceConsoleError,
   classifyExpectedHttpResourceConsoleObservation,
   countPlaywrightAssertions,
+  hasCleanAttemptZeroTelemetry,
+  hasCleanProductionLane,
   journeyIdForTest,
   readJourneyObservation,
   summarizeExpectedHttpErrors,
@@ -509,6 +511,75 @@ describe("CloakBrowser qualification reporter", () => {
     expect(new Set(report.journeys.map((journey) => journey.viewport))).toEqual(
       new Set(REQUIRED_CLOAK_VIEWPORTS),
     );
+  });
+
+  it("requires clean attempt-zero telemetry for an individual production lane", () => {
+    const journey = capturedJourneys()[0]!;
+
+    expect(hasCleanAttemptZeroTelemetry(journey, "CLOAK_CDP_ENDPOINT")).toBe(
+      true,
+    );
+    expect(
+      hasCleanAttemptZeroTelemetry(
+        { ...journey, attempt: 1 },
+        "CLOAK_CDP_ENDPOINT",
+      ),
+    ).toBe(false);
+    expect(
+      hasCleanAttemptZeroTelemetry(
+        { ...journey, telemetryValid: false },
+        "CLOAK_CDP_ENDPOINT",
+      ),
+    ).toBe(false);
+    expect(
+      hasCleanAttemptZeroTelemetry(
+        { ...journey, unexpectedConsoleErrors: 1 },
+        "CLOAK_CDP_ENDPOINT",
+      ),
+    ).toBe(false);
+    expect(
+      hasCleanAttemptZeroTelemetry(journey, "stock-chromium-design-review"),
+    ).toBe(false);
+  });
+
+  it("fails a production lane closed for retries, extra matches, root errors, and bad telemetry", () => {
+    const journey = capturedJourneys()[0]!;
+    const cleanLane = {
+      authority: "CLOAKBROWSER" as const,
+      journeys: [journey],
+      playwrightStatus: "passed" as const,
+      rootErrors: 0,
+    };
+
+    expect(hasCleanProductionLane(cleanLane)).toBe(true);
+    expect(
+      hasCleanProductionLane({
+        ...cleanLane,
+        journeys: [],
+      }),
+    ).toBe(false);
+    expect(
+      hasCleanProductionLane({
+        ...cleanLane,
+        journeys: [{ ...journey, attempt: 1 }],
+      }),
+    ).toBe(false);
+    expect(
+      hasCleanProductionLane({
+        ...cleanLane,
+        journeys: [
+          { ...journey, status: "failed" },
+          { ...journey, attempt: 1 },
+        ],
+      }),
+    ).toBe(false);
+    expect(hasCleanProductionLane({ ...cleanLane, rootErrors: 1 })).toBe(false);
+    expect(
+      hasCleanProductionLane({
+        ...cleanLane,
+        journeys: [{ ...journey, telemetryValid: false }],
+      }),
+    ).toBe(false);
   });
 
   it("accepts one response-bound Chromium resource error without hiding it", () => {

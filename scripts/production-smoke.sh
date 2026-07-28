@@ -499,12 +499,20 @@ record_stage \
   "{\"responseSha256\":\"$(sha256_file "${WORK_DIR}/ready.json")\"}"
 
 stage_started="$(timestamp)"
-"${CURL_BIN}" --fail --silent --show-error \
-  --proto '=https' --proto-redir '=https' --max-redirs 0 \
-  --max-time 30 \
-  "${BASE_URL}/api/health?readiness=probe" \
-  >"${WORK_DIR}/health.json"
-python3 - "${WORK_DIR}/health.json" "${WORKER_VERSION_ID}" "${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" "${CONTAINER_IMAGE_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${GENERATION_ISOLATION_EVIDENCE_SHA256}" "${GENERATION_ISOLATION_PROBE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT}" <<'PY'
+HEALTH_ATTEMPT=0
+HEALTH_CONSECUTIVE=0
+HEALTH_FIRST_SHA256=""
+HEALTH_SECOND_SHA256=""
+HEALTH_PREVIOUS_REQUEST_ID=""
+while (( HEALTH_ATTEMPT < 12 && HEALTH_CONSECUTIVE < 2 )); do
+  HEALTH_ATTEMPT=$((HEALTH_ATTEMPT + 1))
+  HEALTH_RESPONSE="${WORK_DIR}/health-${HEALTH_ATTEMPT}.json"
+  if "${CURL_BIN}" --fail --silent --show-error \
+    --proto '=https' --proto-redir '=https' --max-redirs 0 \
+    --max-time 30 \
+    "${BASE_URL}/api/health?readiness=probe" \
+    >"${HEALTH_RESPONSE}" \
+    && python3 - "${HEALTH_RESPONSE}" "${WORKER_VERSION_ID}" "${WORKER_EVIDENCE_COMMIT}" "${RUNNER_SOURCE_COMMIT}" "${CONTAINER_IMAGE_DIGEST}" "${TIMEOUT_CLEANUP_RECEIPT_SHA256}" "${AGGREGATE_LIMIT_EVIDENCE_SHA256}" "${RUNTIME_POLICY_SHA256}" "${PROOF_DEPENDENCY_MANIFEST_SHA256}" "${WORKER_ARTIFACT_CLASSIFICATION}" "${WORKER_ARTIFACT_MANIFEST_SHA256}" "${WORKER_BUNDLE_SHA256}" "${CLIENT_ASSETS_SHA256}" "${CLIENT_ASSET_COUNT}" "${CLIENT_PUBLIC_ASSETS_SHA256}" "${CLIENT_PUBLIC_ASSET_COUNT}" "${FROZEN_VITE_VERSION}" "${FROZEN_WRANGLER_VERSION}" "${GENERATION_ISOLATION_EVIDENCE_SHA256}" "${GENERATION_ISOLATION_PROBE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_EVIDENCE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_PROBE_SHA256}" "${RELEASE_CHECK_GENERATION_ISOLATION_VERIFIED_AT}" <<'PY'
 import json
 import pathlib
 import sys
@@ -579,9 +587,45 @@ expected_release = {
 if health.get("release") != expected_release:
     raise SystemExit("production health release identity does not match the receipt")
 PY
+  then
+    HEALTH_REQUEST_ID="$(
+      python3 -c '
+import json
+import pathlib
+import sys
+print(json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))["data"]["requestId"])
+' "${HEALTH_RESPONSE}"
+    )"
+    if [[ -n "${HEALTH_PREVIOUS_REQUEST_ID}" && "${HEALTH_REQUEST_ID}" == "${HEALTH_PREVIOUS_REQUEST_ID}" ]]; then
+      HEALTH_CONSECUTIVE=1
+      HEALTH_FIRST_SHA256="$(sha256_file "${HEALTH_RESPONSE}")"
+      HEALTH_SECOND_SHA256=""
+    else
+      HEALTH_CONSECUTIVE=$((HEALTH_CONSECUTIVE + 1))
+      if (( HEALTH_CONSECUTIVE == 1 )); then
+        HEALTH_FIRST_SHA256="$(sha256_file "${HEALTH_RESPONSE}")"
+      else
+        HEALTH_SECOND_SHA256="$(sha256_file "${HEALTH_RESPONSE}")"
+      fi
+    fi
+    HEALTH_PREVIOUS_REQUEST_ID="${HEALTH_REQUEST_ID}"
+  else
+    HEALTH_CONSECUTIVE=0
+    HEALTH_FIRST_SHA256=""
+    HEALTH_SECOND_SHA256=""
+    HEALTH_PREVIOUS_REQUEST_ID=""
+  fi
+  if (( HEALTH_CONSECUTIVE < 2 )); then
+    sleep 5
+  fi
+done
+if (( HEALTH_CONSECUTIVE != 2 )); then
+  echo "Production capability health did not remain ready for two consecutive probes." >&2
+  exit 1
+fi
 record_stage \
   "capability-health" "control_plane" "PASSED" "${stage_started}" "$(timestamp)" "" \
-  "{\"responseSha256\":\"$(sha256_file "${WORK_DIR}/health.json")\"}"
+  "{\"probeAttempts\":${HEALTH_ATTEMPT},\"firstResponseSha256\":\"${HEALTH_FIRST_SHA256}\",\"secondResponseSha256\":\"${HEALTH_SECOND_SHA256}\"}"
 
 cd "${ROOT_DIR}"
 
@@ -595,6 +639,7 @@ PUBLIC_ASSET_RUNTIME_ROOT="${BROWSER_RUNTIME_PARENT}/public-assets"
 PUBLIC_ASSET_EVIDENCE="${PUBLIC_ASSET_RUNTIME_ROOT}/evidence/public-assets.json"
 COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
 COUNTERLAB_E2E_RUNTIME_ROOT="${PUBLIC_ASSET_RUNTIME_ROOT}" \
+COUNTERLAB_E2E_REQUIRE_CLEAN_TELEMETRY=true \
 COUNTERLAB_E2E_PUBLIC_ASSET_SCAN=1 \
 COUNTERLAB_E2E_PUBLIC_ASSET_EVIDENCE_PATH="${PUBLIC_ASSET_EVIDENCE}" \
 COUNTERLAB_E2E_FROZEN_WORKER_MANIFEST_PATH="${FROZEN_WORKER_MANIFEST}" \
@@ -613,6 +658,7 @@ record_stage \
 stage_started="$(timestamp)"
 COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
 COUNTERLAB_E2E_RUNTIME_ROOT="${BROWSER_RUNTIME_PARENT}/judge" \
+COUNTERLAB_E2E_REQUIRE_CLEAN_TELEMETRY=true \
   "${PNPM}" --filter @counterlab/web exec playwright test \
   --config playwright.config.ts \
   --grep "Judge Mode distinguishes every authority path"
@@ -621,6 +667,7 @@ record_stage "judge-mode" "control_plane" "PASSED" "${stage_started}" "$(timesta
 stage_started="$(timestamp)"
 COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
 COUNTERLAB_E2E_RUNTIME_ROOT="${BROWSER_RUNTIME_PARENT}/sample" \
+COUNTERLAB_E2E_REQUIRE_CLEAN_TELEMETRY=true \
   "${PNPM}" --filter @counterlab/web exec playwright test \
   --config playwright.config.ts \
   --grep "Try Instantly persists"
@@ -629,6 +676,7 @@ record_stage "sample-lesson" "sample" "PASSED" "${stage_started}" "$(timestamp)"
 stage_started="$(timestamp)"
 COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
 COUNTERLAB_E2E_RUNTIME_ROOT="${BROWSER_RUNTIME_PARENT}/replay" \
+COUNTERLAB_E2E_REQUIRE_CLEAN_TELEMETRY=true \
   "${PNPM}" --filter @counterlab/web exec playwright test \
   --config playwright.config.ts \
   --grep "Replay remains visibly labelled"
@@ -639,6 +687,7 @@ LEAKAGE_RUNTIME_ROOT="${BROWSER_RUNTIME_PARENT}/live-leakage"
 LEAKAGE_EVIDENCE="${LEAKAGE_RUNTIME_ROOT}/evidence/live-leakage.json"
 COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
 COUNTERLAB_E2E_RUNTIME_ROOT="${LEAKAGE_RUNTIME_ROOT}" \
+COUNTERLAB_E2E_REQUIRE_CLEAN_TELEMETRY=true \
 COUNTERLAB_E2E_LIVE=1 \
 COUNTERLAB_E2E_EVIDENCE_PATH="${LEAKAGE_EVIDENCE}" \
   "${PNPM}" --filter @counterlab/web exec playwright test \
@@ -657,6 +706,7 @@ IMBALANCE_RUNTIME_ROOT="${BROWSER_RUNTIME_PARENT}/live-imbalance"
 IMBALANCE_EVIDENCE="${IMBALANCE_RUNTIME_ROOT}/evidence/live-imbalance.json"
 COUNTERLAB_E2E_BASE_URL="${BASE_URL}" \
 COUNTERLAB_E2E_RUNTIME_ROOT="${IMBALANCE_RUNTIME_ROOT}" \
+COUNTERLAB_E2E_REQUIRE_CLEAN_TELEMETRY=true \
 COUNTERLAB_E2E_LIVE=1 \
 COUNTERLAB_E2E_EVIDENCE_PATH="${IMBALANCE_EVIDENCE}" \
   "${PNPM}" --filter @counterlab/web exec playwright test \
