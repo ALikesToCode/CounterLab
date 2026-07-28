@@ -3,7 +3,7 @@
   "evidenceId": "internal-mutations-integrity-v2",
   "kind": "integrity",
   "files": {
-    "apps/web/src/App.test.tsx": "7f8200624ae9181f62b2e3e970c39f4462450bccd1d3fa5b238fb180431498cc",
+    "apps/web/src/App.test.tsx": "92ac264b4921c4557ea6e592e13bc1e62a8840bd92e05f57740987bfa343c838",
     "apps/web/src/api.test.ts": "a2796de2c3a9fc3939625694b3f2e1462bda7fb681c5781c2b3b63c3919bbcb7",
     "apps/web/src/components/generative-ui/BoundaryMapBlock.test.tsx": "fa109031bc7a1a5d9e2f1c0e3291d3c66c96c25a42e3f7637cad7db1e768b527",
     "apps/web/src/components/generative-ui/TrustedLabSceneRenderer.test.tsx": "1503941c3971e2ccdc6853807df4a060b172f7971a63f87ecd2642f8308a2551",
