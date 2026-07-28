@@ -3069,6 +3069,7 @@ function LeakageRealityScreen({
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const actionInFlight = useRef(false);
+  const proofRecoveryAttempt = useRef<string | null>(null);
   const sampleSessionId =
     session?.mode.kind === "sample_lesson" ? session.sessionId : null;
   const [sampleBoundaryComplete, setSampleBoundaryComplete] = useState(
@@ -3273,6 +3274,33 @@ function LeakageRealityScreen({
     });
   };
 
+  useEffect(() => {
+    if (
+      session?.mode.kind !== "live_notebook" ||
+      session.state !== "REASONING_DIFF_ISSUED" ||
+      session.beliefSpec === undefined ||
+      session.patchResult?.status !== "VERIFIED" ||
+      session.proofCapsule !== undefined
+    ) {
+      return;
+    }
+    const attemptKey = `${session.sessionId}:${session.version}`;
+    if (proofRecoveryAttempt.current === attemptKey) return;
+    proofRecoveryAttempt.current = attemptKey;
+    compilePatch();
+    // The session version is the idempotency boundary. Retrying this exact
+    // version again requires the learner-facing recovery action below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    session?.beliefSpec,
+    session?.mode.kind,
+    session?.patchResult?.status,
+    session?.proofCapsule,
+    session?.sessionId,
+    session?.state,
+    session?.version,
+  ]);
+
   const exportProof = () => {
     if (proofBundle === null) return;
     const url = URL.createObjectURL(
@@ -3450,6 +3478,21 @@ function LeakageRealityScreen({
               a Reasoning Diff or completed Proof Capsule until every native
               authority binding is present.
             </p>
+            {actionError !== null && (
+              <p className="error-text" role="alert">
+                {actionError}
+              </p>
+            )}
+            <button
+              className="button button-primary"
+              type="button"
+              disabled={actionBusy}
+              onClick={compilePatch}
+            >
+              {actionBusy
+                ? "Resuming proof issuance…"
+                : "Resume proof issuance"}
+            </button>
           </div>
           <RepairPreview
             changed={leakageRepairChanges}

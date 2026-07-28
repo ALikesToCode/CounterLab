@@ -564,6 +564,7 @@ function installApi(
       requestIndex: number,
     ) => Response | Promise<Response>;
     predictionCommitResponseLost?: boolean;
+    interruptProofRecovery?: boolean;
   } = {},
 ) {
   const uploadOutcomes = [...(options.uploadOutcomes ?? [])];
@@ -1071,6 +1072,13 @@ function installApi(
               "Evaluation must match deployment timing and use exact code evidence.",
             transferResult,
           }),
+        );
+      }
+      if (path.endsWith("/patch/compile") && options.interruptProofRecovery) {
+        return errorResponse(
+          "PROOF_FINALIZATION_INTERRUPTED",
+          "The verified patch is safe, but Proof Capsule issuance was interrupted.",
+          503,
         );
       }
       if (path.startsWith("/api/replays/")) {
@@ -3765,6 +3773,81 @@ describe("CounterLab judged flow", () => {
           String(path).endsWith("/lab/compile") && init?.method === "POST",
       ),
     ).toBe(false);
+  });
+
+  it("resumes interrupted native Proof Capsule issuance without rerunning the patch", async () => {
+    const user = userEvent.setup();
+    const verifiedPatchWithContentHash = {
+      schemaVersion: "1" as const,
+      id: "patch_verified_ui",
+      sessionId: "session_ui",
+      status: "VERIFIED" as const,
+      sourceArtifactHash: "1".repeat(64),
+      patchedArtifactHash: "2".repeat(64),
+      patchHash: hashCanonicalJson("@@ cell 3 @@"),
+      modifiedCells: [3],
+      diff: "@@ cell 3 @@",
+      verification: {
+        passed: true,
+        invariants: ["unrelated_cells_unchanged"],
+        unchangedCellHashes: ["4".repeat(64)],
+      },
+      generatedAt: "2026-07-14T09:06:00.000Z",
+    };
+    const verifiedPatch = {
+      ...verifiedPatchWithContentHash,
+      resultHash: hashCanonicalJson(verifiedPatchWithContentHash),
+    };
+    const fetcher = installApi({
+      restoredSessionState: "REASONING_DIFF_ISSUED",
+      interruptProofRecovery: true,
+      restoredSessionExtra: {
+        beliefSpec: confirmedLiveBeliefSpec,
+        prediction: committedPrediction,
+        verifiedResult: liveResult,
+        evidenceVerdict: supportingEvidenceVerdict,
+        epistemicReportHash,
+        revision:
+          "Evaluation must match deployment timing and use exact code evidence.",
+        transferResult: passedLeakageTransfer,
+        patchResult: verifiedPatch,
+      },
+    });
+    window.history.replaceState({}, "", "/session/session_ui");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /finalizing the authoritative evidence record/i,
+      }),
+    ).toBeInTheDocument();
+    await vi.waitFor(() =>
+      expect(
+        fetcher.mock.calls.filter(
+          ([path, init]) =>
+            String(path).endsWith("/patch/compile") && init?.method === "POST",
+        ),
+      ).toHaveLength(1),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /proof capsule issuance was interrupted/i,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /resume proof issuance/i }),
+    );
+    await vi.waitFor(() =>
+      expect(
+        fetcher.mock.calls.filter(
+          ([path, init]) =>
+            String(path).endsWith("/patch/compile") && init?.method === "POST",
+        ),
+      ).toHaveLength(2),
+    );
+    expect(
+      screen.queryByRole("button", { name: /verify notebook patch/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("restores the exact reviewed Belief Spec and evidence after refresh", async () => {
