@@ -8,7 +8,7 @@
     "packages/concept-registry/src/index.ts": "9f0edf4c8e7bc62f73ed851442f59efe5b1d60b31542b7fb2d2cf41411c202f1",
     "packages/experiment-ir/src/canonicalize.ts": "3c3564d19b7c4853c1a8f6ec33737723e340450e0e947c994a8acf6b13dc703e",
     "packages/experiment-ir/src/hash.ts": "fae332ab6a45a345f5be177808f6f64fd0d8ee686e2d733d9919ced38a25152b",
-    "packages/experiment-ir/src/policy.ts": "effb319261753660ab497624819a9a6d005d4c45253dee9be29e7663bbdf00b8",
+    "packages/experiment-ir/src/policy.ts": "37ccc0eb1ce2d18f4e5a47b0aeee021091bfa8c3c8971aabf277a1316a92c2fa",
     "packages/experiment-ir/src/runner-bundle.ts": "58c28cf63d24c7c12c55872be8f1502aaa6f1eb09dc2d529bf3e2bbeddab7e68",
     "packages/experiment-ir/src/schema.ts": "943043fd6067aaa3f1a0dd654e4dd36475beb65c62e77ca9b654ce2963b40230",
     "packages/experiment-scorer/src/scorer.ts": "843905a767a5c63b04f906e6ec3e9adc80573f5ab22d09cb512a1df886800e7c",

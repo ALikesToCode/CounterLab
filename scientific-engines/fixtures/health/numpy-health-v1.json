@@ -4,7 +4,7 @@
   "kind": "health_report",
   "engineId": "numpy",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:56dce6cda9154d7efff9b0bff1002d1515848d94e0277e81921a58ed6542130f",
+  "imageDigest": "sha256:f2bf2ccbf61e418e475024cd805b60bbd6bc159383634375e6ff512ff239dfa0",
   "observedVersion": "2.4.6",
   "checks": {
     "import": "PASSED",

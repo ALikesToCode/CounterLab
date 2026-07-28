@@ -1,10 +1,10 @@
 {
   "schemaVersion": "1",
   "evidenceKind": "local-candidate-runtime-summary",
-  "capturedAt": "2026-07-28T09:53:21.907Z",
+  "capturedAt": "2026-07-28T11:24:30.484Z",
   "environmentId": "counterlab-runner-linux-amd64-v2",
-  "imageDigest": "sha256:56dce6cda9154d7efff9b0bff1002d1515848d94e0277e81921a58ed6542130f",
-  "sourceCommit": "e7b486f14cf462bcea06e186096f5fed34438175",
+  "imageDigest": "sha256:f2bf2ccbf61e418e475024cd805b60bbd6bc159383634375e6ff512ff239dfa0",
+  "sourceCommit": "fd5276112f1e497ae8fd14a2be258f7a87f88e9b",
   "observedVersions": {
     "cpython": "3.13.14",
     "counterlab-fixed-ml-kernel": "0.1.0",
