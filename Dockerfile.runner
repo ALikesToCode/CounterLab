@@ -1,5 +1,7 @@
 FROM python:3.13-slim-trixie@sha256:bffeb7bd6a85767587059c6ba23e1e9122078e3aa3fa836099171b9bb5a9bb00 AS python-builder
 
+ARG COUNTERLAB_PYPI_INDEX_URL=https://pypi.org/simple
+
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -11,7 +13,7 @@ COPY LICENSE requirements.build.lock.txt pyproject.toml ./
 COPY services/kernel/src ./services/kernel/src
 
 RUN python -m venv /opt/counterlab-build-venv \
-    && /opt/counterlab-build-venv/bin/pip install --require-hashes --only-binary=:all: -r requirements.build.lock.txt \
+    && /opt/counterlab-build-venv/bin/pip install --index-url "${COUNTERLAB_PYPI_INDEX_URL}" --require-hashes --only-binary=:all: -r requirements.build.lock.txt \
     && /opt/counterlab-build-venv/bin/pip wheel --no-build-isolation --no-deps --wheel-dir /wheelhouse . \
     && sha256sum /wheelhouse/*.whl > /wheelhouse/SHA256SUMS
 
@@ -71,6 +73,7 @@ RUN pnpm install --frozen-lockfile --filter @counterlab/hosted-runner... \
 
 FROM python:3.13-slim-trixie@sha256:bffeb7bd6a85767587059c6ba23e1e9122078e3aa3fa836099171b9bb5a9bb00
 
+ARG COUNTERLAB_PYPI_INDEX_URL=https://pypi.org/simple
 ARG COUNTERLAB_SOURCE_COMMIT=unbound
 ARG COUNTERLAB_SOURCE_TREE_SHA256=unbound
 
@@ -120,7 +123,7 @@ COPY --from=node-builder /out/runtime-rootfs/ /
 
 RUN chmod -R a+rX /opt/codex \
     && ln -s /opt/codex/bin/codex /usr/local/bin/codex \
-    && /opt/counterlab-venv/bin/pip install --no-cache-dir --require-hashes --only-binary=:all: -r requirements.runner.lock.txt \
+    && /opt/counterlab-venv/bin/pip install --index-url "${COUNTERLAB_PYPI_INDEX_URL}" --no-cache-dir --require-hashes --only-binary=:all: -r requirements.runner.lock.txt \
     && /opt/counterlab-venv/bin/pip install --no-cache-dir --no-deps --no-index --find-links=/opt/counterlab-wheelhouse counterlab-kernel==0.1.0 \
     && /opt/counterlab-venv/bin/pip check \
     && mkdir -p /work/jobs /run/counterlab-codex \

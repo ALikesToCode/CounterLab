@@ -114,6 +114,17 @@ SOURCE_COMMIT="$(git rev-parse --verify HEAD)"
 SOURCE_TREE_SHA256="$(git ls-tree -r --full-tree "${SOURCE_COMMIT}" | sha256sum | cut -d ' ' -f 1)"
 LOCAL_IMAGE_TAG="counterlab-runner:git-${SOURCE_COMMIT}"
 ADAPTER_IMAGE_TAG="counterlab-adapter:git-${SOURCE_COMMIT}"
+PYPI_INDEX_URL="${COUNTERLAB_PYPI_INDEX_URL:-https://pypi.org/simple}"
+case "${PYPI_INDEX_URL}" in
+  https://pypi.org/simple | \
+  https://mirrors.aliyun.com/pypi/simple | \
+  https://repo.huaweicloud.com/repository/pypi/simple | \
+  https://mirrors.cloud.tencent.com/pypi/simple) ;;
+  *)
+    echo "COUNTERLAB_PYPI_INDEX_URL is not an approved HTTPS package index." >&2
+    exit 2
+    ;;
+esac
 OUTPUT="$(repo_path "${1:-node_modules/.cache/counterlab-v6.1/releases/runner-build-${SOURCE_COMMIT}.json}")"
 [[ ! -e "${OUTPUT}" ]] || {
   echo "Build receipt already exists; refusing to replace it: ${OUTPUT}" >&2
@@ -315,6 +326,7 @@ DOCKERFILE_SHA256="$(sha256sum "${ARCHIVE_ROOT}/Dockerfile.runner" | cut -d ' ' 
   --local "dockerfile=${ARCHIVE_ROOT}" \
   --opt filename=Dockerfile.runner \
   --opt platform=linux/amd64 \
+  --opt "build-arg:COUNTERLAB_PYPI_INDEX_URL=${PYPI_INDEX_URL}" \
   --opt "build-arg:COUNTERLAB_SOURCE_COMMIT=${SOURCE_COMMIT}" \
   --opt "build-arg:COUNTERLAB_SOURCE_TREE_SHA256=${SOURCE_TREE_SHA256}" \
   --output "type=oci,dest=${RAW_OCI_TAR},name=${LOCAL_IMAGE_TAG}" \
