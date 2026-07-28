@@ -226,6 +226,10 @@ describe("hosted scientific-method compiler", () => {
       /candidate.*operationIds.*observableIds.*allowlists/i,
     );
     expect(prompt).toMatch(/no literal result values/i);
+    expect(prompt).toMatch(
+      /describe precision.*threshold comparisons in words/i,
+    );
+    expect(prompt).toMatch(/never define a metric mathematically/i);
     expect(prompt).toContain("Fixed post-result Lab Scene binding manifest:");
     expect(prompt).toContain("/runs/byId/<runId>/metrics/<field>");
     expect(prompt).toMatch(/at least two distinct Metric blocks/i);
@@ -399,6 +403,37 @@ describe("hosted scientific-method compiler", () => {
         "--expect-strict-output-schema",
         "--structured-scientific-output",
         "--structured-scientific-unsafe-binding-output",
+      ],
+      timeoutMs: 2_000,
+      ...unisolatedTestProcess,
+    });
+
+    try {
+      await expect(
+        collect(compiler.compileScientificMethod(scientificInput(work))),
+      ).rejects.toMatchObject({ code: "CODEX_PROTOCOL_ERROR" });
+      for (const path of scientificInput(work).permittedOutputs) {
+        await expect(readFile(join(work, path), "utf8")).rejects.toMatchObject({
+          code: "ENOENT",
+        });
+      }
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  });
+
+  it("reports formula-bearing Experiment IR prose as a protocol error", async () => {
+    const fakeServer = fileURLToPath(
+      new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
+    );
+    const work = await mkdtemp(join(tmpdir(), "counterlab-formula-science-"));
+    const compiler = new AppServerCodexCompiler({
+      command: process.execPath,
+      commandArgs: [
+        fakeServer,
+        "--expect-structured-turn",
+        "--structured-scientific-output",
+        "--structured-scientific-formula-output",
       ],
       timeoutMs: 2_000,
       ...unisolatedTestProcess,

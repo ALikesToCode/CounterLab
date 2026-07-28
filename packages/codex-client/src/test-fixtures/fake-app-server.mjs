@@ -58,6 +58,9 @@ const structuredScientificSelectedOutput = process.argv.includes(
 const structuredScientificUnsafeBindingOutput = process.argv.includes(
   "--structured-scientific-unsafe-binding-output",
 );
+const structuredScientificFormulaOutput = process.argv.includes(
+  "--structured-scientific-formula-output",
+);
 const structuredInvalidOutput = process.argv.includes(
   "--structured-invalid-output",
 );
@@ -403,6 +406,10 @@ function scientificArtifactsForOutput(evidenceRefs) {
   }
   if (structuredScientificUnsafeBindingOutput) {
     artifacts.labScene.blocks[2].resultBinding = "//unsafe/result";
+  }
+  if (structuredScientificFormulaOutput) {
+    artifacts.experimentIr.candidateExperiments[0].discriminatesBecause =
+      "precision = true positives divided by all alerts";
   }
   return artifacts;
 }

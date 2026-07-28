@@ -1587,6 +1587,65 @@ describe("HostedRunnerJobProcessor", () => {
     ]);
   });
 
+  it("fails closed without retrying or uploading when v5 output violates protocol", async () => {
+    const scientificCompiler = new FakeScientificCompiler(
+      await scientificArtifacts(),
+    );
+    scientificCompiler.compileScientificMethod = async function* () {
+      yield {
+        type: "usage",
+        inputTokens: 31_000,
+        cachedInputTokens: 1_200,
+        outputTokens: 3_800,
+        reasoningOutputTokens: 900,
+        totalTokens: 34_800,
+        modelContextWindow: 200_000,
+      };
+      throw Object.assign(
+        new Error("Experiment IR violated the bounded output policy."),
+        { code: "CODEX_PROTOCOL_ERROR" },
+      );
+    };
+    const controlPlane = new FakeControlPlane(scientificBundleV5(), []);
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler: new FakeCompiler({ schemaVersion: "2" }),
+      scientificCompiler,
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_v5_protocol_error`,
+    });
+
+    await processor.run("runner_job_scientific_1");
+
+    expect(controlPlane.events.map((event) => event.kind)).toEqual([
+      "job.started",
+    ]);
+    expect(controlPlane.uploads.size).toBe(0);
+    expect(controlPlane.candidateCalls).toBe(0);
+    expect(controlPlane.callbacks).toEqual([
+      expect.objectContaining({
+        status: "FAILED",
+        finalEventCursor: 1,
+        outputHashes: [],
+        error: {
+          code: "CODEX_PROTOCOL_ERROR",
+          message: "Codex App Server could not complete the bounded Plan job.",
+          retryable: false,
+        },
+        operationalMetrics: expect.objectContaining({
+          planTokenUsage: {
+            inputTokens: 31_000,
+            cachedInputTokens: 1_200,
+            outputTokens: 3_800,
+            reasoningOutputTokens: 900,
+            totalTokens: 34_800,
+          },
+        }),
+      }),
+    ]);
+  });
+
   it("publishes only allow-listed files and completes a verified plan job", async () => {
     const compiler = new FakeCompiler({ schemaVersion: "2" });
     const controlPlane = new FakeControlPlane(bundle(), [verifiedDecision]);

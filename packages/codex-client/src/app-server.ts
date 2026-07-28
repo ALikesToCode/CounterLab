@@ -13,6 +13,7 @@ import {
   PatchPlanV1Schema,
 } from "@counterlab/contracts";
 import {
+  ExperimentIRPolicyError,
   ExperimentIRV5Schema,
   hashExperimentIR,
 } from "@counterlab/experiment-ir";
@@ -686,6 +687,13 @@ function safeEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 
 function asSetupError(error: unknown): CompilerSetupError {
   if (error instanceof CompilerSetupError) return error;
+  if (error instanceof ExperimentIRPolicyError) {
+    return new CompilerSetupError(
+      "CODEX_PROTOCOL_ERROR",
+      "Codex structured output violated the bounded Experiment IR policy.",
+      { cause: error },
+    );
+  }
   const code =
     error instanceof Error && "code" in error && error.code === "ENOENT"
       ? "CODEX_NOT_FOUND"

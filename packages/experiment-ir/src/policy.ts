@@ -52,7 +52,7 @@ const FORBIDDEN_TEXT: ReadonlyArray<{
   {
     code: "SQL_SOURCE",
     pattern:
-      /\b(?:select|insert|update|delete|drop|alter)\b[\s\S]{0,96}\b(?:from|into|table|set)\b/iu,
+      /(?:^\s*select\s+[\w.*"`-]+(?:\s*,\s*[\w.*"`-]+)*\s+from\s+[\w."`-]+(?:\s+(?:where|join|group\s+by|order\s+by|limit)\b[\s\S]*)?\s*;?\s*$|^\s*insert\s+into\s+[\w."`-]+\s+(?:values\s*\(|\([^)]*\)\s*values\s*\()[\s\S]*$|^\s*update\s+[\w."`-]+\s+set\s+[\w."`-]+\s*=[\s\S]+$|^\s*delete\s+from\s+[\w."`-]+(?:\s+where\b[\s\S]*)?\s*;?\s*$|^\s*(?:drop|alter)\s+table\s+[\w."`-]+[\s\S]*$)/iu,
     message: "SQL source is not allowed in Experiment IR",
   },
   {

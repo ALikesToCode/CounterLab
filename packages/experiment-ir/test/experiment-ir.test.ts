@@ -252,6 +252,11 @@ describe("Experiment IR v5", () => {
       "import os; os.system('id')",
       "curl https://example.invalid/result",
       "SELECT secret FROM hidden_results",
+      "INSERT INTO hidden_results VALUES ('secret')",
+      "UPDATE hidden_results SET value = 'secret'",
+      "DELETE FROM hidden_results",
+      "DROP TABLE hidden_results",
+      "ALTER TABLE hidden_results ADD COLUMN secret TEXT",
       "Read /etc/passwd before deciding",
       "eval(user_expression)",
       "outcome = (x * 2) + y",
@@ -267,6 +272,20 @@ describe("Experiment IR v5", () => {
         ExperimentIRPolicyError,
       );
     }
+  });
+
+  it("allows ordinary threshold-selection prose that is not SQL", () => {
+    const source = nativeIR();
+    const thresholdProse = {
+      ...source,
+      limitations: [
+        "Select a deployment threshold, then set that threshold aside while prevalence changes.",
+        "Select a threshold from the allowed sweep before comparing prevalence.",
+      ],
+    };
+
+    expect(validateExperimentIRPolicy(thresholdProse)).toEqual([]);
+    expect(() => canonicalizeExperimentIR(thresholdProse)).not.toThrow();
   });
 
   it("allows hash-bound notebook code evidence without treating it as IR authority", () => {
