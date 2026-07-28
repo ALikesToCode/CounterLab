@@ -1612,6 +1612,7 @@ async function dispatchRecoverableRunnerJob(input: {
   jobs: RunnerJobService;
   dispatcher: RunnerDispatcher;
   job: RunnerJob;
+  recoverStaleAdmission?: boolean;
 }): Promise<RunnerJob> {
   let dispatchJob = input.job;
   if (dispatchJob.status === "QUEUED") {
@@ -1663,13 +1664,30 @@ async function dispatchRecoverableRunnerJob(input: {
     runnerSigningPrivateKey(input.context, input.options),
   );
   const admissionOperationKey = runnerAdmissionOperationKey(dispatchJob);
-  const admission = await admitOperation(input.context, input.options, {
+  let admission = await admitOperation(input.context, input.options, {
     kind: "runner",
     sessionId: dispatchJob.sessionId,
     operationKey: admissionOperationKey,
   });
-  if (admission.leaseStatus === "already-active") return dispatchJob;
   try {
+    if (admission.leaseStatus === "already-active") {
+      if (input.recoverStaleAdmission !== true) return dispatchJob;
+      await releaseAdmissionBestEffort(
+        input.context,
+        input.options,
+        "runner",
+        admissionOperationKey,
+        admission.leaseGeneration,
+      );
+      admission = await admitOperation(input.context, input.options, {
+        kind: "runner",
+        sessionId: dispatchJob.sessionId,
+        operationKey: admissionOperationKey,
+      });
+      if (admission.leaseStatus === "already-active") {
+        throw new Error("The previous runner admission lease is still active");
+      }
+    }
     await input.dispatcher.dispatch({
       job: dispatchJob,
       token,
@@ -1679,6 +1697,7 @@ async function dispatchRecoverableRunnerJob(input: {
       return await input.jobs.acknowledgeDispatch(
         dispatchJob.jobId,
         dispatchJob.jobVersion,
+        admission.leaseGeneration,
       );
     } catch (error) {
       if (!(error instanceof ConcurrentRunnerJobUpdateError)) throw error;
@@ -1690,6 +1709,7 @@ async function dispatchRecoverableRunnerJob(input: {
       input.options,
       "runner",
       admissionOperationKey,
+      admission.leaseGeneration,
     );
     const failure = {
       code: "RUNNER_DISPATCH_FAILED",
@@ -6012,6 +6032,7 @@ export function createApi(options: ApiOptions = {}) {
         jobs,
         dispatcher,
         job: claimed.job,
+        recoverStaleAdmission: !claimed.reused,
       });
       return context.json(
         jsonSuccess({
@@ -6993,6 +7014,7 @@ export function createApi(options: ApiOptions = {}) {
         options,
         "runner",
         job.requestFingerprint,
+        job.admissionLeaseGeneration,
       );
       const service = sessionService(context, options);
       const current = await service.getSession(sessionId);
@@ -7083,6 +7105,7 @@ export function createApi(options: ApiOptions = {}) {
         options,
         "runner",
         job.requestFingerprint,
+        job.admissionLeaseGeneration,
       );
       const projectedSession = await projectCancellation();
       return context.json(
@@ -7100,6 +7123,7 @@ export function createApi(options: ApiOptions = {}) {
         options,
         "runner",
         job.requestFingerprint,
+        job.admissionLeaseGeneration,
       );
       throw new ApiInputError(
         "RUNNER_JOB_NOT_ACTIVE",
@@ -7142,6 +7166,7 @@ export function createApi(options: ApiOptions = {}) {
       options,
       "runner",
       cancelled.requestFingerprint,
+      cancelled.admissionLeaseGeneration,
     );
     const updatedSession = await projectCancellation();
     let runnerAcknowledged = true;
@@ -8139,6 +8164,7 @@ export function createApi(options: ApiOptions = {}) {
       options,
       "runner",
       completed.job.requestFingerprint,
+      completed.job.admissionLeaseGeneration,
     );
     let updatedSession = await service.getSession(job.sessionId);
     if (
@@ -8862,6 +8888,7 @@ export function createApi(options: ApiOptions = {}) {
           jobs,
           dispatcher,
           job: claimed.job,
+          recoverStaleAdmission: !claimed.reused,
         });
         return context.json(
           jsonSuccess({
@@ -9004,6 +9031,7 @@ export function createApi(options: ApiOptions = {}) {
         jobs,
         dispatcher,
         job: claimed.job,
+        recoverStaleAdmission: !claimed.reused,
       });
       return context.json(
         jsonSuccess({
@@ -9238,6 +9266,7 @@ export function createApi(options: ApiOptions = {}) {
       jobs,
       dispatcher,
       job: claimed.job,
+      recoverStaleAdmission: !claimed.reused,
     });
     return context.json(
       jsonSuccess({
@@ -9470,6 +9499,7 @@ export function createApi(options: ApiOptions = {}) {
         jobs,
         dispatcher,
         job: claimed.job,
+        recoverStaleAdmission: !claimed.reused,
       });
       return context.json(
         jsonSuccess({
@@ -9743,6 +9773,7 @@ export function createApi(options: ApiOptions = {}) {
       jobs,
       dispatcher,
       job: claimed.job,
+      recoverStaleAdmission: !claimed.reused,
     });
     return context.json(
       jsonSuccess({
@@ -10428,6 +10459,7 @@ export function createApi(options: ApiOptions = {}) {
           jobs,
           dispatcher,
           job: claimed.job,
+          recoverStaleAdmission: !claimed.reused,
         });
         return context.json(
           jsonSuccess({
@@ -10606,6 +10638,7 @@ export function createApi(options: ApiOptions = {}) {
         jobs,
         dispatcher,
         job: claimed.job,
+        recoverStaleAdmission: !claimed.reused,
       });
       return context.json(
         jsonSuccess({

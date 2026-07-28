@@ -465,6 +465,29 @@ describe("RunnerJobService", () => {
     expect(duplicate).toEqual({ job: first.job, reused: true });
   });
 
+  it("persists the fenced admission generation with the dispatch acknowledgement", async () => {
+    const harness = service();
+    const queued = await harness.service.createJob(jobInput());
+    const starting = await harness.service.transition(
+      queued.jobId,
+      queued.jobVersion,
+      "STARTING",
+      { runnerIdentity: "runner-container-test" },
+    );
+
+    await expect(
+      harness.service.acknowledgeDispatch(
+        starting.jobId,
+        starting.jobVersion,
+        2,
+      ),
+    ).resolves.toMatchObject({
+      status: "STARTING",
+      admissionLeaseGeneration: 2,
+      dispatchAcknowledgedAt: expect.any(String),
+    });
+  });
+
   it("persists browser-safe events in cursor order and reconnects after a cursor", async () => {
     const harness = service();
     const queued = await harness.service.createJob(jobInput());

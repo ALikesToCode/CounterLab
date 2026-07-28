@@ -11501,6 +11501,51 @@ describe("Cloudflare Worker API", () => {
     ]);
   });
 
+  it("reclaims a stale admission lease before dispatching a fresh runner job", async () => {
+    const admissionControl = new CapturingAdmissionControl([
+      {
+        admitted: true,
+        reused: true,
+        leaseStatus: "already-active",
+        leaseExpiresAt: Date.parse("2026-07-14T10:02:00.000Z"),
+        leaseGeneration: 1,
+      },
+      {
+        admitted: true,
+        reused: true,
+        leaseStatus: "reacquired",
+        leaseExpiresAt: Date.parse("2026-07-14T10:04:00.000Z"),
+        leaseGeneration: 2,
+      },
+    ]);
+    const dispatcher = new CapturingRunnerDispatcher();
+    const harness = await preparedHostedRunner(
+      "session_stale_runner_admission",
+      dispatcher,
+      admissionControl,
+    );
+
+    expect(harness.queued.status).toBe(202);
+    await expect(harness.queued.json()).resolves.toMatchObject({
+      data: {
+        runnerJob: {
+          status: "STARTING",
+          dispatchAcknowledgedAt: expect.any(String),
+        },
+      },
+    });
+    expect(admissionControl.admitted).toHaveLength(2);
+    expect(admissionControl.released).toEqual([
+      {
+        policyVersion: "counterlab-admission-v1",
+        kind: "runner",
+        operationKey: admissionControl.admitted[0]?.operationKey,
+        leaseGeneration: 1,
+      },
+    ]);
+    expect(dispatcher.dispatched).toHaveLength(1);
+  });
+
   it("preserves a failed dispatch and retries the compile on a fresh separate job", async () => {
     const dispatcher = new CapturingRunnerDispatcher(1);
     const harness = await preparedHostedRunner(

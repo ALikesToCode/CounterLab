@@ -1393,6 +1393,7 @@ export const RunnerJobSchema = z
     updatedAt: z.iso.datetime({ offset: true }),
     startedAt: z.iso.datetime({ offset: true }).optional(),
     dispatchAcknowledgedAt: z.iso.datetime({ offset: true }).optional(),
+    admissionLeaseGeneration: z.number().int().positive().optional(),
     completedAt: z.iso.datetime({ offset: true }).optional(),
     attempt: z.number().int().nonnegative(),
     maxAttempts: z.number().int().positive().max(3),

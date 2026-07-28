@@ -417,6 +417,7 @@ export class RunnerJobService {
   async acknowledgeDispatch(
     jobId: string,
     expectedVersion: number,
+    admissionLeaseGeneration?: number,
   ): Promise<RunnerJob> {
     const current = await this.getJob(jobId);
     if (current.dispatchAcknowledgedAt !== undefined) return current;
@@ -443,6 +444,9 @@ export class RunnerJobService {
     const next = RunnerJobSchema.parse({
       ...current,
       dispatchAcknowledgedAt: timestamp,
+      ...(admissionLeaseGeneration === undefined
+        ? {}
+        : { admissionLeaseGeneration }),
       jobVersion: current.jobVersion + 1,
       updatedAt: timestamp,
     });
