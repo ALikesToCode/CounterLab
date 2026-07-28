@@ -8812,6 +8812,18 @@ describe("Cloudflare Worker API", () => {
       harness.sessionRepository.find(bundle.sessionId),
     ).resolves.toMatchObject({ state: "PATCH_VERIFIED" });
 
+    sessionRepository.interruptNext("reasoning_diff_v2.issued");
+    const interruptedRecovery = await harness.app.request(
+      `/api/sessions/${bundle.sessionId}/patch/compile`,
+      { method: "POST" },
+      capsuleSigningEnv,
+    );
+    expect(interruptedRecovery.status).toBe(500);
+    await expect(
+      harness.sessionRepository.find(bundle.sessionId),
+    ).resolves.toMatchObject({ state: "PATCH_VERIFIED" });
+    expect(harness.dispatcher.dispatched).toHaveLength(4);
+
     const requestDuplicateCallback = () =>
       harness.app.request(
         `/api/runner/jobs/${patchDispatch.job.jobId}/callback`,

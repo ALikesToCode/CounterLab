@@ -5,6 +5,7 @@ import {
   BoundaryMapVerificationReportV1Schema,
   ExperimentPlanV2Schema,
   HostedExperimentLineageV5Schema,
+  HostedPatchAuthorityRefV5Schema,
   HostedVerifiedResultSetV2Schema,
   InteractiveImbalanceRunRequestSchema,
   InteractiveLeakageRunRequestSchema,
@@ -10135,6 +10136,44 @@ export function createApi(options: ApiOptions = {}) {
     const sourceArtifact = await artifacts(context, options).find(
       current.artifactId,
     );
+    const storedPatchAuthority = HostedPatchAuthorityRefV5Schema.safeParse(
+      current.patchAuthority,
+    );
+    if (
+      current.mode.kind === "live_notebook" &&
+      current.patchResult?.status === "VERIFIED" &&
+      storedPatchAuthority.success &&
+      (current.state === "PATCH_VERIFIED" ||
+        current.state === "REASONING_DIFF_ISSUED" ||
+        current.state === "PROOF_CAPSULE_ISSUED")
+    ) {
+      if (sourceArtifact === undefined) {
+        throw new ApiInputError(
+          "PROOF_AUTHORITY_MISSING",
+          "The source Artifact Manifest is unavailable for native proof issuance",
+          409,
+        );
+      }
+      const recovered = await finalizeNativeProofV5({
+        service,
+        jobs: runnerJobService(context, options),
+        store: runnerObjectStore(context, options),
+        session: current,
+        manifest: sourceArtifact.manifest,
+        ...(context.env?.COUNTERLAB_SIGNING_KEY === undefined
+          ? {}
+          : { signingKey: context.env.COUNTERLAB_SIGNING_KEY }),
+        ...(context.env?.COUNTERLAB_SIGNING_KEY_ID === undefined
+          ? {}
+          : { signingKeyId: context.env.COUNTERLAB_SIGNING_KEY_ID }),
+      });
+      return context.json(
+        jsonSuccess({
+          ...(await statePayload(context, recovered, options)),
+          patch: recovered.patchResult,
+        }),
+      );
+    }
     if (current.mode.kind === "live_notebook") {
       const dispatcher = runnerDispatcher(context, options);
       if (dispatcher === undefined) {
