@@ -232,7 +232,10 @@ async function writeLiveSmokeEvidence(
   const publishButton = page.getByRole("button", {
     name: /Confirm and publish read-only replay/i,
   });
-  await page.getByRole("button", { name: /Evidence & proof/i }).click();
+  await page
+    .locator("summary")
+    .filter({ hasText: /^Evidence & proof$/ })
+    .click();
   await expect(publicationConsent).toBeVisible();
   await expect(publicationConsent).not.toBeChecked();
   await expect(publishButton).toBeDisabled();
