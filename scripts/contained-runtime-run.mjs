@@ -561,6 +561,10 @@ export function containedRunPlan({
       program: resolve(binRoot, "nerdctl"),
       args: [...nerdctlGlobalArgs, "rm", "--force"],
     },
+    terminateTask: {
+      program: ctr,
+      args: [...ctrGlobalArgs, "tasks", "kill", "--signal", "SIGKILL"],
+    },
     cleanupTask: {
       program: ctr,
       args: [...ctrGlobalArgs, "tasks", "delete", "--force"],
@@ -803,6 +807,16 @@ function cleanupFinal(plan, containerId, baseSpecSha256, spawn, options) {
   }
   const deletions = [];
   if (owned.taskPresent) {
+    deletions.push(
+      spawn(
+        plan.terminateTask.program,
+        [...plan.terminateTask.args, containerId],
+        {
+          ...options,
+          input: Buffer.alloc(0),
+        },
+      ),
+    );
     deletions.push(
       spawn(plan.cleanupTask.program, [...plan.cleanupTask.args, containerId], {
         ...options,

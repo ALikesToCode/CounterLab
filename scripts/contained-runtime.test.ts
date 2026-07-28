@@ -987,6 +987,10 @@ function qualifiedRuntimeHarness() {
         error: timeoutError,
       };
     }
+    if (joined.includes("tasks kill")) {
+      events.push("task-terminated");
+      return successful();
+    }
     if (joined.includes("tasks delete")) {
       events.push("task-cleaned");
       taskPresent = false;
@@ -1365,6 +1369,7 @@ describe("contained runtime command policy", () => {
       "qualification-ready",
       "candidate-started",
       "qualification-draft",
+      "task-terminated",
       "task-cleaned",
       "container-cleaned",
       "rootfs-cleaned",
@@ -3711,6 +3716,9 @@ describe("contained runtime command policy", () => {
         );
         baseSpecSha256 = label!.split("=", 2)[1]!;
         return successful("verified\n");
+      }
+      if (joined.includes("tasks kill")) {
+        return successful();
       }
       if (joined.includes("tasks delete")) {
         return {
