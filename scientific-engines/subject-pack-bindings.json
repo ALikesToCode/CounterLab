@@ -92,7 +92,7 @@
           "authorityId": "counterlab-mutation-matrix",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-mutations-integrity-v2",
-          "integrityHash": "66f6e82fd60a6c8936f8ae1f996dec8b52dad91ff22be977a47f0fe7186aa965",
+          "integrityHash": "b1cd73c2aa77bf90d098969c1901959674f434524a3f3fb2e2250b480ef064fe",
           "validationEvidenceIds": [
             "ml-row-order-invariance-v1"
           ],
@@ -195,7 +195,7 @@
           "authorityId": "counterlab-mutation-matrix",
           "exactVersion": "2.0.0",
           "integrityEvidenceId": "internal-mutations-integrity-v2",
-          "integrityHash": "66f6e82fd60a6c8936f8ae1f996dec8b52dad91ff22be977a47f0fe7186aa965",
+          "integrityHash": "b1cd73c2aa77bf90d098969c1901959674f434524a3f3fb2e2250b480ef064fe",
           "validationEvidenceIds": [
             "ml-row-order-invariance-v1"
           ],
