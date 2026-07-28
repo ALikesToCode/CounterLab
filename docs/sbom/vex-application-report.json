@@ -1,13 +1,13 @@
 {
   "schemaVersion": "1",
   "evidenceKind": "vex-application-report",
-  "imageDigest": "sha256:f2bf2ccbf61e418e475024cd805b60bbd6bc159383634375e6ff512ff239dfa0",
-  "manifestDigest": "sha256:7a10d6e808cff5f3ecdf8571450877512e7ab2503f165c708188ef28a9dac92b",
+  "imageDigest": "sha256:d74548d71179d0d2e053916880824d776afa828e367fc3a272e41baefeb92d6a",
+  "manifestDigest": "sha256:722597e1b8c61ee24fa02fd8646f392b46defbffdfcd34747fe766516ea42757",
   "loadedImage": {
-    "imageTag": "counterlab-runner:git-fd5276112f1e497ae8fd14a2be258f7a87f88e9b",
-    "imageDigest": "sha256:f2bf2ccbf61e418e475024cd805b60bbd6bc159383634375e6ff512ff239dfa0",
-    "sourceCommit": "fd5276112f1e497ae8fd14a2be258f7a87f88e9b",
-    "sourceTreeSha256": "2511666f2f7ee67481598f1e686692d3eb664f2d5653c340cd8de1d27ed39f3d",
+    "imageTag": "counterlab-runner:git-3f311367f9ed7a48999f409551aecc7a6797ddb1",
+    "imageDigest": "sha256:d74548d71179d0d2e053916880824d776afa828e367fc3a272e41baefeb92d6a",
+    "sourceCommit": "3f311367f9ed7a48999f409551aecc7a6797ddb1",
+    "sourceTreeSha256": "a149daae919e5ddc2b387bfb5434d6373930f64e546216362d218907051d8a34",
     "sourceUrl": "https://github.com/ALikesToCode/CounterLab",
     "platform": {
       "architecture": "amd64",
@@ -22,19 +22,19 @@
     "databaseBuiltAt": "2026-07-28T07:06:26.000Z",
     "databaseValid": true
   },
-  "vexSha256": "ae2385f2401bc0f2bf283e6abec28c95334e09d3426d56e429b29edbf44f7427",
+  "vexSha256": "f5e1ce0ade88981a7f15c5d6e41d2aecbde1a0403d43933c012f7d9bbc316228",
   "inputs": {
     "baseline": {
       "evidenceId": "grype-raw-scan-v2",
-      "sha256": "c54affb521a609d328456b629266bb6e5da6350fdc5c75f6ecc76fdcbb0c4690"
+      "sha256": "201ce02e1275855d25ad759e64e6c85c153991e792205f6787e36934f5564512"
     },
     "applied": {
       "evidenceId": "grype-vex-applied-v1",
-      "sha256": "0412320889e50e770dfc3f38c51ef6e8d98b12af2253aec207f4168fd3cc7096"
+      "sha256": "50d642b5c22cae5fed3f9614e0f2bb6da5d9646796ad63a746820047cea74b30"
     },
     "negativeControl": {
       "evidenceId": "grype-vex-negative-v1",
-      "sha256": "8157fd4df79fb536a6701253fbe6ebd96a44b5f1c17d5c24025483255218e0a2"
+      "sha256": "ba2e3de33a53660ac53edfe543895f2eb32989682e4ab91ee65fc6edc3cde35d"
     }
   },
   "suppressedFinding": {
