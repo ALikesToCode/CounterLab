@@ -20,7 +20,7 @@
     "packages/boundary-map/src/index.ts": "c11967a0d97da2e56fc2eb7d4fd87dcdfc7051968450d18b1af601ddb80ca5e1",
     "packages/boundary-map/test/verifier.test.ts": "87b12762a01a03f89389f193144f39997ab5075ab70e87c6574b4504486130d0",
     "packages/codex-client/src/prompts.ts": "dc45972f3730db58f447e3ba78b1fd04bcfe69feaf68e42984048ea85278e622",
-    "packages/codex-client/src/scientific-method.test.ts": "289019f4b608a2850062e6f6418ca9763eb1a08fd7ae9477f3b782ff3935b244",
+    "packages/codex-client/src/scientific-method.test.ts": "0afb0effa34eaae05448d08a0e2a67ed0c4d74f014e236843458ebbe1be62aaa",
     "packages/concept-registry/src/index.test.ts": "c1ea94b3bc0493d2ab39804be14f315b76f6514f5b4281ce9a3a3b9a3dd56d9c",
     "packages/concept-registry/src/index.ts": "9f0edf4c8e7bc62f73ed851442f59efe5b1d60b31542b7fb2d2cf41411c202f1",
     "packages/experiment-ir/test/experiment-ir.test.ts": "cbad7d815db211a419e19869980736f3e3045cf6ed64a490d97f8b4a5bd7b642",
