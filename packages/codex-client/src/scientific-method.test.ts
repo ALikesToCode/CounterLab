@@ -494,4 +494,46 @@ describe("hosted scientific-method compiler", () => {
       ).selection,
     ).toEqual({ status: "UNSELECTED" });
   });
+
+  it("uses one bounded repair turn when immutable scientific lineage is invalid", async () => {
+    const fakeServer = fileURLToPath(
+      new URL("./test-fixtures/fake-app-server.mjs", import.meta.url),
+    );
+    const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+    const work = join(
+      root,
+      `node_modules/.cache/counterlab-v6.1/test-work/codex-lineage-repair-${process.pid}`,
+    );
+    await mkdir(work, { recursive: true });
+    const compiler = new AppServerCodexCompiler({
+      command: process.execPath,
+      commandArgs: [
+        fakeServer,
+        "--expect-structured-turn",
+        "--structured-scientific-output",
+        "--structured-scientific-lineage-until-artifact-repair",
+      ],
+      timeoutMs: 2_000,
+      ...unisolatedTestProcess,
+    });
+
+    const events = await collect(
+      compiler.compileScientificMethod(scientificInput(work)),
+    );
+
+    expect(events).toContainEqual({
+      type: "policy_repair",
+      attempt: 1,
+      findingCodes: ["IMMUTABLE_LINEAGE_MISMATCH"],
+    });
+    expect(events.at(-1)).toMatchObject({
+      type: "file_change",
+      status: "completed",
+    });
+    expect(
+      ExperimentIRV5Schema.parse(
+        JSON.parse(await readFile(join(work, "experiment-ir.json"), "utf8")),
+      ).sessionId,
+    ).toBe(scientificInput(work).sessionId);
+  });
 });

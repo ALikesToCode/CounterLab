@@ -359,6 +359,10 @@ export const CompilerEventSchema = z.discriminatedUnion("type", [
             "SQL_SOURCE",
             "NETWORK_REFERENCE",
             "RAW_PATH",
+            "OUTPUT_SCHEMA_INVALID",
+            "IMMUTABLE_LINEAGE_MISMATCH",
+            "CANDIDATE_REFERENCE_INVALID",
+            "LAB_SCENE_INVALID",
           ]),
         )
         .min(1)

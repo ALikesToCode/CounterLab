@@ -64,6 +64,9 @@ const structuredScientificFormulaOutput = process.argv.includes(
 const structuredScientificFormulaUntilPolicyRepair = process.argv.includes(
   "--structured-scientific-formula-until-policy-repair",
 );
+const structuredScientificLineageUntilArtifactRepair = process.argv.includes(
+  "--structured-scientific-lineage-until-artifact-repair",
+);
 const structuredInvalidOutput = process.argv.includes(
   "--structured-invalid-output",
 );
@@ -400,6 +403,7 @@ function canonicalScientificArtifacts(evidenceRefs) {
 function scientificArtifactsForOutput(
   evidenceRefs,
   formulaOutput = structuredScientificFormulaOutput,
+  lineageOutput = false,
 ) {
   const artifacts = canonicalScientificArtifacts(evidenceRefs);
   if (structuredScientificSelectedOutput) {
@@ -416,6 +420,9 @@ function scientificArtifactsForOutput(
   if (formulaOutput) {
     artifacts.experimentIr.candidateExperiments[0].discriminatesBecause =
       "precision = true positives divided by all alerts";
+  }
+  if (lineageOutput) {
+    artifacts.experimentIr.sessionId = "session_wrong_lineage";
   }
   return artifacts;
 }
@@ -483,8 +490,13 @@ lines.on("line", (line) => {
       structuredScientificFormulaOutput ||
       (structuredScientificFormulaUntilPolicyRepair &&
         !turnInputText.includes(
-          "The previous schema-valid candidate was rejected",
+          "The previous candidate failed CounterLab's fixed scientific artifact validation",
         ));
+    const lineageOutput =
+      structuredScientificLineageUntilArtifactRepair &&
+      !turnInputText.includes(
+        "The previous candidate failed CounterLab's fixed scientific artifact validation",
+      );
     const failureMarker = failTurnTwiceFile ?? failTurnOnceFile;
     const failuresBeforeSuccess = failTurnTwiceFile ? 2 : 1;
     const observedFailures =
@@ -579,7 +591,11 @@ lines.on("line", (line) => {
                 authoritativeArtifact: structuredInvalidOutput
                   ? { schemaVersion: "2" }
                   : structuredScientificOutput
-                    ? scientificArtifactsForOutput(evidenceRefs, formulaOutput)
+                    ? scientificArtifactsForOutput(
+                        evidenceRefs,
+                        formulaOutput,
+                        lineageOutput,
+                      )
                     : structuredPatchOutput
                       ? canonicalPatchPlan(evidenceRefs)
                       : canonicalExperimentPlan(evidenceRefs),

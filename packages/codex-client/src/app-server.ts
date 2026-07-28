@@ -74,6 +74,27 @@ const DISCRIMINATION_CONTRACT_PATH = "discrimination-contract.json";
 const EXPERIMENT_IR_PATH = "experiment-ir.json";
 const LAB_SCENE_PATH = "lab-scene.json";
 
+type ScientificArtifactFindingCode =
+  | ExperimentIRPolicyFindingCode
+  | "OUTPUT_SCHEMA_INVALID"
+  | "IMMUTABLE_LINEAGE_MISMATCH"
+  | "CANDIDATE_REFERENCE_INVALID"
+  | "LAB_SCENE_INVALID";
+
+class ScientificArtifactValidationError extends Error {
+  readonly findingCode: ScientificArtifactFindingCode;
+
+  constructor(
+    findingCode: ScientificArtifactFindingCode,
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = "ScientificArtifactValidationError";
+    this.findingCode = findingCode;
+  }
+}
+
 const StructuredHostedOutputSchema = z
   .object({
     authoritativeArtifact: JsonValueSchema,
@@ -347,22 +368,42 @@ async function materializeStructuredScientificOutput(
   try {
     value = JSON.parse(finalMessage) as unknown;
   } catch (error) {
-    throw new CompilerSetupError(
-      "CODEX_PROTOCOL_ERROR",
+    throw new ScientificArtifactValidationError(
+      "OUTPUT_SCHEMA_INVALID",
       "Codex did not return schema-constrained scientific artifacts.",
       { cause: error },
     );
   }
 
-  const envelope = StructuredHostedOutputSchema.parse(value);
-  const artifacts = z
+  const envelopeResult = StructuredHostedOutputSchema.safeParse(value);
+  if (!envelopeResult.success) {
+    throw new ScientificArtifactValidationError(
+      "OUTPUT_SCHEMA_INVALID",
+      "Codex scientific output did not match the fixed response envelope.",
+      { cause: envelopeResult.error },
+    );
+  }
+  const artifactsResult = z
     .object({
       discriminationContract: DiscriminationContractV1Schema,
       experimentIr: ExperimentIRV5Schema,
       labScene: LabSceneDraftV2Schema,
     })
     .strict()
-    .parse(removeModelBoundaryNullPlaceholders(envelope.authoritativeArtifact));
+    .safeParse(
+      removeModelBoundaryNullPlaceholders(
+        envelopeResult.data.authoritativeArtifact,
+      ),
+    );
+  if (!artifactsResult.success) {
+    throw new ScientificArtifactValidationError(
+      "OUTPUT_SCHEMA_INVALID",
+      "Codex scientific artifacts did not match the fixed local schemas.",
+      { cause: artifactsResult.error },
+    );
+  }
+  const envelope = envelopeResult.data;
+  const artifacts = artifactsResult.data;
   const beliefSpec = BeliefSpecV2Schema.parse(input.approvedBeliefSpec);
   if (
     artifacts.experimentIr.selection.status !== "UNSELECTED" ||
@@ -399,8 +440,8 @@ async function materializeStructuredScientificOutput(
     artifacts.experimentIr.hypotheses[1].statement !==
       beliefSpec.hypotheses[1].statement
   ) {
-    throw new CompilerSetupError(
-      "CODEX_PROTOCOL_ERROR",
+    throw new ScientificArtifactValidationError(
+      "IMMUTABLE_LINEAGE_MISMATCH",
       "Codex scientific artifacts failed immutable lineage or selection policy.",
     );
   }
@@ -424,13 +465,13 @@ async function materializeStructuredScientificOutput(
         ),
     )
   ) {
-    throw new CompilerSetupError(
-      "CODEX_PROTOCOL_ERROR",
+    throw new ScientificArtifactValidationError(
+      "CANDIDATE_REFERENCE_INVALID",
       "The Discrimination Contract references an unresolved candidate experiment.",
     );
   }
 
-  const scene = LabSceneV2Schema.parse({
+  const sceneResult = LabSceneV2Schema.safeParse({
     ...artifacts.labScene,
     provenance: {
       discriminationContractHash: await hashCanonical(
@@ -439,6 +480,14 @@ async function materializeStructuredScientificOutput(
       experimentIrHash: await hashExperimentIR(artifacts.experimentIr),
     },
   });
+  if (!sceneResult.success) {
+    throw new ScientificArtifactValidationError(
+      "LAB_SCENE_INVALID",
+      "The generated lab scene did not match its fixed verified bindings.",
+      { cause: sceneResult.error },
+    );
+  }
+  const scene = sceneResult.data;
   const canonicalDirectory = await realpath(input.generationDirectory);
   await writeBoundedFile(
     directChild(canonicalDirectory, DISCRIMINATION_CONTRACT_PATH),
@@ -695,6 +744,13 @@ function asSetupError(error: unknown): CompilerSetupError {
       { cause: error },
     );
   }
+  if (error instanceof ScientificArtifactValidationError) {
+    return new CompilerSetupError(
+      "CODEX_PROTOCOL_ERROR",
+      "Codex structured output failed fixed scientific artifact validation.",
+      { cause: error },
+    );
+  }
   const code =
     error instanceof Error && "code" in error && error.code === "ENOENT"
       ? "CODEX_NOT_FOUND"
@@ -717,17 +773,30 @@ function experimentIRPolicyFailure(
   return undefined;
 }
 
+function scientificArtifactFailure(
+  error: unknown,
+): ScientificArtifactValidationError | undefined {
+  if (error instanceof ScientificArtifactValidationError) return error;
+  if (
+    error instanceof Error &&
+    error.cause instanceof ScientificArtifactValidationError
+  ) {
+    return error.cause;
+  }
+  return undefined;
+}
+
 function policyRepairPrompt(
   originalPrompt: string,
   attempt: 1 | 2,
-  findingCodes: readonly ExperimentIRPolicyFindingCode[],
+  findingCodes: readonly ScientificArtifactFindingCode[],
 ): string {
   return `${originalPrompt}
 
-The previous schema-valid candidate was rejected by CounterLab's fixed local Experiment IR text policy before any file was materialized. This is bounded repair attempt ${attempt} of at most 2.
-Return a fresh complete structured candidate. Preserve the immutable input lineage and allowed operation composition. Correct every rejected text-policy class below without weakening, omitting, or reinterpreting the policy. Use short plain-language comparisons only; do not use equations, assignment syntax, executable source, commands, SQL, URLs, or raw paths.
+The previous candidate failed CounterLab's fixed scientific artifact validation before any file was materialized. This is bounded repair attempt ${attempt} of at most 2.
+Return a fresh complete structured candidate. Copy the immutable input lineage exactly, keep selection UNSELECTED, and use only the allowed candidate and operation IDs. Correct every sanitized rejection class below without weakening, omitting, or reinterpreting any fixed schema or policy. Use short plain-language comparisons only; do not use equations, assignment syntax, executable source, commands, SQL, URLs, or raw paths.
 
-Fixed local rejection classes:
+Fixed local validation classes:
 ${JSON.stringify(findingCodes)}
 `;
 }
@@ -1251,13 +1320,24 @@ export class AppServerCodexCompiler implements CodexCompiler {
         return;
       } catch (error) {
         const policyFailure = experimentIRPolicyFailure(error);
-        if (policyFailure === undefined || repairAttempts >= 2) throw error;
+        const artifactFailure = scientificArtifactFailure(error);
+        if (
+          (policyFailure === undefined && artifactFailure === undefined) ||
+          repairAttempts >= 2
+        ) {
+          throw error;
+        }
 
         repairAttempts += 1;
         const attempt = repairAttempts as 1 | 2;
-        const findingCodes = [
-          ...new Set(policyFailure.findings.map((finding) => finding.code)),
-        ].sort() as ExperimentIRPolicyFindingCode[];
+        const findingCodes =
+          policyFailure === undefined
+            ? [artifactFailure!.findingCode]
+            : ([
+                ...new Set(
+                  policyFailure.findings.map((finding) => finding.code),
+                ),
+              ].sort() as ExperimentIRPolicyFindingCode[]);
         yield {
           type: "policy_repair",
           attempt,
