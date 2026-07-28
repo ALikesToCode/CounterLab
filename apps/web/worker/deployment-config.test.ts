@@ -372,11 +372,19 @@ describe("Cloudflare static asset routing", () => {
       resolve(process.cwd(), "../../scripts/create-deployment-receipt.ts"),
       "utf8",
     );
+    const replayPreflight = readFileSync(
+      resolve(process.cwd(), "../../scripts/query-legacy-replay-count.ts"),
+      "utf8",
+    );
 
     expect(script).toContain("git status --porcelain=v1 --untracked-files=all");
     expect(script).toContain("COUNTERLAB_ADMISSION_KEY");
     expect(script).toContain("d1 migrations apply DB");
-    expect(script).toContain("existing_replay_count");
+    expect(script).toContain("scripts/query-legacy-replay-count.ts");
+    expect(replayPreflight).toContain("existing_replay_count");
+    expect(replayPreflight).toContain(
+      "public_replay_projections.replay_id IS NULL",
+    );
     expect(script.match(/query_legacy_replay_count/gu)).toHaveLength(3);
     expect(script).toContain('rollback "${recovery_version}"');
     expect(script).toContain("recover_previous_worker");

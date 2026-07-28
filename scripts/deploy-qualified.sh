@@ -415,27 +415,10 @@ assert_frozen_worker_release() {
 
 query_legacy_replay_count() {
   local output_path="$1"
-  "${WRANGLER}" d1 execute DB \
-    --remote \
+  "${TSX}" scripts/query-legacy-replay-count.ts \
+    --wrangler "${WRANGLER}" \
     --config "${RELEASE_CONFIG}" \
-    --command "SELECT COUNT(*) AS existing_replay_count FROM replays" \
-    --json >"${output_path}"
-  node - "${output_path}" <<'NODE'
-const fs = require("node:fs");
-const payload = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-const groups = Array.isArray(payload) ? payload : [payload];
-const counts = groups
-  .flatMap((group) =>
-    Array.isArray(group?.results)
-      ? group.results.map((row) => row?.existing_replay_count)
-      : [],
-  )
-  .filter((value) => Number.isInteger(value) && value >= 0);
-if (counts.length !== 1) {
-  throw new Error("D1 did not return one existing replay count");
-}
-process.stdout.write(String(counts[0]));
-NODE
+    --output "${output_path}"
 }
 
 FINAL_READINESS_RUN=0
