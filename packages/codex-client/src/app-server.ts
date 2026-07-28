@@ -16,6 +16,7 @@ import {
   ExperimentIRPolicyError,
   ExperimentIRV5Schema,
   hashExperimentIR,
+  type ExperimentIRPolicyFindingCode,
 } from "@counterlab/experiment-ir";
 import {
   LabSceneDraftV2Schema,
@@ -703,6 +704,34 @@ function asSetupError(error: unknown): CompilerSetupError {
   });
 }
 
+function experimentIRPolicyFailure(
+  error: unknown,
+): ExperimentIRPolicyError | undefined {
+  if (error instanceof ExperimentIRPolicyError) return error;
+  if (
+    error instanceof Error &&
+    error.cause instanceof ExperimentIRPolicyError
+  ) {
+    return error.cause;
+  }
+  return undefined;
+}
+
+function policyRepairPrompt(
+  originalPrompt: string,
+  attempt: 1 | 2,
+  findingCodes: readonly ExperimentIRPolicyFindingCode[],
+): string {
+  return `${originalPrompt}
+
+The previous schema-valid candidate was rejected by CounterLab's fixed local Experiment IR text policy before any file was materialized. This is bounded repair attempt ${attempt} of at most 2.
+Return a fresh complete structured candidate. Preserve the immutable input lineage and allowed operation composition. Correct every rejected text-policy class below without weakening, omitting, or reinterpreting the policy. Use short plain-language comparisons only; do not use equations, assignment syntax, executable source, commands, SQL, URLs, or raw paths.
+
+Fixed local rejection classes:
+${JSON.stringify(findingCodes)}
+`;
+}
+
 function parseInput<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
   if (!result.success) {
@@ -1168,16 +1197,12 @@ export class AppServerCodexCompiler implements CodexCompiler {
     options: CompilerExecutionOptions = {},
   ): AsyncIterable<CompilerEvent> {
     const input = parseInput(CompileHostedScientificMethodInputSchema, raw);
-    yield* this.run(
+    yield* this.runScientificMethodWithPolicyRepairs(
+      input,
       buildCompileHostedScientificMethodPrompt(input),
-      input.generationDirectory,
       "plan",
+      0,
       options.signal,
-      {
-        outputSchema: scientificArtifactsOutputSchema(input),
-        materialize: (finalMessage) =>
-          materializeStructuredScientificOutput(input, finalMessage),
-      },
     );
     yield materializedScientificFileEvent();
   }
@@ -1195,18 +1220,53 @@ export class AppServerCodexCompiler implements CodexCompiler {
         counterexample: counterexample.counterexample,
       };
     }
-    yield* this.run(
+    yield* this.runScientificMethodWithPolicyRepairs(
+      input,
       buildRepairHostedScientificMethodPrompt(input),
-      input.generationDirectory,
       "repair",
+      input.repairAttempt,
       options.signal,
-      {
-        outputSchema: scientificArtifactsOutputSchema(input),
-        materialize: (finalMessage) =>
-          materializeStructuredScientificOutput(input, finalMessage),
-      },
     );
     yield materializedScientificFileEvent();
+  }
+
+  private async *runScientificMethodWithPolicyRepairs(
+    input: CompileHostedScientificMethodInput,
+    originalPrompt: string,
+    initialPhase: "plan" | "repair",
+    initialRepairAttempts: number,
+    signal?: AbortSignal,
+  ): AsyncIterable<CompilerEvent> {
+    let phase = initialPhase;
+    let prompt = originalPrompt;
+    let repairAttempts = initialRepairAttempts;
+
+    while (true) {
+      try {
+        yield* this.run(prompt, input.generationDirectory, phase, signal, {
+          outputSchema: scientificArtifactsOutputSchema(input),
+          materialize: (finalMessage) =>
+            materializeStructuredScientificOutput(input, finalMessage),
+        });
+        return;
+      } catch (error) {
+        const policyFailure = experimentIRPolicyFailure(error);
+        if (policyFailure === undefined || repairAttempts >= 2) throw error;
+
+        repairAttempts += 1;
+        const attempt = repairAttempts as 1 | 2;
+        const findingCodes = [
+          ...new Set(policyFailure.findings.map((finding) => finding.code)),
+        ].sort() as ExperimentIRPolicyFindingCode[];
+        yield {
+          type: "policy_repair",
+          attempt,
+          findingCodes,
+        };
+        prompt = policyRepairPrompt(originalPrompt, attempt, findingCodes);
+        phase = "repair";
+      }
+    }
   }
 
   async *compileHostedPatchPlan(

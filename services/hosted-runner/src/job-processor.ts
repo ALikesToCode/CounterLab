@@ -859,11 +859,8 @@ export class HostedRunnerJobProcessor {
     operationalMetrics.verifierDurationMs += decision.verifierDurationMs;
     progress.cursor = decision.nextCursor;
 
-    for (
-      let repairAttempt = 1;
-      decision.status === "REJECTED";
-      repairAttempt += 1
-    ) {
+    while (decision.status === "REJECTED") {
+      const repairAttempt = operationalMetrics.repairAttempts + 1;
       if (!decision.canRepair || repairAttempt > 2) {
         throw new RunnerProcessingError(
           "SCIENTIFIC_METHOD_VERIFIER_REJECTED",
@@ -1236,6 +1233,22 @@ export class HostedRunnerJobProcessor {
           );
           if (progress !== undefined) progress.cursor = cursor;
         }
+      } else if (event.type === "policy_repair") {
+        if (event.attempt !== operationalMetrics.repairAttempts + 1) {
+          throw new RunnerProcessingError(
+            "CODEX_PROTOCOL_ERROR",
+            "Codex reported an invalid scientific repair sequence.",
+            false,
+          );
+        }
+        operationalMetrics.repairAttempts = event.attempt;
+        cursor = await this.emit(
+          jobId,
+          cursor,
+          { kind: "repair.started", attempt: event.attempt },
+          signal,
+        );
+        if (progress !== undefined) progress.cursor = cursor;
       } else if (event.type === "command") {
         cursor = await this.emit(
           jobId,

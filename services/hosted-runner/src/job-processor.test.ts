@@ -1646,6 +1646,68 @@ describe("HostedRunnerJobProcessor", () => {
     ]);
   });
 
+  it("counts local output-policy repairs against the two-turn scientific budget", async () => {
+    const scientificCompiler = new FakeScientificCompiler(
+      await scientificArtifacts(),
+    );
+    const compile =
+      scientificCompiler.compileScientificMethod.bind(scientificCompiler);
+    scientificCompiler.compileScientificMethod = async function* (input) {
+      yield {
+        type: "policy_repair",
+        attempt: 1,
+        findingCodes: ["DYNAMIC_EXPRESSION"],
+      };
+      yield {
+        type: "policy_repair",
+        attempt: 2,
+        findingCodes: ["DYNAMIC_EXPRESSION"],
+      };
+      yield* compile(input);
+    };
+    const rejected: CandidateDecision = {
+      status: "REJECTED",
+      canRepair: true,
+      nextCursor: 8,
+      verifierDurationMs: 6,
+      counterexamples: [
+        {
+          invariant: "MISSING_REQUIRED_CONTROL",
+          observed: ["model", "seed"],
+          expected: ["model", "seed", "preprocessing"],
+          counterexample: "preprocessing is not held constant",
+        },
+      ],
+    };
+    const controlPlane = new FakeControlPlane(scientificBundleV5(), [rejected]);
+    const processor = new HostedRunnerJobProcessor({
+      workspaceRoot: await workspace(),
+      compiler: new FakeCompiler({ schemaVersion: "2" }),
+      scientificCompiler,
+      controlPlane,
+      now: () => new Date("2026-07-14T10:00:00.000Z"),
+      id: (prefix) => `${prefix}_v5_local_policy_budget`,
+    });
+
+    await processor.run("runner_job_scientific_1");
+
+    expect(scientificCompiler.repairCalls).toHaveLength(0);
+    expect(controlPlane.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "repair.started", attempt: 2 }),
+      ]),
+    );
+    expect(controlPlane.callbacks).toEqual([
+      expect.objectContaining({
+        status: "REJECTED",
+        operationalMetrics: expect.objectContaining({ repairAttempts: 2 }),
+        error: expect.objectContaining({
+          code: "SCIENTIFIC_METHOD_VERIFIER_REJECTED",
+        }),
+      }),
+    ]);
+  });
+
   it("publishes only allow-listed files and completes a verified plan job", async () => {
     const compiler = new FakeCompiler({ schemaVersion: "2" });
     const controlPlane = new FakeControlPlane(bundle(), [verifiedDecision]);

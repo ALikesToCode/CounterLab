@@ -61,6 +61,9 @@ const structuredScientificUnsafeBindingOutput = process.argv.includes(
 const structuredScientificFormulaOutput = process.argv.includes(
   "--structured-scientific-formula-output",
 );
+const structuredScientificFormulaUntilPolicyRepair = process.argv.includes(
+  "--structured-scientific-formula-until-policy-repair",
+);
 const structuredInvalidOutput = process.argv.includes(
   "--structured-invalid-output",
 );
@@ -394,7 +397,10 @@ function canonicalScientificArtifacts(evidenceRefs) {
   };
 }
 
-function scientificArtifactsForOutput(evidenceRefs) {
+function scientificArtifactsForOutput(
+  evidenceRefs,
+  formulaOutput = structuredScientificFormulaOutput,
+) {
   const artifacts = canonicalScientificArtifacts(evidenceRefs);
   if (structuredScientificSelectedOutput) {
     artifacts.experimentIr.selection = {
@@ -407,7 +413,7 @@ function scientificArtifactsForOutput(evidenceRefs) {
   if (structuredScientificUnsafeBindingOutput) {
     artifacts.labScene.blocks[2].resultBinding = "//unsafe/result";
   }
-  if (structuredScientificFormulaOutput) {
+  if (formulaOutput) {
     artifacts.experimentIr.candidateExperiments[0].discriminatesBecause =
       "precision = true positives divided by all alerts";
   }
@@ -468,6 +474,17 @@ lines.on("line", (line) => {
     return;
   }
   if (message.method === "turn/start") {
+    const turnInputText = Array.isArray(message.params.input)
+      ? message.params.input
+          .map((item) => (typeof item?.text === "string" ? item.text : ""))
+          .join("\n")
+      : "";
+    const formulaOutput =
+      structuredScientificFormulaOutput ||
+      (structuredScientificFormulaUntilPolicyRepair &&
+        !turnInputText.includes(
+          "The previous schema-valid candidate was rejected",
+        ));
     const failureMarker = failTurnTwiceFile ?? failTurnOnceFile;
     const failuresBeforeSuccess = failTurnTwiceFile ? 2 : 1;
     const observedFailures =
@@ -562,7 +579,7 @@ lines.on("line", (line) => {
                 authoritativeArtifact: structuredInvalidOutput
                   ? { schemaVersion: "2" }
                   : structuredScientificOutput
-                    ? scientificArtifactsForOutput(evidenceRefs)
+                    ? scientificArtifactsForOutput(evidenceRefs, formulaOutput)
                     : structuredPatchOutput
                       ? canonicalPatchPlan(evidenceRefs)
                       : canonicalExperimentPlan(evidenceRefs),

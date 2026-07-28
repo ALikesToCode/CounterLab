@@ -347,6 +347,26 @@ export const CompilerEventSchema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
+      type: z.literal("policy_repair"),
+      attempt: z.union([z.literal(1), z.literal(2)]),
+      findingCodes: z
+        .array(
+          z.enum([
+            "SCHEMA_INVALID",
+            "EXECUTABLE_SOURCE",
+            "DYNAMIC_EXPRESSION",
+            "SHELL_COMMAND",
+            "SQL_SOURCE",
+            "NETWORK_REFERENCE",
+            "RAW_PATH",
+          ]),
+        )
+        .min(1)
+        .max(7),
+    })
+    .strict(),
+  z
+    .object({
       type: z.literal("final_status"),
       status: z.enum([
         "completed",
