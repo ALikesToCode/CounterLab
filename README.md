@@ -1,10 +1,65 @@
 # CounterLab
 
-**Ask like chat. Prove it like science.** CounterLab is a scientific debugger
-for beliefs: it formalizes a claim, commits a prediction, runs a discriminating
-test, refuses invalid evidence, verifies transfer, and only then unlocks repair.
+**A belief debugger for machine-learning evaluation mistakes.** State a claim
+about your model, lock in a prediction, and CounterLab runs a controlled
+experiment on your Jupyter notebook's evidence. A fixed verifier, not a language
+model, decides whether the result counts.
 
 > Chatbots explain. CounterLab lets reality answer.
+
+**Try it now, no account needed:** <https://counterlab.cserules.workers.dev>
+
+<p align="center">
+  <img src="docs/assets/counterlab-start.png" alt="CounterLab start screen: state a claim or attach a notebook, then test the claim" width="560">
+</p>
+
+## How it works
+
+```mermaid
+flowchart LR
+    A["1. Claim<br/>'My model generalises:<br/>98% test accuracy'"] --> B["2. Prediction<br/>locked before the test"]
+    B --> C["3. Controlled test<br/>fixed kernel changes<br/>one thing"]
+    C --> D{"4. Frozen verifier"}
+    D -->|evidence valid| E["5. Result, boundary map<br/>and verified repair"]
+    D -->|evidence invalid| F["Refused with a<br/>typed reason"]
+```
+
+A language model only proposes how to frame the claim. Fixed code computes every
+number, and a frozen verifier releases a result only when the evidence binds to
+it. Unsupported notebooks are refused, not guessed at.
+
+## What it catches
+
+Measured on the bundled fixtures, recorded in
+[docs/ACHIEVED_METRICS.json](docs/ACHIEVED_METRICS.json):
+
+| Mistake                           | What the notebook reports                                                 | What the controlled test shows                       |
+| --------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Entity leakage across the split   | 98.5% accuracy on a random split                                          | 59.4% accuracy once each customer stays in one split |
+| Class imbalance and metric choice | 98.9% accuracy from always predicting the majority class (1.1% positives) | 0% recall: that model catches none of the rare cases |
+
+Seeded mutation benchmarks detected 14 of 14 leakage variants and 15 of 15
+imbalance variants. No learner-study outcome has been measured.
+
+## Quick start
+
+The fastest route is the hosted demo above: choose **Start verified sample**.
+
+To run it locally you need Node 22+, pnpm 11.13.1 and Python 3.12+:
+
+```bash
+git clone https://github.com/ALikesToCode/CounterLab.git
+cd CounterLab
+cp .env.example .env.local
+./scripts/clean-demo.sh
+```
+
+Then open <http://127.0.0.1:5173>. The script installs dependencies, sets up the
+local database, starts the fixed kernel and the web app, and prints which live
+capabilities are available. The sample and replay paths need no API key;
+[Live mode](#live-mode) covers the keys for testing your own notebook.
+
+## Status and scope
 
 CounterLab is a narrow Education-track product for machine-learning evaluation
 misconceptions in supported Jupyter notebooks. Its released Subject Packs cover
